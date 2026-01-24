@@ -1,0 +1,31 @@
+============================================================
+Tastytrade Option Chain Diagnostic Test
+============================================================
+
+1. Initializing TastytradeClient...
+2. Connecting...
+   Mode: PRODUCTION
+   Connected: True
+
+3. Testing stock price fetch...
+   SPY Price: $690.26
+
+4. Forcing OAuth session refresh...
+   Session refreshed successfully!
+
+5. Testing get_option_chain() via SDK...
+   Chain dates found: 0
+
+6. Testing direct REST API...
+   Direct API Error: 'Session' object has no attribute 'get'
+Traceback (most recent call last):
+  File "d:\Projects\tastywork-trading-1\debug_tasty_data.py", line 64, in test_option_chain
+    response = client._session.get('/option-chains/SPY/nested')
+AttributeError: 'Session' object has no attribute 'get'. Did you mean: '_get'?
+
+7. Testing NestedOptionChain alternative...
+   NestedOptionChain Error: 'list' object has no attribute 'root_symbol'
+
+============================================================
+Diagnostic Complete
+============================================================

@@ -1,0 +1,10 @@
+[Unit]
+Description=Run TradeMind Scanner every 5 minutes
+
+[Timer]
+OnBootSec=5min
+OnUnitActiveSec=5min
+Unit=trademind-scanner.service
+
+[Install]
+WantedBy=timers.target

@@ -1,0 +1,20 @@
+● scanner.service - TradeMind Signal Scanner
+     Loaded: loaded (/etc/systemd/system/scanner.service; enabled; preset: enabled)
+     Active: active (running) since Fri 2026-01-23 01:27:00 UTC; 2h 12min ago
+   Main PID: 1542892 (python3)
+      Tasks: 4 (limit: 4443)
+     Memory: 99.5M (peak: 102.1M)
+        CPU: 2.351s
+     CGroup: /system.slice/scanner.service
+             └─1542892 /home/ubuntu/venv/bin/python3 /home/ubuntu/scheduled_scanner.py --loop --interval 300 --force
+
+Jan 23 03:39:04 ip-172-31-34-178 python3[1542892]: 2026-01-23 03:39:04,709 [INFO] scanner:   Found 0 setups for QQQ
+Jan 23 03:39:04 ip-172-31-34-178 python3[1542892]: 2026-01-23 03:39:04,709 [INFO] scanner: Scanning IWM...
+Jan 23 03:39:04 ip-172-31-34-178 python3[1542892]: 2026-01-23 03:39:04,712 [INFO] scanner:   Found 0 setups for IWM
+Jan 23 03:39:04 ip-172-31-34-178 python3[1542892]: 2026-01-23 03:39:04,712 [INFO] scanner: Scanning AAPL...
+Jan 23 03:39:04 ip-172-31-34-178 python3[1542892]: 2026-01-23 03:39:04,713 [INFO] scanner:   Found 0 setups for AAPL
+Jan 23 03:39:04 ip-172-31-34-178 python3[1542892]: 2026-01-23 03:39:04,713 [INFO] scanner: Scanning MSFT...
+Jan 23 03:39:04 ip-172-31-34-178 python3[1542892]: 2026-01-23 03:39:04,714 [INFO] scanner:   Found 0 setups for MSFT
+Jan 23 03:39:04 ip-172-31-34-178 python3[1542892]: 2026-01-23 03:39:04,714 [INFO] __main__: Found 0 potential setups
+Jan 23 03:39:04 ip-172-31-34-178 python3[1542892]: 2026-01-23 03:39:04,714 [INFO] __main__: No setups found
+Jan 23 03:39:04 ip-172-31-34-178 python3[1542892]: 2026-01-23 03:39:04,714 [INFO] __main__: 💤 Sleeping for 300s...

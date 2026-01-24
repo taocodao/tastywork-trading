@@ -1,0 +1,14 @@
+{
+	"folders": [
+		{
+			"path": ".."
+		},
+		{
+			"path": "../../IB-program-trading"
+		},
+		{
+			"path": "../../trademind-app"
+		}
+	],
+	"settings": {}
+}

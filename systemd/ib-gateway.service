@@ -1,0 +1,19 @@
+[Unit]
+Description=IB Gateway Docker Container
+Requires=docker.service
+After=docker.service network.target
+
+[Service]
+Restart=always
+User=ubuntu
+Group=docker
+WorkingDirectory=/home/ubuntu/IB-program-trading
+# Shutdown old container if exists
+ExecStartPre=/usr/local/bin/docker-compose down
+# Start new container
+ExecStart=/usr/local/bin/docker-compose up ib-gateway-data
+# Stop container on service stop
+ExecStop=/usr/local/bin/docker-compose stop ib-gateway-data
+
+[Install]
+WantedBy=multi-user.target

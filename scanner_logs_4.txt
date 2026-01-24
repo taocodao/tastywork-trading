@@ -1,0 +1,61 @@
+Jan 23 03:49:19 ip-172-31-34-178 systemd[1]: Stopping scanner.service - TradeMind Signal Scanner...
+Jan 23 03:49:19 ip-172-31-34-178 systemd[1]: scanner.service: Deactivated successfully.
+Jan 23 03:49:19 ip-172-31-34-178 systemd[1]: Stopped scanner.service - TradeMind Signal Scanner.
+Jan 23 03:49:19 ip-172-31-34-178 systemd[1]: scanner.service: Consumed 2.877s CPU time.
+Jan 23 03:49:19 ip-172-31-34-178 systemd[1]: Started scanner.service - TradeMind Signal Scanner.
+Jan 23 03:49:21 ip-172-31-34-178 python3[1585158]: 2026-01-23 03:49:21,514 [INFO] __main__: 🔄 Starting scanner loop (interval: 300s)
+Jan 23 03:49:21 ip-172-31-34-178 python3[1585158]: 2026-01-23 03:49:21,514 [INFO] __main__: --- Starting Calendar Scan ---
+Jan 23 03:49:21 ip-172-31-34-178 python3[1585158]: 2026-01-23 03:49:21,519 [INFO] __main__: 🔍 Connecting to Data Provider...
+Jan 23 03:49:22 ip-172-31-34-178 python3[1585158]: 2026-01-23 03:49:22,062 [INFO] tastytrade_client: Connecting to Tastytrade (live)...
+Jan 23 03:49:22 ip-172-31-34-178 python3[1585158]: 2026-01-23 03:49:22,062 [INFO] tastytrade_client: Authenticating with OAuth2 (client_secret + refresh_token)...
+Jan 23 03:49:22 ip-172-31-34-178 python3[1585158]: 2026-01-23 03:49:22,362 [INFO] httpx: HTTP Request: POST https://api.tastyworks.com/oauth/token "HTTP/1.1 200 OK"
+Jan 23 03:49:22 ip-172-31-34-178 python3[1585158]: 2026-01-23 03:49:22,362 [DEBUG] tastytrade: Refreshed token, expires in 900ms
+Jan 23 03:49:22 ip-172-31-34-178 python3[1585158]: 2026-01-23 03:49:22,441 [INFO] httpx: HTTP Request: GET https://api.tastyworks.com/api-quote-tokens "HTTP/1.1 200 OK"
+Jan 23 03:49:22 ip-172-31-34-178 python3[1585158]: 2026-01-23 03:49:22,442 [INFO] tastytrade_client: OAuth2 authentication successful!
+Jan 23 03:49:22 ip-172-31-34-178 python3[1585158]: 2026-01-23 03:49:22,442 [INFO] tastytrade_client: Successfully connected to Tastytrade
+Jan 23 03:49:22 ip-172-31-34-178 python3[1585158]: 2026-01-23 03:49:22,442 [INFO] __main__: ✅ Connected to Tastytrade API for Market Data
+Jan 23 03:49:22 ip-172-31-34-178 python3[1585158]: 2026-01-23 03:49:22,442 [INFO] __main__: 📊 Scanning for calendar spread opportunities...
+Jan 23 03:49:22 ip-172-31-34-178 python3[1585158]: 2026-01-23 03:49:22,442 [INFO] scanner: Scanning SPY...
+Jan 23 03:49:22 ip-172-31-34-178 python3[1585158]: 2026-01-23 03:49:22,572 [INFO] httpx: HTTP Request: GET https://api.tastyworks.com/option-chains/SPY "HTTP/1.1 200 OK"
+Jan 23 03:49:23 ip-172-31-34-178 python3[1585158]: 2026-01-23 03:49:23,001 [INFO] httpx: HTTP Request: GET https://api.tastyworks.com/option-chains/SPY "HTTP/1.1 200 OK"
+Jan 23 03:49:23 ip-172-31-34-178 python3[1585158]: 2026-01-23 03:49:23,298 [WARNING] scanner: No options found for SPY
+Jan 23 03:49:23 ip-172-31-34-178 python3[1585158]: 2026-01-23 03:49:23,298 [INFO] scanner:   Found 0 setups for SPY
+Jan 23 03:49:23 ip-172-31-34-178 python3[1585158]: 2026-01-23 03:49:23,298 [INFO] scanner: Scanning QQQ...
+Jan 23 03:49:23 ip-172-31-34-178 python3[1585158]: 2026-01-23 03:49:23,363 [INFO] httpx: HTTP Request: GET https://api.tastyworks.com/option-chains/QQQ "HTTP/1.1 200 OK"
+Jan 23 03:49:23 ip-172-31-34-178 python3[1585158]: 2026-01-23 03:49:23,740 [INFO] httpx: HTTP Request: GET https://api.tastyworks.com/option-chains/QQQ "HTTP/1.1 200 OK"
+Jan 23 03:49:24 ip-172-31-34-178 python3[1585158]: 2026-01-23 03:49:24,100 [WARNING] scanner: No options found for QQQ
+Jan 23 03:49:24 ip-172-31-34-178 python3[1585158]: 2026-01-23 03:49:24,100 [INFO] scanner:   Found 0 setups for QQQ
+Jan 23 03:49:24 ip-172-31-34-178 python3[1585158]: 2026-01-23 03:49:24,100 [INFO] scanner: Scanning IWM...
+Jan 23 03:49:24 ip-172-31-34-178 python3[1585158]: 2026-01-23 03:49:24,160 [INFO] httpx: HTTP Request: GET https://api.tastyworks.com/option-chains/IWM "HTTP/1.1 200 OK"
+Jan 23 03:49:24 ip-172-31-34-178 python3[1585158]: 2026-01-23 03:49:24,346 [INFO] httpx: HTTP Request: GET https://api.tastyworks.com/option-chains/IWM "HTTP/1.1 200 OK"
+Jan 23 03:49:24 ip-172-31-34-178 python3[1585158]: 2026-01-23 03:49:24,490 [WARNING] scanner: No options found for IWM
+Jan 23 03:49:24 ip-172-31-34-178 python3[1585158]: 2026-01-23 03:49:24,490 [INFO] scanner:   Found 0 setups for IWM
+Jan 23 03:49:24 ip-172-31-34-178 python3[1585158]: 2026-01-23 03:49:24,490 [INFO] scanner: Scanning AAPL...
+Jan 23 03:49:24 ip-172-31-34-178 python3[1585158]: 2026-01-23 03:49:24,549 [INFO] httpx: HTTP Request: GET https://api.tastyworks.com/option-chains/AAPL "HTTP/1.1 200 OK"
+Jan 23 03:49:24 ip-172-31-34-178 python3[1585158]: 2026-01-23 03:49:24,698 [INFO] httpx: HTTP Request: GET https://api.tastyworks.com/option-chains/AAPL "HTTP/1.1 200 OK"
+Jan 23 03:49:24 ip-172-31-34-178 python3[1585158]: 2026-01-23 03:49:24,792 [WARNING] scanner: No options found for AAPL
+Jan 23 03:49:24 ip-172-31-34-178 python3[1585158]: 2026-01-23 03:49:24,792 [INFO] scanner:   Found 0 setups for AAPL
+Jan 23 03:49:24 ip-172-31-34-178 python3[1585158]: 2026-01-23 03:49:24,792 [INFO] scanner: Scanning MSFT...
+Jan 23 03:49:24 ip-172-31-34-178 python3[1585158]: 2026-01-23 03:49:24,846 [INFO] httpx: HTTP Request: GET https://api.tastyworks.com/option-chains/MSFT "HTTP/1.1 200 OK"
+Jan 23 03:49:25 ip-172-31-34-178 python3[1585158]: 2026-01-23 03:49:25,033 [INFO] httpx: HTTP Request: GET https://api.tastyworks.com/option-chains/MSFT "HTTP/1.1 200 OK"
+Jan 23 03:49:25 ip-172-31-34-178 python3[1585158]: 2026-01-23 03:49:25,148 [WARNING] scanner: No options found for MSFT
+Jan 23 03:49:25 ip-172-31-34-178 python3[1585158]: 2026-01-23 03:49:25,148 [INFO] scanner:   Found 0 setups for MSFT
+Jan 23 03:49:25 ip-172-31-34-178 python3[1585158]: 2026-01-23 03:49:25,148 [INFO] __main__: Found 0 potential setups
+Jan 23 03:49:25 ip-172-31-34-178 python3[1585158]: 2026-01-23 03:49:25,148 [INFO] __main__: No setups found
+Jan 23 03:49:25 ip-172-31-34-178 python3[1585158]: 2026-01-23 03:49:25,149 [INFO] __main__: --- Starting Earnings Scan ---
+Jan 23 03:49:25 ip-172-31-34-178 python3[1585158]: 2026-01-23 03:49:25,150 [INFO] __main__: 🧠 Running Earnings Intelligence Scan...
+Jan 23 03:49:25 ip-172-31-34-178 python3[1585158]: 2026-01-23 03:49:25,150 [INFO] __main__:   Analysing AAPL earnings...
+Jan 23 03:49:30 ip-172-31-34-178 python3[1585158]: /home/ubuntu/venv/lib/python3.12/site-packages/sklearn/base.py:463: InconsistentVersionWarning: Trying to unpickle estimator DecisionTreeClassifier from version 1.7.2 when using version 1.8.0. This might lead to breaking code or invalid results. Use at your own risk. For more info please refer to:
+Jan 23 03:49:30 ip-172-31-34-178 python3[1585158]: https://scikit-learn.org/stable/model_persistence.html#security-maintainability-limitations
+Jan 23 03:49:30 ip-172-31-34-178 python3[1585158]:   warnings.warn(
+Jan 23 03:49:30 ip-172-31-34-178 python3[1585158]: /home/ubuntu/venv/lib/python3.12/site-packages/sklearn/base.py:463: InconsistentVersionWarning: Trying to unpickle estimator RandomForestClassifier from version 1.7.2 when using version 1.8.0. This might lead to breaking code or invalid results. Use at your own risk. For more info please refer to:
+Jan 23 03:49:30 ip-172-31-34-178 python3[1585158]: https://scikit-learn.org/stable/model_persistence.html#security-maintainability-limitations
+Jan 23 03:49:30 ip-172-31-34-178 python3[1585158]:   warnings.warn(
+Jan 23 03:49:30 ip-172-31-34-178 python3[1585158]: /home/ubuntu/venv/lib/python3.12/site-packages/sklearn/base.py:463: InconsistentVersionWarning: Trying to unpickle estimator StandardScaler from version 1.7.2 when using version 1.8.0. This might lead to breaking code or invalid results. Use at your own risk. For more info please refer to:
+Jan 23 03:49:30 ip-172-31-34-178 python3[1585158]: https://scikit-learn.org/stable/model_persistence.html#security-maintainability-limitations
+Jan 23 03:49:30 ip-172-31-34-178 python3[1585158]:   warnings.warn(
+Jan 23 03:49:30 ip-172-31-34-178 python3[1585158]: 2026-01-23 03:49:30,895 [INFO] src.earnings_intelligence.iv_crush_model: Model loaded from /home/ubuntu/src/earnings_intelligence/models/iv_crush_rf_v1.pkl
+Jan 23 03:49:30 ip-172-31-34-178 python3[1585158]: 2026-01-23 03:49:30,956 [ERROR] __main__:     Error analysing AAPL: unsupported operand type(s) for /: 'NoneType' and 'float'
+Jan 23 03:49:30 ip-172-31-34-178 python3[1585158]: 2026-01-23 03:49:30,957 [INFO] __main__:   Analysing MSFT earnings...
+Jan 23 03:49:34 ip-172-31-34-178 python3[1585158]: 2026-01-23 03:49:34,428 [INFO] __main__:     -> Opportunity found: REDUCE_SIZE
+Jan 23 03:49:34 ip-172-31-34-178 python3[1585158]: 2026-01-23 03:49:34,428 [INFO] __main__:   Analysing GOOGL earnings...

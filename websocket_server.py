@@ -149,10 +149,11 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 sys.path.append(BASE_DIR)
 
 def load_signals_from_db() -> list:
-    """Load signals from database."""
+    """Load non-expired signals from database."""
     try:
         from src.earnings_intelligence.database import SignalRepository
         repo = SignalRepository()
+        # get_all_signals now automatically filters expired signals (include_expired=False by default)
         signals = repo.get_all_signals()
         return [s.to_dict() for s in signals]
     except Exception as e:
@@ -160,11 +161,15 @@ def load_signals_from_db() -> list:
     return []
 
 async def send_signal_history(websocket: WebSocketServerProtocol, channels: Set[str]):
-    """Send historical signals for the subscribed channels."""
+    """Send historical signals for the subscribed channels.
+    
+    Only sends non-expired, pending signals.
+    """
     signals = load_signals_from_db()
     sent_count = 0
     
     # Filter only pending signals for initial load
+    # Expired signals are already filtered out by load_signals_from_db()
     active_signals = [s for s in signals if s.get('status') == 'pending']
     
     for signal in active_signals:

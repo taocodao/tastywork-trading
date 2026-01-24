@@ -127,6 +127,8 @@ class TastyHandler(BaseHTTPRequestHandler):
                 self.handle_positions()
             elif self.path == '/api/signals':
                 self.handle_get_signals()
+            elif self.path == '/api/tracked-positions':
+                self.handle_get_tracked_positions()
             elif self.path == '/health':
                 self._send_json({'status': 'ok', 'service': 'TradeMind Tastytrade API'})
             else:
@@ -146,6 +148,9 @@ class TastyHandler(BaseHTTPRequestHandler):
             if self.path.startswith('/api/signals/') and self.path.endswith('/approve'):
                 signal_id = self.path.split('/')[3]
                 self.handle_approve_signal(signal_id, data)
+            elif self.path.startswith('/api/positions/') and self.path.endswith('/close'):
+                position_id = self.path.split('/')[3]
+                self.handle_close_position(position_id, data)
             elif self.path == '/api/trade':
                 self.handle_execute_trade(data)
             else:
@@ -263,12 +268,166 @@ class TastyHandler(BaseHTTPRequestHandler):
             print(f"Signal loading error: {e}")
             self._send_json({'error': str(e)}, 500)
 
+    def handle_get_tracked_positions(self):
+        """Return tracked positions from our database (for risk management)."""
+        try:
+            from src.earnings_intelligence.database import PositionRepository
+            repo = PositionRepository()
+            
+            # Get open positions
+            positions = repo.get_open_positions()
+            
+            # Convert to dicts
+            position_dicts = [pos.to_dict() for pos in positions]
+            
+            self._send_json({
+                'positions': position_dicts,
+                'total': len(position_dicts),
+                'source': 'database'
+            })
+            
+        except Exception as e:
+            print(f"Tracked positions loading error: {e}")
+            import traceback
+            traceback.print_exc()
+            self._send_json({'error': str(e)}, 500)
+
+    def handle_close_position(self, position_id: str, data: dict):
+        """Close a tracked position.
+        
+        This will:
+        1. Look up the position in our database
+        2. Build a closing order via Tastytrade
+        3. Place the order
+        4. Update the position status in our database
+        """
+        # Extract user credentials
+        user_refresh_token = data.get('refreshToken')
+        account_number = data.get('accountNumber')
+        user_id = data.get('userId', 'anonymous')
+        limit_price = data.get('limitPrice')  # Optional limit price override
+        
+        if not user_refresh_token:
+            self._send_json({
+                'error': 'Missing user credentials. Please reconnect Tastytrade.',
+                'status': 'auth_required'
+            }, 401)
+            return
+        
+        try:
+            from src.earnings_intelligence.database import PositionRepository
+            from tastytrade import Account
+            from tastytrade_client import TastytradeClient
+            
+            pos_repo = PositionRepository()
+            
+            # Find the position
+            position = pos_repo.get_position(position_id)
+            
+            if not position:
+                self._send_json({'error': 'Position not found'}, 404)
+                return
+            
+            if position.status != 'open':
+                self._send_json({
+                    'error': f'Position already {position.status}',
+                    'status': position.status
+                }, 400)
+                return
+            
+            # Get user session using their OAuth token
+            user_session = get_user_oauth_session(user_refresh_token)
+            
+            if not user_session:
+                self._send_json({
+                    'error': 'Failed to create session with provided credentials',
+                    'status': 'auth_error'
+                }, 401)
+                return
+            
+            # Get the user's account
+            accounts = Account.get_accounts(user_session)
+            if account_number:
+                account = next((a for a in accounts if a.account_number == account_number), None)
+            else:
+                account = accounts[0] if accounts else None
+            
+            if not account:
+                self._send_json({'error': 'No account found'}, 404)
+                return
+            
+            # Build the closing order
+            client = TastytradeClient()
+            client._session = user_session  # Use user's session
+            client._account = account
+            
+            # Get the option symbols from the position
+            # front_symbol = short (sold), back_symbol = long (bought)
+            short_symbol = position.front_symbol
+            long_symbol = position.back_symbol
+            quantity = position.quantity
+            
+            if not short_symbol or not long_symbol:
+                self._send_json({
+                    'error': 'Position missing option symbols for close order',
+                    'status': 'data_error'
+                }, 400)
+                return
+            
+            # Build and place the close order
+            close_response = client.close_calendar_spread_position(
+                short_option_symbol=short_symbol,
+                long_option_symbol=long_symbol,
+                quantity=quantity,
+                limit_price=limit_price,
+                dry_run=False
+            )
+            
+            # Extract closing details
+            close_order_id = None
+            exit_pnl = None
+            if hasattr(close_response, 'fee_calculation') and close_response.fee_calculation:
+                if hasattr(close_response.fee_calculation, 'order'):
+                    close_order_id = str(close_response.fee_calculation.order.id)
+                if hasattr(close_response.fee_calculation, 'price'):
+                    # Calculate P&L: exit credit - entry debit
+                    exit_credit = float(close_response.fee_calculation.price)
+                    entry_debit = position.entry_debit or 0
+                    exit_pnl = (exit_credit - entry_debit) * (position.quantity or 1) * 100
+            
+            # Update position in database
+            pos_repo.close_position(
+                position_id=position_id,
+                exit_reason=data.get('reason', 'manual'),
+                exit_pnl=exit_pnl or 0,
+                exit_order_id=close_order_id
+            )
+            
+            self._send_json({
+                'status': 'closed',
+                'message': 'Position closed successfully',
+                'close_order_id': close_order_id,
+                'exit_credit': close_credit,
+                'position_id': position_id
+            })
+            
+        except Exception as e:
+            print(f"Close position error: {e}")
+            import traceback
+            traceback.print_exc()
+            self._send_json({'error': str(e)}, 500)
+
     def handle_approve_signal(self, signal_id: str, data: dict):
-        """Approve a signal and execute the trade using USER's OAuth credentials."""
+        """Approve a signal and execute the trade using USER's OAuth credentials.
+        
+        Multi-user design: Each user's execution is tracked separately.
+        The signal's global status stays 'pending' so other users can also execute.
+        """
         
         # Extract per-user OAuth credentials
         user_refresh_token = data.get('refreshToken')
         account_number = data.get('accountNumber')
+        user_id = data.get('userId', 'anonymous')  # Frontend should pass Privy user ID
         execute = data.get('execute', True)
         
         if not user_refresh_token:
@@ -279,25 +438,50 @@ class TastyHandler(BaseHTTPRequestHandler):
             return
         
         try:
-            from src.earnings_intelligence.database import SignalRepository
-            repo = SignalRepository()
+            from src.earnings_intelligence.database import SignalRepository, UserSignalRepository
+            signal_repo = SignalRepository()
+            user_repo = UserSignalRepository()
             
             # Find the signal
-            signal = repo.get_signal(signal_id)
+            signal = signal_repo.get_signal(signal_id)
             
             if not signal:
                 self._send_json({'error': 'Signal not found'}, 404)
                 return
             
-            # Update data
+            # Check if signal is expired
+            if signal.is_expired():
+                self._send_json({
+                    'error': 'Signal has expired',
+                    'status': 'expired'
+                }, 400)
+                return
+            
+            # Check if this user already executed this signal
+            existing_execution = user_repo.get_user_execution(user_id, signal_id)
+            if existing_execution and existing_execution.status == 'executed':
+                self._send_json({
+                    'error': 'You have already executed this signal',
+                    'status': 'already_executed',
+                    'execution': existing_execution.to_dict()
+                }, 400)
+                return
+            
+            # Get signal data for execution
             signal_data = signal.to_dict()
-            signal_data['status'] = 'approved'
             
             response_data = {
                 'status': 'approved',
                 'signal': signal_data,
                 'message': 'Signal approved, executing trade...'
             }
+            
+            # Track user's approval
+            user_execution = user_repo.create_or_update_execution(
+                user_id=user_id,
+                signal_id=signal_id,
+                status='approved'
+            )
 
             if execute:
                 try:
@@ -307,18 +491,33 @@ class TastyHandler(BaseHTTPRequestHandler):
                         user_refresh_token, 
                         account_number
                     )
-                    signal_data['status'] = 'executed'
-                    signal_data['orderId'] = result.get('orderId')
+                    
+                    # Update user's execution status (NOT the global signal status!)
+                    user_repo.create_or_update_execution(
+                        user_id=user_id,
+                        signal_id=signal_id,
+                        status='executed',
+                        order_id=result.get('orderId')
+                    )
+                    
+                    execution_count = user_repo.get_signal_execution_count(signal_id)
                     
                     response_data = {
                         'status': 'executed',
                         'signal': signal_data,
                         'order': result,
+                        'executionCount': execution_count,
                         'message': f"Calendar spread on {signal.symbol} submitted to YOUR account!"
                     }
                 except Exception as e:
-                    signal_data['status'] = 'failed'
-                    signal_data['error'] = str(e)
+                    # Update user's execution status to failed
+                    user_repo.create_or_update_execution(
+                        user_id=user_id,
+                        signal_id=signal_id,
+                        status='failed',
+                        error_message=str(e)
+                    )
+                    
                     response_data = {
                         'status': 'failed',
                         'signal': signal_data,
@@ -326,13 +525,8 @@ class TastyHandler(BaseHTTPRequestHandler):
                         'message': f"Trade failed: {str(e)}"
                     }
             
-            # Save updates to DB
-            repo.save_signal(signal_data)
-            
-            # Return fresh data
-            updated_signal = repo.get_signal(signal_id)
-            if updated_signal:
-                response_data['signal'] = updated_signal.to_dict()
+            # Note: We do NOT update the Signal's global status anymore
+            # The signal stays 'pending' so other users can execute it too
                 
             self._send_json(response_data)
             
@@ -341,6 +535,7 @@ class TastyHandler(BaseHTTPRequestHandler):
             import traceback
             traceback.print_exc()
             self._send_json({'error': str(e)}, 500)
+
 
     def _execute_calendar_spread_for_user(
         self, 
@@ -443,6 +638,34 @@ class TastyHandler(BaseHTTPRequestHandler):
             order_id = str(response.order.id) if hasattr(response, 'order') else "Submitted"
             
             print(f"✅ Order submitted to user's account: {order_id}")
+            
+            # Save position to database for risk management tracking
+            try:
+                from src.earnings_intelligence.database import PositionRepository
+                from datetime import datetime as dt
+                
+                position_data = {
+                    'order_id': order_id,
+                    'user_id': signal.get('userId', 'unknown'),
+                    'signal_id': signal.get('id'),
+                    'symbol': symbol,
+                    'strategy': 'Calendar Spread',
+                    'front_expiry': dt.fromisoformat(front_expiry) if front_expiry else None,
+                    'back_expiry': dt.fromisoformat(back_expiry) if back_expiry else None,
+                    'strike': strike,
+                    'quantity': 1,
+                    'front_symbol': short_symbol.strip(),
+                    'back_symbol': long_symbol.strip(),
+                    'entry_debit': price,
+                    'entry_stock_price': signal.get('stockPrice'),
+                }
+                
+                pos_repo = PositionRepository()
+                pos_repo.save_position(position_data)
+                print(f"📊 Position saved for risk management: {order_id}")
+                
+            except Exception as pos_err:
+                print(f"⚠️ Could not save position (non-blocking): {pos_err}")
             
             return {
                 'orderId': order_id,

@@ -182,6 +182,49 @@ def save_signal_to_db(signal_data: Dict[str, Any]):
         logger.error(traceback.format_exc())
         return False
 
+
+def publish_alert(alert_data: Dict[str, Any], channel: str = "position_alerts") -> bool:
+    """
+    Publish a position alert to the WebSocket server for broadcast.
+    
+    Args:
+        alert_data: Alert data dict containing:
+            - type: alert type (e.g., 'position_alert')
+            - position_id: Position ID
+            - symbol: Underlying symbol
+            - rule: Exit rule that triggered
+            - reason: Exit reason
+            - action: Recommended action
+            - pnl_percent: P&L percentage
+            - urgency: 'high' or 'medium'
+            - timestamp: ISO timestamp
+        channel: WebSocket channel to broadcast on
+        
+    Returns:
+        True if broadcast succeeded
+    """
+    try:
+        # Broadcast via WebSocket HTTP endpoint
+        response = requests.post(
+            WEBSOCKET_BROADCAST_URL,
+            json={"channel": channel, "alert": alert_data},
+            timeout=5
+        )
+        
+        if response.ok:
+            logger.info(f"📢 Published alert: {alert_data.get('symbol')} - {alert_data.get('rule')}")
+            return True
+        else:
+            logger.warning(f"Alert broadcast failed: {response.status_code}")
+            return False
+            
+    except requests.exceptions.ConnectionError:
+        logger.warning("WebSocket server not running, alert not broadcast")
+        return False
+    except Exception as e:
+        logger.error(f"Failed to publish alert: {e}")
+        return False
+
 def save_signals_to_disk(filename=None):
     """Deprecated - using DB now."""
     pass

@@ -1,0 +1,22 @@
+tastytrade>=11.0.0
+scipy
+numpy
+python-dotenv
+google-cloud-secret-manager
+google-auth
+requests
+ib_insync
+
+# API Server
+fastapi>=0.109.0
+uvicorn[standard]>=0.27.0
+pydantic-settings>=2.1.0
+cryptography>=42.0.0
+
+# ML & Earnings Intelligence
+scikit-learn>=1.0
+yfinance>=0.2.0
+sqlalchemy>=2.0.0
+psycopg2-binary>=2.9.0
+joblib>=1.0
+pandas>=1.5.0

@@ -1,0 +1,25 @@
+"""
+TradeMind Tastytrade API Server
+================================
+Uses the working Python SDK to serve account data via HTTP.
+Includes: Account data, Signals, Trade execution
+"""
+
+from http.server import HTTPServer, BaseHTTPRequestHandler
+import json
+import os
+import uuid
+from datetime import datetime, timedelta
+from dotenv import load_dotenv
+from tastytrade import Session, Account
+from tastytrade.instruments import Option, get_option_chain
+from tastytrade.order import NewOrder, OrderAction, OrderTimeInForce, OrderType, PriceEffect
+from tastytrade_client import TastytradeClient
+from typing import List, Dict, Any
+
+load_dotenv()
+
+
+# Inline signal file operations to avoid importing scanner/scipy
+def load_signals_from_disk(filename="signals.json") -> List[Dict[str, Any]]:
+    """Load signals from disk."""
