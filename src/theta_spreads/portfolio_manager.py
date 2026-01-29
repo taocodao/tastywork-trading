@@ -52,10 +52,6 @@ class ThetaPosition:
     unrealized_pnl: float = 0.0
     unrealized_pnl_pct: float = 0.0
     
-    # Peak tracking for trailing stop
-    peak_pnl_pct: float = 0.0
-    trailing_active: bool = False
-    
     # Days tracking
     days_held: int = 0
     days_to_expiration: int = 0
