@@ -26,8 +26,18 @@ subscriptions: Dict[WebSocketServerProtocol, Set[str]] = {}
 async def register(websocket: WebSocketServerProtocol):
     """Register a new client."""
     clients.add(websocket)
-    # Default subscriptions include both calendar and vertical spread channels
-    subscriptions[websocket] = {"calendar_spread", "vertical_spread", "vertical_spread.buy", "vertical_spread.sell", "vertical_spread.warning"}
+    # Default subscriptions include calendar, vertical spreads, and theta strategy channels
+    subscriptions[websocket] = {
+        "calendar_spread",
+        "vertical_spread",
+        "vertical_spread.buy",
+        "vertical_spread.sell",
+        "vertical_spread.warning",
+        # Theta strategy channels
+        "theta_puts",
+        "theta_entry",
+        "theta_exit"
+    }
     logger.info(f"Client connected. Total: {len(clients)}")
     
     # Send initial history immediately for default subscriptions

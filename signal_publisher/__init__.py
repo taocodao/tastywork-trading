@@ -1,0 +1,44 @@
+"""
+Signal Publisher - Modular Architecture
+=========================================
+Unified signal publishing for multiple trading strategies.
+
+Supported Strategies:
+- Theta (cash-secured puts)
+- Calendar Spreads
+- Vertical Spreads (future)
+"""
+
+# Theta signals
+from .theta import (
+    ThetaEntrySignal,
+    ThetaExitSignal,
+    publish_theta_entry_signal,
+    publish_theta_exit_signal
+)
+
+# Calendar signals
+from .calendar import (
+    publish_calendar_signal,
+    spread_setup_to_signal
+)
+
+# Base classes
+from .base import BaseSignal
+
+__all__ = [
+    # Theta
+    'ThetaEntrySignal',
+    'ThetaExitSignal',
+    'publish_theta_entry_signal',
+    'publish_theta_exit_signal',
+    
+    # Calendar
+    'publish_calendar_signal',
+    'spread_setup_to_signal',
+    
+    # Base
+    'BaseSignal',
+]
+
+__version__ = '2.0.0'

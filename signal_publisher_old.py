@@ -403,6 +403,9 @@ def publish_earnings_signal(opportunity, channel: str = "earnings") -> bool:
     except Exception as e:
         logger.error(f"Failed to publish earnings signal: {e}")
         return False
+    finally:
+        # Persist to database (same as calendar spreads)
+        save_signal_to_db(signal)
 
 
 def publish_earnings_signals(opportunities: List, max_signals: int = 10) -> int:
@@ -578,6 +581,9 @@ def publish_vertical_spread_signal(
     except Exception as e:
         logger.error(f"Failed to publish vertical spread signal: {e}")
         return False
+    finally:
+        # Persist to database (same as calendar spreads)
+        save_signal_to_db(signal)
 
 
 def publish_buy_signal(spread_setup) -> bool:
@@ -640,6 +646,203 @@ def get_vertical_spread_signals(signal_type: str = None) -> List[Dict[str, Any]]
         signals = [s for s in signals if s.get('signalType') == signal_type]
     
     return signals
+
+
+# =============================================================================
+# THETA STRATEGY SIGNAL PUBLISHING (Cash-Secured Puts)
+# =============================================================================
+
+def theta_put_to_signal(put_signal, signal_type: str = "ENTRY") -> Dict[str, Any]:
+    """
+    Convert Theta put signal (entry or exit) to frontend Signal format.
+    
+    Args:
+        put_signal: ThetaEntrySignal or ThetaExitSignal object
+        signal_type: "ENTRY" or "EXIT"
+        
+    Returns:
+        Dict formatted for frontend consumption
+    """
+    # Handle both entry and exit signals
+    if signal_type == "ENTRY":
+        signal = {
+            "id": getattr(put_signal, 'id', str(uuid.uuid4())),
+            "signalType": "ENTRY",
+            "action": "SELL_TO_OPEN",
+            "symbol": getattr(put_signal, 'symbol', ''),
+            "strategy": "Theta Cash-Secured Put",
+            "strategyType": "theta",
+            "direction": "neutral",  # Selling puts is neutral-to-bullish
+            "strike": getattr(put_signal, 'strike', 0),
+            "expiration": str(getattr(put_signal, 'expiration', '')),
+            "dte": getattr(put_signal, 'dte', 0),
+            "entryPrice": round(float(getattr(put_signal, 'entry_price', 0)), 2),
+            "delta": round(float(getattr(put_signal, 'delta', 0)), 3),
+            "theta": round(float(getattr(put_signal, 'theta', 0)), 3),
+            "vega": round(float(getattr(put_signal, 'vega', 0)), 3),
+            "iv": round(float(getattr(put_signal, 'iv', 0)) * 100, 1),
+            "confidence": getattr(put_signal, 'confidence', 0),
+            "probabilityOTM": round(float(getattr(put_signal, 'probability_otm', 0)), 1),
+            "contracts": getattr(put_signal, 'contracts', 1),
+            "totalPremium": round(float(getattr(put_signal, 'total_premium', 0)), 2),
+            "capitalRequired": round(float(getattr(put_signal, 'total_capital_required', 0)), 2),
+            "cost": round(float(getattr(put_signal, 'total_capital_required', 0)), 2),  # For consistency
+            "potentialReturn": round(float(getattr(put_signal, 'total_premium', 0)), 2),
+            "returnPercent": round((float(getattr(put_signal, 'total_premium', 0)) / 
+                                   float(getattr(put_signal, 'total_capital_required', 1))) * 100, 2),
+            "riskLevel": _theta_risk_level(put_signal),
+            "rationale": f"30-delta put | {getattr(put_signal, 'confidence', 0)}% confidence | "
+                        f"Premium ${getattr(put_signal, 'total_premium', 0):.0f}",
+            "status": "pending",
+            "createdAt": datetime.now().isoformat(),
+        }
+    else:  # EXIT
+        signal = {
+            "id": getattr(put_signal, 'id', str(uuid.uuid4())),
+            "signalType": "EXIT",
+            "action": "BUY_TO_CLOSE",
+            "positionId": getattr(put_signal, 'position_id', ''),
+            "symbol": getattr(put_signal, 'symbol', ''),
+            "strategy": "Theta Cash-Secured Put",
+            "strategyType": "theta",
+            "strike": getattr(put_signal, 'strike', 0),
+            "exitPrice": round(float(getattr(put_signal, 'exit_price', 0)), 2),
+            "entryPrice": round(float(getattr(put_signal, 'entry_price', 0)), 2),
+            "unrealizedPnL": round(float(getattr(put_signal, 'unrealized_pnl', 0)), 2),
+            "unrealizedPnLPct": round(float(getattr(put_signal, 'unrealized_pnl_pct', 0)), 1),
+            "reason": str(getattr(put_signal, 'reason', '')).split('.')[-1],  # Remove enum prefix
+            "urgency": getattr(put_signal, 'urgency', 'MEDIUM'),
+            "daysInTrade": getattr(put_signal, 'days_in_trade', 0),
+            "targetProfitPct": round(float(getattr(put_signal, 'target_profit_pct', 0)), 1),
+            "contracts": getattr(put_signal, 'contracts', 1),
+            "capitalToRelease": round(float(getattr(put_signal, 'capital_to_release', 0)), 2),
+            "rationale": _theta_exit_rationale(put_signal),
+            "status": "pending",
+            "createdAt": datetime.now().isoformat(),
+        }
+    
+    return signal
+
+
+def _theta_risk_level(put_signal) -> str:
+    """Determine risk level for Theta entry signal."""
+    delta = float(getattr(put_signal, 'delta', 0.30))
+    dte = getattr(put_signal, 'dte', 30)
+    confidence = getattr(put_signal, 'confidence', 60)
+    
+    if delta > 0.35 or dte < 21 or confidence < 60:
+        return "High"
+    elif delta < 0.28 and dte > 28 and confidence > 70:
+        return "Low"
+    else:
+        return "Medium"
+
+
+def _theta_exit_rationale(put_signal) -> str:
+    """Build rationale for Theta exit signal."""
+    reason = str(getattr(put_signal, 'reason', '')).split('.')[-1]
+    pnl_pct = float(getattr(put_signal, 'unrealized_pnl_pct', 0))
+    target_pct = float(getattr(put_signal, 'target_profit_pct', 0))
+    days = getattr(put_signal, 'days_in_trade', 0)
+    
+    if reason == "PROFIT_TARGET":
+        week = (days - 1) // 7 + 1  # Week 1-4
+        return f"Time-based exit: Week {week} target ({target_pct:.0f}%) reached @ {pnl_pct:.1f}% profit"
+    elif reason == "EXPIRATION_IMMINENT":
+        return f"Close to expiration ({days} days in trade)"
+    elif reason == "DEFENSIVE_CLOSE":
+        return f"Underlying breached strike threshold ({pnl_pct:.1f}% P&L)"
+    else:
+        return f"{reason} | P&L: {pnl_pct:.1f}% | Days: {days}"
+
+
+def publish_theta_signal(
+    put_signal,
+    signal_type: str = "ENTRY",
+    channel: str = "theta_puts"
+) -> bool:
+    """
+    Publish a Theta strategy signal to WebSocket subscribers.
+    
+    Args:
+        put_signal: ThetaEntrySignal or ThetaExitSignal object
+        signal_type: "ENTRY" or "EXIT"
+        channel: WebSocket channel (default: 'theta_puts')
+        
+    Returns:
+        True if broadcast succeeded
+    """
+    try:
+        signal = theta_put_to_signal(put_signal, signal_type)
+        
+        # Add to pending signals for API
+        _pending_signals.append(signal)
+        
+        # Determine channel based on signal type
+        specific_channel = f"theta_{signal_type.lower()}"
+        
+        # Broadcast to specific channel
+        response = requests.post(
+            WEBSOCKET_BROADCAST_URL,
+            json={"channel": specific_channel, "signal": signal},
+            timeout=5
+        )
+        
+        # Also broadcast to parent channel
+        requests.post(
+            WEBSOCKET_BROADCAST_URL,
+            json={"channel": channel, "signal": signal},
+            timeout=5
+        )
+        
+        if response.ok:
+            logger.info(f"📡 Published Theta {signal_type}: {signal['symbol']} {signal.get('strike')}P")
+            return True
+        else:
+            logger.warning(f"Broadcast failed: {response.status_code}")
+            return False
+            
+    except requests.exceptions.ConnectionError:
+        logger.warning("WebSocket server not running, signal queued locally only")
+        return False
+    except Exception as e:
+        logger.error(f"Failed to publish Theta signal: {e}")
+        import traceback
+        logger.error(traceback.format_exc())
+        return False
+    finally:
+        # Persist to database
+        save_signal_to_db(signal)
+
+
+def publish_theta_entry_signal(put_signal) -> bool:
+    """Publish a Theta entry signal (SELL_TO_OPEN)."""
+    return publish_theta_signal(put_signal, "ENTRY", "theta_puts")
+
+
+def publish_theta_exit_signal(put_signal) -> bool:
+    """Publish a Theta exit signal (BUY_TO_CLOSE)."""
+    return publish_theta_signal(put_signal, "EXIT", "theta_puts")
+
+
+def get_theta_signals(signal_type: str = None) -> List[Dict[str, Any]]:
+    """
+    Get pending Theta strategy signals.
+    
+    Args:
+        signal_type: Optional filter by "ENTRY" or "EXIT"
+        
+    Returns:
+        List of matching signals
+    """
+    theta_signals = [s for s in _pending_signals if s.get('strategyType') == 'theta']
+    
+    if signal_type:
+        theta_signals = [s for s in theta_signals if s.get('signalType') == signal_type]
+    
+    return theta_signals
+
+
 
 
 # For testing

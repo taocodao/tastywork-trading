@@ -25,7 +25,7 @@ STRIKE_TOLERANCE_PCT: float = 0.5  # Accept strikes within 0.5% of ATM
 # =============================================================================
 # ACCOUNT & RISK PARAMETERS
 # =============================================================================
-ACCOUNT_SIZE: float = 5000      # Starting account size
+ACCOUNT_SIZE: float = 50000     # Starting account size (adjusted for Theta strategy)
 RISK_PER_TRADE_PCT: float = 2.0   # Risk 2% of account per trade
 MAX_CONCURRENT_POSITIONS: int = 3  # Maximum simultaneous positions
 PROFIT_TARGET_PCT: float = 5.0    # Close at +5% profit
@@ -52,6 +52,12 @@ MIN_VOLUME: int = 50            # Minimum daily volume
 MIN_VIX: float = 12             # Skip trading if VIX too low
 MAX_VIX: float = 25             # Skip trading if VIX too high
 VIX_SYMBOL: str = "VIX"
+
+# =============================================================================
+# THETA STRATEGY PARAMETERS
+# =============================================================================
+THETA_DELTA_TOLERANCE: float = 0.10  # Accept puts within 0.10 delta of target
+THETA_MIN_PREMIUM: float = 0.50       # Minimum premium per contract ($50 per contract)
 
 # =============================================================================
 # SCHEDULE
@@ -114,6 +120,7 @@ EARNINGS_AVOID_DAYS: int = 3
 EARNINGS_REDUCE_SIZE_DAYS: int = 7
 PERPLEXITY_API_KEY: str = os.getenv("PERPLEXITY_API_KEY", "")
 
+
 # =============================================================================
 # VERTICAL SPREAD SETTINGS
 # =============================================================================
@@ -127,6 +134,63 @@ VERTICAL_PROFIT_TARGET_PCT: float = 75.0  # Close at 75% of max profit
 VERTICAL_STOP_LOSS_PCT: float = 50.0    # Close at 50% of max loss
 VERTICAL_MIN_ACCOUNT_SIZE: float = 2000  # Minimum account size for verticals
 VERTICAL_MIN_OPTIONS_LEVEL: int = 2     # Options approval level required
+
+# =============================================================================
+# THETA STRATEGY SETTINGS (Cash-Secured Puts)
+# =============================================================================
+THETA_ENABLED: bool = True
+THETA_MIN_CONFIDENCE: int = 60          # Minimum put confidence score
+THETA_TARGET_DELTA: float = 0.30        # Target put delta (30-delta)
+THETA_DELTA_TOLERANCE: float = 0.05     # Delta range tolerance (±5 delta)
+THETA_DTE_MIN: int = 28                 # Minimum days to expiration
+THETA_DTE_MAX: int = 35                 # Maximum days to expiration
+THETA_CONTRACTS_PER_TRADE: int = 1      # Number of contracts per signal (adjusted for capital)
+THETA_MAX_POSITIONS: int = 6            # Maximum open positions
+THETA_MAX_PORTFOLIO_HEAT: float = 50000 # Max capital at risk ($50K)
+THETA_MIN_PREMIUM: float = 0.50         # Minimum bid price ($0.50)
+THETA_MIN_IV: float = 0.15              # Minimum implied volatility (15%)
+THETA_MIN_LIQUIDITY: int = 100          # Minimum open interest
+
+# Time-based exit targets (key differentiator)
+THETA_WEEK1_PROFIT_PCT: float = 50.0    # Days 1-7: Exit at 50% profit
+THETA_WEEK2_PROFIT_PCT: float = 60.0    # Days 8-14: Exit at 60% profit
+THETA_WEEK3_PROFIT_PCT: float = 75.0    # Days 15-21: Exit at 75% profit
+THETA_WEEK4_PROFIT_PCT: float = 90.0    # Days 22-28: Exit at 90% profit
+THETA_EXPIRATION_THRESHOLD: int = 3     # Close if DTE <= 3
+THETA_DEFENSIVE_BREACH_PCT: float = 2.0 # Close if underlying < strike * 98%
+
+# Symbol selection parameters
+THETA_SELECT_TOP_N: int = 12            # Select top 12 symbols daily
+THETA_MIN_IV_PERCENTILE: int = 20       # Minimum IV percentile
+THETA_EXCLUDE_PRE_EARNINGS_DAYS: int = 21  # Skip if earnings within N days
+THETA_MAX_SECTOR_PCT: float = 25.0      # Max % per sector in watchlist
+
+# Symbol universe (50+ liquid ETFs and stocks)
+THETA_UNIVERSE: List[str] = [
+    # Large Cap ETFs
+    "SPY", "QQQ", "IWM", "DIA",
+    # Bond/Fixed Income
+    "TLT", "IEF", "LQD", "HYG", "SHY", "AGG",
+    # Commodities
+    "GLD", "SLV", "USO", "UNG", "DBC", "PDBC",
+    # Sector ETFs
+    "XLV", "XLK", "XLF", "XLI", "XLY", "XLE", "XLRE", "XLU", "XLP", "XLB",
+    # Volatility
+    "VXX", "UVXY",
+    # International
+    "EEM", "FXI", "EWJ", "EWG", "EWZ", "EWU",
+    # Growth
+    "ARKK", "QQQM", "VUG", "IWF",
+    # Value/Dividend
+    "VTV", "VYM", "SCHV", "DVY",
+    # Small/Mid Cap
+    "MDY", "IJR", "VB",
+    # Real Estate
+    "VNQ", "IYR",
+    # Additional Liquid
+    "RSP", "EFA", "VEA", "VWO", "BND",
+]
+
 
 # =============================================================================
 # COMMISSION ESTIMATES (for P&L calculation)

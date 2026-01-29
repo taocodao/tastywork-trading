@@ -142,3 +142,227 @@ async def reject_signal(signal_id: str):
             return {"status": "rejected", "message": "Signal rejected"}
     
     raise HTTPException(status_code=404, detail="Signal not found")
+
+
+# =============================================================================
+# THETA STRATEGY ENDPOINTS
+# =============================================================================
+
+class ThetaSignalResponse(BaseModel):
+    """Theta strategy signal response."""
+    id: str
+    signalType: str  # ENTRY or EXIT
+    symbol: str
+    strike: float
+    expiration: str
+    entryPrice: Optional[float] = None
+    exitPrice: Optional[float] = None
+    contracts: int
+    confidence: Optional[int] = None
+    capitalRequired: Optional[float] = None
+    totalPremium: Optional[float] = None
+    unrealizedPnL: Optional[float] = None
+    unrealizedPnLPct: Optional[float] = None
+    reason: Optional[str] = None
+    urgency: Optional[str] = None
+    rationale: str
+    status: str
+    createdAt: datetime
+
+
+class ThetaPositionResponse(BaseModel):
+    """Theta position response."""
+    position_id: str
+    symbol: str
+    strike: float
+    expiration: str
+    entry_date: str
+    entry_price: float
+    contracts: int
+    capital_reserved: float
+    premium_received: float
+    current_mid: float
+    unrealized_pnl: float
+    unrealized_pnl_pct: float
+    delta: float
+    theta: float
+    status: str
+
+
+@router.get("/theta", response_model=List[ThetaSignalResponse])
+async def list_theta_signals(
+    signal_type: Optional[str] = None,
+    status: Optional[str] = "pending",
+    limit: int = 20
+):
+    """
+    Get Theta strategy signals.
+    
+    Filter by:
+    - signal_type: ENTRY or EXIT
+    - status: pending, approved, executed
+    """
+    try:
+        from signal_publisher import get_theta_signals
+        signals = get_theta_signals(signal_type)
+        
+        if status:
+            signals = [s for s in signals if s.get("status") == status]
+        
+        return signals[:limit]
+    except Exception as e:
+        logger.error(f"Error fetching theta signals: {e}")
+        return []
+
+
+@router.get("/theta/positions", response_model=List[ThetaPositionResponse])
+async def list_theta_positions():
+    """Get all open Theta strategy positions."""
+    try:
+        import sys, os
+        sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
+        
+        from src.theta_spreads import ThetaPortfolioManager
+        import config
+        
+        portfolio = ThetaPortfolioManager(total_capital=config.ACCOUNT_SIZE)
+        positions = portfolio.get_all_positions()
+        
+        return [
+            {
+                "position_id": p.position_id,
+                "symbol": p.symbol,
+                "strike": p.strike,
+                "expiration": p.expiration.isoformat(),
+                "entry_date": p.entry_date.isoformat(),
+                "entry_price": p.entry_price,
+                "contracts": p.contracts,
+                "capital_reserved": p.capital_reserved,
+                "premium_received": p.premium_received,
+                "current_mid": p.current_mid,
+                "unrealized_pnl": p.unrealized_pnl,
+                "unrealized_pnl_pct": p.unrealized_pnl_pct,
+                "delta": p.delta,
+                "theta": p.theta,
+                "status": p.status
+            }
+            for p in positions
+        ]
+    except Exception as e:
+        logger.error(f"Error fetching theta positions: {e}")
+        return []
+
+
+@router.get("/theta/portfolio")
+async def get_theta_portfolio_state():
+    """Get Theta portfolio summary."""
+    try:
+        import sys, os
+        sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
+        
+        from src.theta_spreads import ThetaPortfolioManager
+        import config
+        
+        portfolio = ThetaPortfolioManager(total_capital=config.ACCOUNT_SIZE)
+        state = portfolio.get_portfolio_state()
+        
+        return {
+            "total_capital": state.total_capital,
+            "reserved_capital": state.reserved_capital,
+            "available_capital": state.available_capital,
+            "current_heat": state.current_heat,
+            "heat_pct": state.heat_pct,
+            "position_count": state.position_count,
+            "open_symbols": state.open_symbols,
+            "total_premium_received": state.total_premium_received,
+            "total_unrealized_pnl": state.total_unrealized_pnl,
+            "total_unrealized_pnl_pct": state.total_unrealized_pnl_pct
+        }
+    except Exception as e:
+        logger.error(f"Error fetching theta portfolio: {e}")
+        return {"error": str(e)}
+
+
+@router.post("/theta/{signal_id}/approve")
+async def approve_theta_signal(signal_id: str):
+    """
+    Approve a Theta signal.
+    
+    Marks the signal as 'approved'. The frontend will execute the actual trade
+    using the user's Tastytrade credentials via the frontend API.
+    """
+    try:
+        from signal_publisher import get_theta_signals
+        
+        signals = get_theta_signals()
+        signal = next((s for s in signals if s.get("id") == signal_id), None)
+        
+        if not signal:
+            raise HTTPException(status_code=404, detail="Signal not found")
+        
+        if signal.get("status") != "pending":
+            raise HTTPException(status_code=400, detail=f"Signal already {signal.get('status')}")
+        
+        # Just mark as approved - frontend will execute via user credentials
+        signal["status"] = "approved"
+        
+        logger.info(f"✅ Theta signal approved: {signal.get('symbol')} {signal.get('strike')}P")
+        
+        return {
+            "status": "approved",
+            "message": f"Theta signal {signal_id} approved. Ready for execution.",
+            "signal": signal
+        }
+    
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error approving theta signal: {e}")
+        import traceback
+        logger.error(traceback.format_exc())
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/theta/run-morning-analysis")
+async def run_theta_morning_analysis():
+    """
+    Manually trigger morning analysis.
+    
+    Runs: symbol selection → options analysis → entry signal generation
+    """
+    try:
+        import sys, os
+        sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
+        
+        from src.theta_spreads import ThetaScheduler
+        
+        scheduler = ThetaScheduler()
+        scheduler.run_morning_analysis_now()
+        
+        return {"status": "success", "message": "Morning analysis triggered"}
+    except Exception as e:
+        logger.error(f"Error running morning analysis: {e}")
+        return {"status": "error", "message": str(e)}
+
+
+@router.post("/theta/run-position-check")
+async def run_theta_position_check():
+    """
+    Manually trigger position monitoring.
+    
+    Checks all open positions for exit signals.
+    """
+    try:
+        import sys, os
+        sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
+        
+        from src.theta_spreads import ThetaScheduler
+        
+        scheduler = ThetaScheduler()
+        scheduler.run_position_check_now()
+        
+        return {"status": "success", "message": "Position check triggered"}
+    except Exception as e:
+        logger.error(f"Error running position check: {e}")
+        return {"status": "error", "message": str(e)}
+

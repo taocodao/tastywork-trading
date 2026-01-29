@@ -20,3 +20,7 @@ sqlalchemy>=2.0.0
 psycopg2-binary>=2.9.0
 joblib>=1.0
 pandas>=1.5.0
+
+# Theta Strategy Scheduler
+apscheduler>=3.10.0
+websockets>=12.0

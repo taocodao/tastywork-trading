@@ -613,6 +613,167 @@ class TastytradeClient:
         # If no exact match, find closest
         return min(options, key=lambda o: abs(float(o.strike) - strike))
     
+    def build_cash_secured_put_order(
+        self,
+        symbol: str,
+        strike: float,
+        expiry: date,
+        quantity: int = 1,
+        limit_price: Optional[float] = None
+    ):
+        """
+        Build a cash-secured put (SELL TO OPEN) order for Theta strategy.
+        
+        Args:
+            symbol: Underlying symbol (e.g., 'IWM')
+            strike: Put strike price
+            expiry: Expiration date
+            quantity: Number of contracts to sell
+            limit_price: Optional limit price (positive = credit received)
+            
+        Returns:
+            NewOrder object ready for submission
+        """
+        from tastytrade.order import NewOrder, OrderAction, OrderTimeInForce, OrderType
+        from tastytrade.instruments import Option
+        
+        if not self.is_connected:
+            raise RuntimeError("Not connected. Call connect() first.")
+        
+        # Find the put option at the specified strike
+        put_option = self.find_option_at_strike(symbol, expiry, strike, option_type='P')
+        
+        if not put_option:
+            raise ValueError(f"Could not find put option at strike {strike} for {symbol} exp {expiry}")
+        
+        # Get option instrument
+        put_instrument = Option.get(self._session, put_option.symbol)
+        
+        # Build SELL TO OPEN leg
+        put_leg = put_instrument.build_leg(
+            Decimal(str(quantity)),
+            OrderAction.SELL_TO_OPEN
+        )
+        
+        # Calculate limit price if not provided (use bid for premium)
+        if limit_price is None:
+            limit_price = put_option.bid  # Credit received
+        
+        order = NewOrder(
+            time_in_force=OrderTimeInForce.DAY,
+            order_type=OrderType.LIMIT,
+            legs=[put_leg],
+            price=Decimal(str(round(limit_price, 2)))  # Positive = credit
+        )
+        
+        logger.info(f"Built cash-secured put: SELL {symbol} {strike}P x{quantity} @ ${limit_price:.2f}")
+        
+        return order
+    
+    def build_close_put_order(
+        self,
+        put_option_symbol: str,
+        quantity: int = 1,
+        limit_price: Optional[float] = None
+    ):
+        """
+        Build a BUY TO CLOSE order for exiting a short put position.
+        
+        Args:
+            put_option_symbol: OCC symbol of the put option
+            quantity: Number of contracts to close
+            limit_price: Optional limit price (negative = debit paid)
+            
+        Returns:
+            NewOrder object ready for submission
+        """
+        from tastytrade.order import NewOrder, OrderAction, OrderTimeInForce, OrderType
+        from tastytrade.instruments import Option
+        
+        if not self.is_connected:
+            raise RuntimeError("Not connected. Call connect() first.")
+        
+        # Get option instrument
+        put_instrument = Option.get(self._session, put_option_symbol)
+        
+        # Build BUY TO CLOSE leg
+        put_leg = put_instrument.build_leg(
+            Decimal(str(quantity)),
+            OrderAction.BUY_TO_CLOSE
+        )
+        
+        order_params = {
+            'time_in_force': OrderTimeInForce.DAY,
+            'order_type': OrderType.LIMIT if limit_price else OrderType.MARKET,
+            'legs': [put_leg],
+        }
+        
+        if limit_price:
+            order_params['price'] = Decimal(str(round(-abs(limit_price), 2)))  # Negative = debit
+        
+        order = NewOrder(**order_params)
+        logger.info(f"Built close order: BUY TO CLOSE {put_option_symbol} x{quantity}")
+        
+        return order
+    
+    def execute_theta_entry(
+        self,
+        symbol: str,
+        strike: float,
+        expiry: date,
+        quantity: int = 1,
+        limit_price: Optional[float] = None,
+        dry_run: bool = True
+    ):
+        """
+        Execute a Theta strategy ENTRY (sell cash-secured put).
+        
+        Args:
+            symbol: Underlying symbol
+            strike: Put strike price
+            expiry: Expiration date
+            quantity: Number of contracts
+            limit_price: Optional limit price
+            dry_run: If True, validate only
+            
+        Returns:
+            Order response
+        """
+        order = self.build_cash_secured_put_order(
+            symbol=symbol,
+            strike=strike,
+            expiry=expiry,
+            quantity=quantity,
+            limit_price=limit_price
+        )
+        return self.place_order(order, dry_run=dry_run)
+    
+    def execute_theta_exit(
+        self,
+        put_option_symbol: str,
+        quantity: int = 1,
+        limit_price: Optional[float] = None,
+        dry_run: bool = True
+    ):
+        """
+        Execute a Theta strategy EXIT (buy to close put).
+        
+        Args:
+            put_option_symbol: OCC symbol of the put
+            quantity: Number of contracts
+            limit_price: Optional limit price
+            dry_run: If True, validate only
+            
+        Returns:
+            Order response
+        """
+        order = self.build_close_put_order(
+            put_option_symbol=put_option_symbol,
+            quantity=quantity,
+            limit_price=limit_price
+        )
+        return self.place_order(order, dry_run=dry_run)
+    
     def place_order(self, order, dry_run: bool = True):
         """
         Place an order.

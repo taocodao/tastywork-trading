@@ -1,0 +1,2 @@
+Signal count: 1
+Signal: f4a1452f-661c-4296-b337-d6aeea316dc2, Symbol: AAPL, Status: pending

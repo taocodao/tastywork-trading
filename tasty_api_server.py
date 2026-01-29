@@ -15,9 +15,39 @@ from tastytrade import Session, Account
 from tastytrade.instruments import Option, get_option_chain
 from tastytrade.order import NewOrder, OrderAction, OrderTimeInForce, OrderType, PriceEffect
 from tastytrade_client import TastytradeClient
+from tastytrade_utils import create_user_session, get_user_account
 from typing import List, Dict, Any
 
-load_dotenv()
+# CRITICAL: Use absolute path for systemd service compatibility
+# load_dotenv() without path fails in systemd because it searches relative to Python file location
+# See: https://github.com/theskumar/python-dotenv/issues/194
+ENV_FILE = '/home/ubuntu/tastywork-trading/.env'
+load_dotenv(ENV_FILE)
+
+# Verify critical environment variables are loaded
+TASTYTRADE_CLIENT_ID = os.getenv('TASTYTRADE_CLIENT_ID')
+TASTYTRADE_CLIENT_SECRET = os.getenv('TASTYTRADE_CLIENT_SECRET')
+
+if not TASTYTRADE_CLIENT_SECRET:
+    raise Exception(
+        f"CRITICAL: TASTYTRADE_CLIENT_SECRET not loaded from {ENV_FILE}\n"
+        f"Check that .env file exists and contains TASTYTRADE_CLIENT_SECRET=..."
+    )
+
+print(f"✅ Environment loaded from {ENV_FILE}")
+print(f"✅ TASTYTRADE_CLIENT_ID: {TASTYTRADE_CLIENT_ID[:10] if TASTYTRADE_CLIENT_ID else 'NOT SET'}...")
+print(f"✅ TASTYTRADE_CLIENT_SECRET: {TASTYTRADE_CLIENT_SECRET[:4] if TASTYTRADE_CLIENT_SECRET else 'NOT SET'}...")
+
+# Validate OAuth credentials at startup
+try:
+    from credential_enforcement import startup_credential_check
+    startup_credential_check()
+except ImportError:
+    print("⚠️  credential_enforcement.py not found - skipping startup validation")
+    print("   This check ensures frontend/backend OAuth credentials match")
+except SystemExit:
+    # startup_credential_check() calls sys.exit(1) on failure
+    raise
 
 # Add current directory to path to allow 'src' imports
 import sys
@@ -336,24 +366,20 @@ class TastyHandler(BaseHTTPRequestHandler):
                 return
             
             # Get user session using their OAuth token
-            user_session = get_user_oauth_session(user_refresh_token)
-            
-            if not user_session:
+            try:
+                user_session = create_user_session(user_refresh_token)
+                account = get_user_account(user_session, account_number)
+            except ValueError as e:
                 self._send_json({
-                    'error': 'Failed to create session with provided credentials',
+                    'error': str(e),
                     'status': 'auth_error'
                 }, 401)
                 return
-            
-            # Get the user's account
-            accounts = Account.get_accounts(user_session)
-            if account_number:
-                account = next((a for a in accounts if a.account_number == account_number), None)
-            else:
-                account = accounts[0] if accounts else None
-            
-            if not account:
-                self._send_json({'error': 'No account found'}, 404)
+            except Exception as e:
+                self._send_json({
+                    'error': f'Failed to create session: {str(e)}',
+                    'status': 'auth_error'
+                }, 401)
                 return
             
             # Build the closing order
@@ -555,34 +581,16 @@ class TastyHandler(BaseHTTPRequestHandler):
         
         try:
             # Import SDK components
-            from tastytrade import OAuthSession, Account
             from tastytrade.order import NewOrder
             
-            # Create per-user session (session-per-task pattern)
-            client_secret = os.getenv('TASTYTRADE_CLIENT_SECRET')
-            if not client_secret:
-                raise ValueError("TASTYTRADE_CLIENT_SECRET not configured")
-            
-            session = OAuthSession(
-                client_secret=client_secret,
-                refresh_token=user_refresh_token
-            )
+            # Create per-user session using shared utility (session-per-task pattern)
+            session = create_user_session(user_refresh_token)
             print(f"✅ Created session for user (expires: {session.session_expiration})")
             
-            # Get account if not provided
-            if not account_number:
-                accounts = Account.get_accounts(session)
-                if not accounts:
-                    raise ValueError("No accounts found for user")
-                account = accounts[0]
-                account_number = account.account_number
-                print(f"📊 Using account: {account_number}")
-            else:
-                # Get account object from account number
-                accounts = Account.get_accounts(session)
-                account = next((a for a in accounts if a.account_number == account_number), accounts[0] if accounts else None)
-                if not account:
-                    raise ValueError(f"Account {account_number} not found")
+            # Get user's account using shared utility
+            account = get_user_account(session, account_number)
+            account_number = account.account_number
+            print(f"📊 Using account: {account_number}")
             
             # Build calendar spread order
             symbol = signal['symbol']

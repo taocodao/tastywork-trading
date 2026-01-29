@@ -414,3 +414,157 @@ class IBDataProvider:
             import traceback
             traceback.print_exc()
             return None
+
+    def get_put_chain_for_theta(
+        self, 
+        symbol: str, 
+        expiry: date,
+        delta_min: float = 0.25,
+        delta_max: float = 0.35
+    ) -> List[dict]:
+        """
+        Get put option chain filtered by delta range with full Greeks for Theta strategy.
+        
+        For 30-delta puts, we need OTM strikes (typically 5-10% below stock price).
+        
+        Args:
+            symbol: Stock symbol
+            expiry: Target expiration date
+            delta_min: Minimum delta (default: 0.25)
+            delta_max: Maximum delta (default: 0.35)
+            
+        Returns:
+            List of put dicts with: strike, expiration, bid, ask, delta, theta, vega, gamma, iv, volume, open_interest
+        """
+        if not self._connected and not self.connect():
+            return []
+            
+        try:
+            # Get stock price first
+            stock_price = self.get_price(symbol)
+            if stock_price <= 0:
+                logger.warning(f"Could not get stock price for {symbol}")
+                return []
+            
+            # Get underlying contract
+            underlying = Stock(symbol, 'SMART', 'USD')
+            self.ib.qualifyContracts(underlying)
+            
+            # Get option chain parameters
+            chains = self.ib.reqSecDefOptParams(underlying.symbol, '', underlying.secType, underlying.conId)
+            smart_chains = [c for c in chains if c.exchange == 'SMART']
+            
+            if not smart_chains:
+                logger.warning(f"No SMART option chains found for {symbol}")
+                return []
+            
+            # Find nearest expiry to target
+            all_expirations = set()
+            for c in smart_chains:
+                all_expirations.update(c.expirations)
+            
+            target_exp_str = expiry.strftime('%Y%m%d')
+            if target_exp_str in all_expirations:
+                final_exp_str = target_exp_str
+            else:
+                # Find nearest
+                available_dates = [datetime.strptime(d, '%Y%m%d').date() for d in all_expirations]
+                nearest_date = min(available_dates, key=lambda d: abs(d - expiry))
+                final_exp_str = nearest_date.strftime('%Y%m%d')
+            
+            selected_chain = next((c for c in smart_chains if final_exp_str in c.expirations), None)
+            if not selected_chain:
+                return []
+            
+            # For 30-delta OTM puts, we need strikes BELOW the stock price
+            # Typically 5-15% OTM for 30-delta range
+            strikes = [k for k in selected_chain.strikes 
+                      if 0.85 * stock_price <= k <= 0.98 * stock_price]
+            
+            if not strikes:
+                logger.warning(f"No OTM put strikes found for {symbol}")
+                return []
+            
+            # Build put contracts
+            contracts = [Option(symbol, final_exp_str, k, 'P', 'SMART') for k in strikes]
+            
+            # Qualify contracts
+            self.ib.qualifyContracts(*contracts)
+            
+            # Request market data with Greeks (generic tick 106)
+            tickers = [self.ib.reqMktData(c, '106', False, False) for c in contracts]
+            
+            # Wait for data
+            start_wait = datetime.now()
+            while (datetime.now() - start_wait).total_seconds() < 3.0:
+                self.ib.sleep(0.1)
+                ready_count = sum(1 for t in tickers if t.bid > 0 and t.ask > 0)
+                if ready_count >= len(tickers) * 0.8:
+                    break
+            
+            # Build result
+            result = []
+            final_expiry_date = datetime.strptime(final_exp_str, '%Y%m%d').date()
+            
+            for t in tickers:
+                bid = t.bid if t.bid > 0 else (t.last if t.last else 0)
+                ask = t.ask if t.ask > 0 else (t.last if t.last else 0)
+                
+                if bid <= 0 and ask <= 0:
+                    continue
+                
+                # Get Greeks if available
+                if t.modelGreeks:
+                    delta = abs(t.modelGreeks.delta) if t.modelGreeks.delta else 0.30
+                    theta = t.modelGreeks.theta or 0
+                    vega = t.modelGreeks.vega or 0
+                    gamma = t.modelGreeks.gamma or 0
+                    iv = t.modelGreeks.impliedVol or 0.30
+                else:
+                    # Estimate delta from moneyness
+                    moneyness = t.contract.strike / stock_price
+                    if moneyness < 0.90:
+                        delta = 0.15
+                    elif moneyness < 0.95:
+                        delta = 0.25
+                    elif moneyness < 0.97:
+                        delta = 0.30
+                    else:
+                        delta = 0.40
+                    
+                    mid = (bid + ask) / 2 if bid > 0 and ask > 0 else bid or ask
+                    dte = (final_expiry_date - date.today()).days
+                    theta = -mid / max(dte, 1) * 0.7
+                    vega = mid * 0.01
+                    gamma = 0.015
+                    iv = 0.30
+                
+                result.append({
+                    "strike": t.contract.strike,
+                    "expiration": final_expiry_date,
+                    "bid": bid,
+                    "ask": ask,
+                    "delta": delta,
+                    "theta": theta,
+                    "vega": vega,
+                    "gamma": gamma,
+                    "iv": iv,
+                    "volume": t.volume if t.volume else 0,
+                    "open_interest": t.putOpenInterest if t.putOpenInterest else 0
+                })
+            
+            # Cancel market data
+            for t in tickers:
+                try:
+                    self.ib.cancelMktData(t.contract)
+                except:
+                    pass
+            
+            logger.info(f"{symbol}: Found {len(result)} OTM puts (strikes {min(strikes):.0f}-{max(strikes):.0f})")
+            return result
+            
+        except Exception as e:
+            logger.error(f"Error getting put chain for {symbol}: {e}")
+            import traceback
+            traceback.print_exc()
+            return []
