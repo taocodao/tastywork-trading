@@ -23,40 +23,42 @@ logger = logging.getLogger(__name__)
 class ThetaEntrySignal:
     """Signal for opening a theta position (cash-secured put)."""
     
-    # Identity
+    # Identity (required)
     id: str
     symbol: str
-    action: str = "SELL_TO_OPEN"
     
-    # Option details
+    # Option details (required)
     strike: float
     expiration: str  # ISO format date
     dte: int
     
-    # Pricing
+    # Pricing (required)
     entry_price: float  # Bid price we're selling at
     ask: float
     mid: float
     
-    # Greeks
+    # Greeks (required)
     delta: float
     theta: float
     vega: float
     iv: float  # Implied volatility
     
-    # Risk metrics
+    # Risk metrics (required)
     confidence: float  # 0-100 score
     probability_otm: float  # Probability of expiring OTM
     expected_premium: float
     capital_required: float
     
-    # Position sizing
+    # Position sizing (required)
     contracts: int
     total_premium: float
     total_capital_required: float
     
-    # Metadata
+    # Metadata (required)
     created_at: datetime
+    
+    # Fields with default values must come last
+    action: str = "SELL_TO_OPEN"
     status: str = "pending"
     
     def to_dict(self):
@@ -72,31 +74,33 @@ class ThetaEntrySignal:
 class ThetaExitSignal:
     """Signal for closing a theta position (buy back the put)."""
     
-    # Identity
+    # Identity (required)
     id: str
     position_id: str  # ID of the entry signal
     symbol: str
-    action: str = "BUY_TO_CLOSE"
     
-    # Option details
+    # Option details (required)
     strike: float
     expiration: str
     
-    # Exit details
+    # Exit details (required)
     exit_price: float  # Ask price we're buying at
     exit_reason: str  # "profit_target", "stop_loss", "time_decay", "manual"
     
-    # P&L
+    # P&L (required)
     entry_price: float
     pnl: float
     pnl_percent: float
     
-    # Position info
+    # Position info (required)
     contracts: int
     days_held: int
     
-    # Metadata
+    # Metadata (required)
     created_at: datetime
+    
+    # Fields with default values must come last
+    action: str = "BUY_TO_CLOSE"
     status: str = "pending"
     
     def to_dict(self):

@@ -157,6 +157,124 @@ class ThetaSignalGenerator:
         
         self.dte_expiration_threshold = dte_expiration_threshold
         self.defensive_breach_pct = defensive_breach_pct
+        
+        # Initialize filters
+        self._init_filters()
+        
+    @classmethod
+    def from_risk_profile(cls, risk_level: Optional[str] = None):
+        """Create generator instance from risk profile name."""
+        try:
+            from .risk_profiles import RiskLevel, get_risk_profile
+            
+            # Default to MEDIUM if not specified
+            if not risk_level:
+                risk_level = "MEDIUM"
+                
+            try:
+                level = RiskLevel[risk_level.upper()]
+            except KeyError:
+                logger.warning(f"Invalid risk level '{risk_level}', defaulting to MEDIUM")
+                level = RiskLevel.MEDIUM
+                
+            profile = get_risk_profile(level)
+            logger.info(f"Initialized signal generator with {level.name} risk profile")
+            
+            return cls(
+                contracts_per_trade=profile.contracts_per_trade,
+                max_positions=profile.max_positions,
+                max_portfolio_heat=profile.max_portfolio_heat,
+                min_confidence=profile.min_confidence,
+                week1_profit_pct=profile.week1_profit_pct,
+                week2_profit_pct=profile.week2_profit_pct,
+                week3_profit_pct=profile.week3_profit_pct,
+                week4_profit_pct=profile.week4_profit_pct,
+                dte_expiration_threshold=profile.dte_exit_threshold,
+                defensive_breach_pct=profile.defensive_breach_pct
+            )
+        except ImportError:
+            logger.warning("Risk profiles module not available, using defaults")
+            return cls()
+    
+    @classmethod
+    def from_symbol(cls, symbol: str, fallback_risk_level: Optional[str] = "MEDIUM"):
+        """
+        Create generator instance with symbol-specific optimized profile.
+        
+        Uses symbol_profiles module for per-symbol parameter tuning.
+        If symbol not configured, falls back to standard risk profile.
+        
+        Args:
+            symbol: Stock symbol (e.g., "QQQ", "SPY", "IWM")
+            fallback_risk_level: Risk level if symbol not configured
+            
+        Returns:
+            ThetaSignalGenerator configured for symbol
+        """
+        try:
+            from .symbol_profiles import get_symbol_profile
+            from .risk_profiles import RiskLevel
+            
+            # Get symbol-specific profile (with optimizations)
+            try:
+                level = RiskLevel[fallback_risk_level.upper()]
+            except (KeyError, AttributeError):
+                level = RiskLevel.MEDIUM
+                
+            profile = get_symbol_profile(symbol, default_risk_level=level)
+            logger.info(f"Initialized signal generator for {symbol} with optimized profile")
+            
+            return cls(
+                contracts_per_trade=profile.contracts_per_trade,
+                max_positions=profile.max_positions,
+                max_portfolio_heat=profile.max_portfolio_heat,
+                min_confidence=profile.min_confidence,
+                week1_profit_pct=profile.week1_profit_pct,
+                week2_profit_pct=profile.week2_profit_pct,
+                week3_profit_pct=profile.week3_profit_pct,
+                week4_profit_pct=profile.week4_profit_pct,
+                dte_expiration_threshold=profile.dte_exit_threshold,
+                defensive_breach_pct=profile.defensive_breach_pct
+            )
+        except ImportError:
+            logger.warning("Symbol profiles not available, using standard risk profile")
+            return cls.from_risk_profile(fallback_risk_level)
+
+    def _init_filters(self):
+        """Initialize market filters for rule-based risk management."""
+        try:
+            from .market_filters import MarketFilters
+            self.market_filters = MarketFilters()
+        except ImportError:
+            logger.warning("MarketFilters not available, VIX filtering disabled")
+            self.market_filters = None
+        
+        try:
+            from .earnings_calendar import EarningsCalendar
+            self.earnings_calendar = EarningsCalendar()
+        except ImportError:
+            logger.warning("EarningsCalendar not available, earnings blackout disabled")
+            self.earnings_calendar = None
+        
+        try:
+            from .correlation_filter import CorrelationFilter
+            self.correlation_filter = CorrelationFilter()
+        except ImportError:
+            logger.warning("CorrelationFilter not available, correlation filtering disabled")
+            self.correlation_filter = None
+        
+        # Initialize defensive exit manager with trailing confirmation
+        try:
+            from .defensive_exits import DefensiveExitManager
+            self.defensive_exit_manager = DefensiveExitManager(
+                breach_threshold_pct=self.defensive_breach_pct / 100,  # Convert % to decimal
+                breach_confirmation_days=3,  # Default: require 3 days to confirm
+                dte_exit_threshold=self.dte_expiration_threshold
+            )
+            logger.info("DefensiveExitManager initialized with trailing confirmation")
+        except ImportError:
+            logger.warning("DefensiveExitManager not available, using static exits")
+            self.defensive_exit_manager = None
     
     def generate_entry_signals(
         self,
@@ -179,15 +297,35 @@ class ThetaSignalGenerator:
         """
         signals: List[ThetaEntrySignal] = []
         
+        # ===== VIX filter with graceful degradation =====
+        vix_level = 0.0
+        adjusted_contracts = self.contracts_per_trade
+        
+        if self.market_filters:
+            can_trade, vix_reason, vix_level = self.market_filters.check_vix_filter()
+            if not can_trade:
+                logger.warning(f"\ud83d\udeab ALL ENTRIES BLOCKED: {vix_reason}")
+                return []  # No signals when VIX too high
+            
+            # Get position size multiplier based on VIX
+            size_multiplier = self.market_filters.get_position_size_multiplier()
+            adjusted_contracts = max(1, int(self.contracts_per_trade * size_multiplier))
+            
+            if size_multiplier < 1.0:
+                logger.info(f"\u26a0\ufe0f VIX elevated ({vix_level:.1f}): Reducing position size to {adjusted_contracts} contracts")
+        else:
+            logger.debug("VIX filter not available, using default position size")
+        
         available_capital = portfolio_state.get("available_capital", 0)
         current_heat = portfolio_state.get("current_heat", 0)
         open_symbols = set(portfolio_state.get("open_positions", []))
+        open_symbols_list = list(open_symbols)  # For correlation filter
         position_count = portfolio_state.get("position_count", 0)
         
         logger.info(f"Generating entry signals from {len(ranked_puts)} ranked puts...")
-        logger.info(f"Portfolio state: {position_count}/{self.max_positions} positions, "
-                   f"${current_heat:,.0f}/${self.max_portfolio_heat:,.0f} heat, "
-                   f"${available_capital:,.0f} available")
+        logger.info(f"Portfolio state: {position_count}/{self.max_positions} positions, ")
+        logger.info(f"  Heat: ${current_heat:,.0f}/${self.max_portfolio_heat:,.0f}, ")
+        logger.info(f"  Available: ${available_capital:,.0f}, VIX: {vix_level:.1f}")
         
         for put in ranked_puts:
             # Filter 1: Confidence threshold
@@ -204,9 +342,27 @@ class ThetaSignalGenerator:
                 logger.debug(f"{put.symbol}: Already have position")
                 continue
             
-            # Calculate position sizing
-            capital_required = put.strike * 100 * self.contracts_per_trade
-            premium_received = put.bid * 100 * self.contracts_per_trade
+            # ===== Earnings blackout (with graceful degradation) =====
+            if self.earnings_calendar:
+                is_blackout, blackout_reason = self.earnings_calendar.is_in_blackout(
+                    put.symbol, position_dte=put.dte
+                )
+                if is_blackout:
+                    logger.info(f"{put.symbol}: {blackout_reason}")
+                    continue
+            
+            # ===== Correlation check (with graceful degradation) =====
+            if self.correlation_filter:
+                can_open, corr_reason = self.correlation_filter.can_open_position(
+                    put.symbol, open_symbols_list
+                )
+                if not can_open:
+                    logger.info(f"{put.symbol}: {corr_reason}")
+                    continue
+            
+            # Calculate position sizing (using VIX-adjusted contracts)
+            capital_required = put.strike * 100 * adjusted_contracts
+            premium_received = put.bid * 100 * adjusted_contracts
             
             # Filter 4: Available capital check
             if capital_required > available_capital:
@@ -237,7 +393,7 @@ class ThetaSignalGenerator:
                 probability_otm=put.probability_otm,
                 expected_premium=put.expected_premium,
                 capital_required=put.capital_required,
-                contracts=self.contracts_per_trade,
+                contracts=adjusted_contracts,  # Use VIX-adjusted size
                 total_premium=premium_received,
                 total_capital_required=capital_required,
                 created_at=datetime.now(),
@@ -251,6 +407,7 @@ class ThetaSignalGenerator:
             current_heat += capital_required
             position_count += 1
             open_symbols.add(put.symbol)
+            open_symbols_list.append(put.symbol)  # For correlation filter
         
         logger.info(f"Generated {len(signals)} entry signals")
         self._log_entry_signals(signals)
@@ -342,17 +499,35 @@ class ThetaSignalGenerator:
                     "CRITICAL", days_in_trade, 90.0
                 )
             
-            # Check 3: Defensive close (underlying breached strike)
+            # Check 3: Defensive close with TRAILING CONFIRMATION
+            # Instead of immediate exit, requires 2-3 consecutive days of breach
             if current_prices:
                 underlying_price = current_prices.get(symbol)
                 if underlying_price:
-                    breach_threshold = strike * (1 - self.defensive_breach_pct / 100)
-                    if underlying_price < breach_threshold:
-                        return self._create_exit_signal(
-                            position_id, position, current_ask, unrealized_pnl,
-                            unrealized_pnl_pct, ExitReason.DEFENSIVE_CLOSE,
-                            "HIGH", days_in_trade, 0.0
+                    # Use trailing defensive exit manager if available
+                    if self.defensive_exit_manager:
+                        should_exit, reason, breach_days = self.defensive_exit_manager.check_defensive_exit(
+                            position_id, symbol, strike, underlying_price
                         )
+                        if should_exit:
+                            logger.warning(f"🚫 {symbol}: {reason}")
+                            return self._create_exit_signal(
+                                position_id, position, current_ask, unrealized_pnl,
+                                unrealized_pnl_pct, ExitReason.DEFENSIVE_CLOSE,
+                                "HIGH", days_in_trade, 0.0
+                            )
+                        elif breach_days > 0:
+                            # In breach but not confirmed yet - log for awareness
+                            logger.info(f"⚠️ {symbol}: Breach day {breach_days}, watching...")
+                    else:
+                        # Fallback to static exit if manager not available
+                        breach_threshold = strike * (1 - self.defensive_breach_pct / 100)
+                        if underlying_price < breach_threshold:
+                            return self._create_exit_signal(
+                                position_id, position, current_ask, unrealized_pnl,
+                                unrealized_pnl_pct, ExitReason.DEFENSIVE_CLOSE,
+                                "HIGH", days_in_trade, 0.0
+                            )
             
             # No exit signal
             return None

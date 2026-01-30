@@ -35,16 +35,11 @@ import signal as sig
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 import config
-# Simple signal publishing stub (bypass modular refactor for now)
-def publish_theta_entry_signal(signal):
-    """Stub for signal publishing - implement WebSocket later."""
-    logger.info(f"[STUB] Would publish signal: {signal.symbol} {signal.strike}P")
-    return True
 
-def publish_theta_exit_signal(signal):
-    """Stub for exit signal publishing."""
-    logger.info(f"[STUB] Would publish exit: {signal.symbol} {signal.strike}P")  
-    return True
+# Import modular signal publishers
+from signal_publisher.theta import ThetaEntrySignal, ThetaExitSignal, publish_theta_entry_signal, publish_theta_exit_signal
+from datetime import datetime
+import uuid
 
 # Configure logging
 logging.basicConfig(
@@ -133,7 +128,7 @@ def run_morning_analysis():
             # Step 3: Generate Signals
             logger.info("[3/4] Generating entry signals...")
             portfolio = ThetaPortfolioManager(total_capital=config.ACCOUNT_SIZE)
-            signal_gen = ThetaSignalGenerator()
+            signal_gen = ThetaSignalGenerator.from_risk_profile(config.THETA_RISK_LEVEL)
             
             # Get portfolio state
             state = portfolio.get_portfolio_state()

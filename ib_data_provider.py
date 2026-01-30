@@ -20,10 +20,12 @@ class IBDataProvider:
     Data provider that fetches real-time data from Interactive Brokers.
     """
     
-    def __init__(self, host: str = "34.235.119.67", port: int = 4004, client_id: int = 3000):
-        self.host = host
-        self.port = port
-        self.client_id = client_id
+    def __init__(self, host: str = None, port: int = None, client_id: int = None):
+        # Use config values as defaults
+        import config
+        self.host = host or config.IB_HOST
+        self.port = port or config.IB_PORT
+        self.client_id = client_id or config.IB_CLIENT_ID
         self.ib = IB()
         self._connected = False
         

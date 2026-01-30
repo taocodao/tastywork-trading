@@ -73,9 +73,11 @@ MAX_HOLD_HOURS: float = 6.5      # Close by 10:00 AM if still open
 # Order Execution: Tastytrade API
 # =============================================================================
 
-# Interactive Brokers (Market Data Source)
-IB_HOST: str = "127.0.0.1"
-IB_PORT: int = 7497              # Paper trading: 7497, Live: 7496
+# Interactive Brokers (Market Data Source + IB Paper Trading Execution)
+# EC2 IB Gateway: 34.235.119.67:4004 (Production)
+# Local Paper: 127.0.0.1:7497, Local Live: 127.0.0.1:7496
+IB_HOST: str = "34.235.119.67"
+IB_PORT: int = 4004              # EC2 Gateway port
 IB_CLIENT_ID: int = 100
 
 # Tastytrade (Order Execution)
@@ -139,6 +141,7 @@ VERTICAL_MIN_OPTIONS_LEVEL: int = 2     # Options approval level required
 # THETA STRATEGY SETTINGS (Cash-Secured Puts)
 # =============================================================================
 THETA_ENABLED: bool = True
+THETA_RISK_LEVEL: str = "MEDIUM"        # Risk Profile: LOW, MEDIUM, HIGH
 THETA_MIN_CONFIDENCE: int = 60          # Minimum put confidence score
 THETA_TARGET_DELTA: float = 0.30        # Target put delta (30-delta)
 THETA_DELTA_TOLERANCE: float = 0.05     # Delta range tolerance (±5 delta)

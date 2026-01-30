@@ -141,7 +141,7 @@ class TastyHandler(BaseHTTPRequestHandler):
         self.send_response(status)
         self.send_header('Content-Type', 'application/json')
         self.send_header('Access-Control-Allow-Origin', '*')
-        self.send_header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
+        self.send_header('Access-Control-Allow-Methods', 'GET, POST, PUT, OPTIONS')
         self.send_header('Access-Control-Allow-Headers', 'Content-Type')
         self.end_headers()
         self.wfile.write(json.dumps(data).encode())
@@ -159,6 +159,10 @@ class TastyHandler(BaseHTTPRequestHandler):
                 self.handle_get_signals()
             elif self.path == '/api/tracked-positions':
                 self.handle_get_tracked_positions()
+            elif self.path == '/api/settings/risk-level':
+                self.handle_get_risk_level()
+            elif self.path == '/api/settings/risk-profiles':
+                self.handle_get_risk_profiles()
             elif self.path == '/health':
                 self._send_json({'status': 'ok', 'service': 'TradeMind Tastytrade API'})
             else:
@@ -183,6 +187,23 @@ class TastyHandler(BaseHTTPRequestHandler):
                 self.handle_close_position(position_id, data)
             elif self.path == '/api/trade':
                 self.handle_execute_trade(data)
+            else:
+                self._send_json({'error': 'Not found'}, 404)
+        except Exception as e:
+            print(f"Error: {e}")
+            import traceback
+            traceback.print_exc()
+            self._send_json({'error': str(e)}, 500)
+
+    def do_PUT(self):
+        """Handle PUT requests."""
+        try:
+            content_length = int(self.headers.get('Content-Length', 0))
+            body = self.rfile.read(content_length).decode() if content_length > 0 else '{}'
+            data = json.loads(body)
+            
+            if self.path == '/api/settings/risk-level':
+                self.handle_set_risk_level(data)
             else:
                 self._send_json({'error': 'Not found'}, 404)
         except Exception as e:
@@ -321,6 +342,139 @@ class TastyHandler(BaseHTTPRequestHandler):
             import traceback
             traceback.print_exc()
             self._send_json({'error': str(e)}, 500)
+
+    def handle_get_risk_level(self):
+        """Get current risk level and profile details."""
+        try:
+            from pathlib import Path
+            import json as json_lib
+            
+            from src.theta_spreads.risk_profiles import (
+                LOW_RISK_PROFILE, MEDIUM_RISK_PROFILE, HIGH_RISK_PROFILE
+            )
+            
+            # Load from settings file
+            settings_file = Path("data/theta_settings.json")
+            current_level = "MEDIUM"
+            if settings_file.exists():
+                with open(settings_file) as f:
+                    settings = json_lib.load(f)
+                    current_level = settings.get("risk_level", "MEDIUM").upper()
+            
+            def profile_to_dict(profile):
+                return {
+                    "level": profile.level.value.upper(),
+                    "name": profile.name,
+                    "description": profile.description,
+                    "max_positions": profile.max_positions,
+                    "max_capital_deployed_pct": profile.max_capital_deployed_pct,
+                    "cash_reserve_pct": profile.cash_reserve_pct,
+                    "max_portfolio_heat": profile.max_portfolio_heat,
+                    "contracts_per_trade": profile.contracts_per_trade,
+                    "breach_confirmation_days": profile.breach_confirmation_days,
+                    "vix_block_trading": profile.vix_block_trading,
+                    "vix_close_all": profile.vix_close_all,
+                    "expected_max_loss_pct": profile.expected_max_loss_pct,
+                    "expected_annual_roi_pct": profile.expected_annual_roi_pct,
+                    "recovery_time_months": profile.recovery_time_months,
+                }
+            
+            self._send_json({
+                "current_level": current_level,
+                "profiles": {
+                    "LOW": profile_to_dict(LOW_RISK_PROFILE),
+                    "MEDIUM": profile_to_dict(MEDIUM_RISK_PROFILE),
+                    "HIGH": profile_to_dict(HIGH_RISK_PROFILE),
+                }
+            })
+            
+        except Exception as e:
+            print(f"Risk level error: {e}")
+            import traceback
+            traceback.print_exc()
+            self._send_json({'error': str(e)}, 500)
+
+    def handle_get_risk_profiles(self):
+        """Get all risk profiles with summaries for display."""
+        try:
+            from src.theta_spreads.risk_profiles import (
+                LOW_RISK_PROFILE, MEDIUM_RISK_PROFILE, HIGH_RISK_PROFILE
+            )
+            
+            def profile_summary(profile, icon):
+                return {
+                    "level": profile.level.value.upper(),
+                    "name": profile.name,
+                    "icon": icon,
+                    "description": profile.description,
+                    "highlights": {
+                        "max_positions": profile.max_positions,
+                        "capital_deployed": f"{int(profile.max_capital_deployed_pct * 100)}%",
+                        "cash_reserve": f"{int(profile.cash_reserve_pct * 100)}%",
+                        "vix_close_all": f">{int(profile.vix_close_all)}",
+                        "expected_roi": f"{int(profile.expected_annual_roi_pct * 100)}%",
+                        "max_loss": f"-{int(profile.expected_max_loss_pct * 100)}%",
+                        "recovery": profile.recovery_time_months
+                    }
+                }
+            
+            self._send_json({
+                "profiles": [
+                    profile_summary(LOW_RISK_PROFILE, "🛡️"),
+                    profile_summary(MEDIUM_RISK_PROFILE, "⚖️"),
+                    profile_summary(HIGH_RISK_PROFILE, "🚀"),
+                ]
+            })
+            
+        except Exception as e:
+            print(f"Risk profiles error: {e}")
+            self._send_json({'error': str(e)}, 500)
+
+    def handle_set_risk_level(self, data: dict):
+        """Set the Theta strategy risk level."""
+        try:
+            from pathlib import Path
+            import json as json_lib
+            
+            level = data.get("level", "").upper()
+            
+            if level not in ["LOW", "MEDIUM", "HIGH"]:
+                self._send_json({
+                    'error': f"Invalid risk level '{level}'. Must be LOW, MEDIUM, or HIGH."
+                }, 400)
+                return
+            
+            # Save to settings file
+            settings_file = Path("data/theta_settings.json")
+            settings_file.parent.mkdir(parents=True, exist_ok=True)
+            
+            settings = {}
+            if settings_file.exists():
+                with open(settings_file) as f:
+                    settings = json_lib.load(f)
+            
+            settings["risk_level"] = level
+            
+            with open(settings_file, 'w') as f:
+                json_lib.dump(settings, f, indent=2)
+            
+            # Also update environment variable for current session
+            os.environ["THETA_RISK_LEVEL"] = level
+            
+            print(f"✅ Risk level changed to: {level}")
+            
+            self._send_json({
+                "status": "success",
+                "message": f"Risk level set to {level}",
+                "current_level": level
+            })
+            
+        except Exception as e:
+            print(f"Set risk level error: {e}")
+            import traceback
+            traceback.print_exc()
+            self._send_json({'error': str(e)}, 500)
+
 
     def handle_close_position(self, position_id: str, data: dict):
         """Close a tracked position.

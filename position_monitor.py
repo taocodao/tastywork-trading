@@ -103,13 +103,36 @@ class PositionMonitor:
     """
     Monitors open theta positions and executes exits.
     Runs every 60 seconds during market hours.
+    
+    Uses symbol-specific defensive exit logic with optimized parameters:
+    - QQQ: Tighter profit targets, earlier DTE exit
+    - IWM: Aggressive settings
+    - SPY: Balanced approach
     """
     
     def __init__(self, ib_provider, portfolio_manager: ThetaPortfolioManager, ib_executor: IBOrderExecutor):
         self.ib = ib_provider
         self.portfolio = portfolio_manager
         self.executor = ib_executor
-        self.exit_manager = OptimizedExitManager()
+        
+        # Symbol-specific exit managers (lazy loaded per symbol)
+        self.exit_managers = {}
+        
+        logger.info("Position Monitor initialized with symbol-specific exit logic")
+    
+    def _get_exit_manager(self, symbol: str):
+        """Get or create exit manager for symbol."""
+        if symbol not in self.exit_managers:
+            try:
+                from src.theta_spreads.defensive_exits import create_exit_manager_from_symbol
+                self.exit_managers[symbol] = create_exit_manager_from_symbol(symbol)
+                logger.info(f"Created symbol-specific exit manager for {symbol}")
+            except ImportError:
+                # Fallback to old trailing stop if new modules not available
+                logger.warning(f"Symbol-specific exits not available, using trailing stop for {symbol}")
+                self.exit_managers[symbol] = OptimizedExitManager()
+        
+        return self.exit_managers[symbol]
     
     def check_all_positions(self):
         """
@@ -136,13 +159,16 @@ class PositionMonitor:
                 logger.error(f"Error checking {position.symbol}: {e}", exc_info=True)
         
         # Summary
-        logger.info("\\n" + "=" * 70)
+        logger.info("\n" + "=" * 70)
         logger.info(f"✅ Monitoring complete - {len(open_positions)} position(s) checked")
         logger.info("=" * 70)
     
     def _check_position(self, position: ThetaPosition):
-        """Check a single position for exit criteria."""
-        logger.info(f"\\n--- {position.symbol} {position.strike}P ---")
+        """Check a single position for exit criteria using symbol-specific logic."""
+        logger.info(f"\n--- {position.symbol} {position.strike}P ---")
+        
+        # Get symbol-specific exit manager
+        exit_manager = self._get_exit_manager(position.symbol)
         
         # Fetch current option price
         current_price = self._get_current_price(position)
@@ -154,26 +180,78 @@ class PositionMonitor:
         # Update position state
         self.portfolio.update_position_state(position.id, current_price)
         
-        # Check exit criteria
-        exit_reason = self.exit_manager.should_exit(position)
+        # Check symbol-specific exit criteria
+        exit_reason = None
+        
+        # Try defensive exits if available
+        if hasattr(exit_manager, 'check_all_exits'):
+            # New symbol-specific defensive exit logic
+            try:
+                # Get current stock price for breach checking
+                stock_price = self._get_stock_price(position.symbol)
+                
+                should_exit, reason, exit_type = exit_manager.check_all_exits(
+                    position_id=position.id,
+                    symbol=position.symbol,
+                    strike=position.strike,
+                    current_stock_price=stock_price if stock_price else position.strike * 1.05,
+                    days_to_expiration=position.days_to_expiration,
+                    current_vix=None  # Could add VIX fetching
+                )
+                
+                if should_exit:
+                    exit_reason = f"{exit_type}_{reason}" if exit_type else reason
+                    
+            except Exception as e:
+                logger.warning(f"Defensive exit check failed: {e}, falling back to trailing stop")
+                exit_reason = exit_manager.should_exit(position)
+        else:
+            # Fallback to trailing stop
+            exit_reason = exit_manager.should_exit(position)
         
         if exit_reason:
             logger.info(f"🚨 EXIT TRIGGERED: {exit_reason}")
             self._execute_exit(position, exit_reason)
         else:
             # Log monitoring status
-            status = "TRAILING" if position.trailing_active else "MONITORING"
+            status = getattr(position, 'trailing_active', False)
+            status_str = "TRAILING" if status else "MONITORING"
+            
             logger.info(
-                f"Status: {status}\\n"
-                f"  Entry: ${position.entry_price:.2f} → Current: ${current_price:.2f}\\n"
-                f"  P&L: {position.unrealized_pnl_pct:+.1f}% (${position.unrealized_pnl:+.2f})\\n"
-                f"  Peak: {position.peak_pnl_pct:.1f}%\\n"
+                f"Status: {status_str}\n"
+                f"  Entry: ${position.entry_price:.2f} → Current: ${current_price:.2f}\n"
+                f"  P&L: {position.unrealized_pnl_pct:+.1f}% (${position.unrealized_pnl:+.2f})\n"
+                f"  Peak: {getattr(position, 'peak_pnl_pct', 0):.1f}%\n"
                 f"  DTE: {position.days_to_expiration} days | Held: {position.days_held} days"
             )
     
+    def _get_stock_price(self, symbol: str) -> Optional[float]:
+        """Fetch current stock price for breach checking."""
+        try:
+            from ib_insync import Stock
+            
+            stock = Stock(symbol, 'SMART', 'USD')
+            self.ib.qualifyContracts(stock)
+            ticker = self.ib.reqMktData(stock, '', False, False)
+            
+            time.sleep(0.5)
+            
+            price = ticker.last or ticker.close or ticker.bid
+            
+            try:
+                self.ib.cancelMktData(stock)
+            except:
+                pass
+            
+            return price
+            
+        except Exception as e:
+            logger.debug(f"Could not fetch stock price for {symbol}: {e}")
+            return None
+    
     def _execute_exit(self, position: ThetaPosition, exit_reason: str):
         """Close position by buying back the put."""
-        logger.info(f"\\n{'=' * 70}")
+        logger.info(f"\n{'=' * 70}")
         logger.info(f"🔴 EXECUTING EXIT: {position.symbol} {position.strike}P")
         logger.info(f"{'=' * 70}")
         
