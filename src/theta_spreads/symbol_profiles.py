@@ -143,11 +143,249 @@ SPY_PROFILE = SymbolProfile(
 )
 
 
+# =============================================================================
+# BOND ETF PROFILES - Lower volatility, trending behavior
+# =============================================================================
+
+TLT_PROFILE = SymbolProfile(
+    symbol="TLT",
+    base_risk_level=RiskLevel.LOW,
+    
+    # Bonds trend more than mean-revert, take profits quickly
+    week1_profit_pct=35.0,
+    week2_profit_pct=45.0,
+    week3_profit_pct=60.0,
+    week4_profit_pct=75.0,
+    
+    # Tighter breach for lower volatility asset
+    breach_threshold_pct=0.015,  # 1.5%
+    confirmation_days=2,
+    dte_exit_threshold=5,
+    
+    avg_iv=0.12,
+    price_volatility="low",
+    mean_reversion_strength="weak"
+)
+
+# Apply same profile to other bond ETFs
+IEF_PROFILE = SymbolProfile(symbol="IEF", base_risk_level=RiskLevel.LOW,
+    week1_profit_pct=35.0, week2_profit_pct=45.0,
+    breach_threshold_pct=0.015, confirmation_days=2, dte_exit_threshold=5,
+    avg_iv=0.08, price_volatility="low", mean_reversion_strength="weak")
+
+LQD_PROFILE = SymbolProfile(symbol="LQD", base_risk_level=RiskLevel.LOW,
+    week1_profit_pct=35.0, week2_profit_pct=45.0,
+    breach_threshold_pct=0.015, confirmation_days=2, dte_exit_threshold=5,
+    avg_iv=0.10, price_volatility="low", mean_reversion_strength="weak")
+
+AGG_PROFILE = SymbolProfile(symbol="AGG", base_risk_level=RiskLevel.LOW,
+    week1_profit_pct=35.0, week2_profit_pct=45.0,
+    breach_threshold_pct=0.015, confirmation_days=2, dte_exit_threshold=5,
+    avg_iv=0.06, price_volatility="low", mean_reversion_strength="weak")
+
+HYG_PROFILE = SymbolProfile(symbol="HYG", base_risk_level=RiskLevel.LOW,
+    week1_profit_pct=40.0, week2_profit_pct=50.0,
+    breach_threshold_pct=0.02, confirmation_days=2, dte_exit_threshold=5,
+    avg_iv=0.12, price_volatility="medium", mean_reversion_strength="medium")
+
+
+# =============================================================================
+# COMMODITY ETF PROFILES - Regime-dependent, can spike
+# =============================================================================
+
+GLD_PROFILE = SymbolProfile(
+    symbol="GLD",
+    base_risk_level=RiskLevel.MEDIUM,
+    
+    # Gold can spike during crises, give more room
+    week1_profit_pct=45.0,
+    week2_profit_pct=55.0,
+    week3_profit_pct=70.0,
+    week4_profit_pct=85.0,
+    
+    # Wider breach for commodity volatility
+    breach_threshold_pct=0.035,  # 3.5%
+    confirmation_days=3,
+    dte_exit_threshold=5,
+    
+    avg_iv=0.14,
+    price_volatility="medium",
+    mean_reversion_strength="medium"
+)
+
+SLV_PROFILE = SymbolProfile(symbol="SLV", base_risk_level=RiskLevel.MEDIUM,
+    week1_profit_pct=40.0, week2_profit_pct=50.0,
+    breach_threshold_pct=0.04, confirmation_days=3, dte_exit_threshold=5,
+    avg_iv=0.22, price_volatility="high", mean_reversion_strength="medium")
+
+USO_PROFILE = SymbolProfile(symbol="USO", base_risk_level=RiskLevel.MEDIUM,
+    week1_profit_pct=40.0, week2_profit_pct=50.0,
+    breach_threshold_pct=0.05, confirmation_days=3, dte_exit_threshold=7,
+    avg_iv=0.30, price_volatility="high", mean_reversion_strength="weak")
+
+
+# =============================================================================
+# TECH SECTOR PROFILES - High beta, similar to QQQ
+# =============================================================================
+
+XLK_PROFILE = SymbolProfile(
+    symbol="XLK",
+    base_risk_level=RiskLevel.MEDIUM,
+    
+    # Tech sector: exit faster like QQQ
+    week1_profit_pct=30.0,
+    week2_profit_pct=40.0,
+    week3_profit_pct=55.0,
+    week4_profit_pct=70.0,
+    
+    breach_threshold_pct=0.03,
+    confirmation_days=2,
+    dte_exit_threshold=7,
+    
+    avg_iv=0.22,
+    price_volatility="high",
+    mean_reversion_strength="medium"
+)
+
+ARKK_PROFILE = SymbolProfile(symbol="ARKK", base_risk_level=RiskLevel.HIGH,
+    week1_profit_pct=25.0, week2_profit_pct=35.0, week3_profit_pct=50.0, week4_profit_pct=65.0,
+    breach_threshold_pct=0.04, confirmation_days=2, dte_exit_threshold=7,
+    avg_iv=0.40, price_volatility="high", mean_reversion_strength="weak")
+
+
+# =============================================================================
+# DEFENSIVE SECTOR PROFILES - Lower volatility, stable
+# =============================================================================
+
+XLV_PROFILE = SymbolProfile(symbol="XLV", base_risk_level=RiskLevel.LOW,
+    week1_profit_pct=40.0, week2_profit_pct=50.0,
+    breach_threshold_pct=0.02, confirmation_days=3, dte_exit_threshold=3,
+    avg_iv=0.14, price_volatility="low", mean_reversion_strength="strong")
+
+XLP_PROFILE = SymbolProfile(symbol="XLP", base_risk_level=RiskLevel.LOW,
+    week1_profit_pct=40.0, week2_profit_pct=50.0,
+    breach_threshold_pct=0.02, confirmation_days=3, dte_exit_threshold=3,
+    avg_iv=0.12, price_volatility="low", mean_reversion_strength="strong")
+
+XLU_PROFILE = SymbolProfile(symbol="XLU", base_risk_level=RiskLevel.LOW,
+    week1_profit_pct=40.0, week2_profit_pct=50.0,
+    breach_threshold_pct=0.02, confirmation_days=3, dte_exit_threshold=3,
+    avg_iv=0.15, price_volatility="low", mean_reversion_strength="strong")
+
+
+# =============================================================================
+# CYCLICAL SECTOR PROFILES - Economic sensitive
+# =============================================================================
+
+XLF_PROFILE = SymbolProfile(symbol="XLF", base_risk_level=RiskLevel.MEDIUM,
+    week1_profit_pct=45.0, week2_profit_pct=55.0,
+    breach_threshold_pct=0.025, confirmation_days=3, dte_exit_threshold=3,
+    avg_iv=0.18, price_volatility="medium", mean_reversion_strength="medium")
+
+XLE_PROFILE = SymbolProfile(symbol="XLE", base_risk_level=RiskLevel.MEDIUM,
+    week1_profit_pct=40.0, week2_profit_pct=50.0,
+    breach_threshold_pct=0.04, confirmation_days=3, dte_exit_threshold=5,
+    avg_iv=0.25, price_volatility="high", mean_reversion_strength="medium")
+
+XLI_PROFILE = SymbolProfile(symbol="XLI", base_risk_level=RiskLevel.MEDIUM,
+    week1_profit_pct=45.0, week2_profit_pct=55.0,
+    breach_threshold_pct=0.025, confirmation_days=3, dte_exit_threshold=3,
+    avg_iv=0.16, price_volatility="medium", mean_reversion_strength="medium")
+
+XLY_PROFILE = SymbolProfile(symbol="XLY", base_risk_level=RiskLevel.MEDIUM,
+    week1_profit_pct=45.0, week2_profit_pct=55.0,
+    breach_threshold_pct=0.025, confirmation_days=3, dte_exit_threshold=3,
+    avg_iv=0.18, price_volatility="medium", mean_reversion_strength="medium")
+
+XLRE_PROFILE = SymbolProfile(symbol="XLRE", base_risk_level=RiskLevel.LOW,
+    week1_profit_pct=40.0, week2_profit_pct=50.0,
+    breach_threshold_pct=0.03, confirmation_days=3, dte_exit_threshold=5,
+    avg_iv=0.18, price_volatility="medium", mean_reversion_strength="medium")
+
+XLB_PROFILE = SymbolProfile(symbol="XLB", base_risk_level=RiskLevel.MEDIUM,
+    week1_profit_pct=45.0, week2_profit_pct=55.0,
+    breach_threshold_pct=0.025, confirmation_days=3, dte_exit_threshold=3,
+    avg_iv=0.18, price_volatility="medium", mean_reversion_strength="medium")
+
+
+# =============================================================================
+# INTERNATIONAL ETF PROFILES - Higher risk, currency effects
+# =============================================================================
+
+EEM_PROFILE = SymbolProfile(symbol="EEM", base_risk_level=RiskLevel.MEDIUM,
+    week1_profit_pct=40.0, week2_profit_pct=50.0,
+    breach_threshold_pct=0.035, confirmation_days=3, dte_exit_threshold=5,
+    avg_iv=0.20, price_volatility="high", mean_reversion_strength="medium")
+
+EWZ_PROFILE = SymbolProfile(symbol="EWZ", base_risk_level=RiskLevel.HIGH,
+    week1_profit_pct=35.0, week2_profit_pct=45.0,
+    breach_threshold_pct=0.04, confirmation_days=2, dte_exit_threshold=7,
+    avg_iv=0.30, price_volatility="high", mean_reversion_strength="weak")
+
+FXI_PROFILE = SymbolProfile(symbol="FXI", base_risk_level=RiskLevel.MEDIUM,
+    week1_profit_pct=40.0, week2_profit_pct=50.0,
+    breach_threshold_pct=0.035, confirmation_days=3, dte_exit_threshold=5,
+    avg_iv=0.25, price_volatility="high", mean_reversion_strength="medium")
+
+
+# =============================================================================
+# EQUITY INDEX (Default MEDIUM behavior)
+# =============================================================================
+
+DIA_PROFILE = SymbolProfile(symbol="DIA", base_risk_level=RiskLevel.MEDIUM,
+    week1_profit_pct=45.0, week2_profit_pct=55.0,
+    breach_threshold_pct=0.02, confirmation_days=3, dte_exit_threshold=3,
+    avg_iv=0.14, price_volatility="medium", mean_reversion_strength="strong")
+
+
+# =============================================================================
+# EXCLUDE LIST - Never trade these (volatility decay products)
+# =============================================================================
+
+THETA_EXCLUDE_SYMBOLS = ["VXX", "UVXY", "SVXY", "UNG"]
+
+
 # Symbol profile registry
 SYMBOL_PROFILES: Dict[str, SymbolProfile] = {
+    # Core Equity Index
     "QQQ": QQQ_PROFILE,
     "IWM": IWM_PROFILE,
     "SPY": SPY_PROFILE,
+    "DIA": DIA_PROFILE,
+    
+    # Bonds
+    "TLT": TLT_PROFILE,
+    "IEF": IEF_PROFILE,
+    "LQD": LQD_PROFILE,
+    "AGG": AGG_PROFILE,
+    "HYG": HYG_PROFILE,
+    
+    # Commodities
+    "GLD": GLD_PROFILE,
+    "SLV": SLV_PROFILE,
+    "USO": USO_PROFILE,
+    
+    # Tech Sector
+    "XLK": XLK_PROFILE,
+    "ARKK": ARKK_PROFILE,
+    
+    # Defensive Sectors
+    "XLV": XLV_PROFILE,
+    "XLP": XLP_PROFILE,
+    "XLU": XLU_PROFILE,
+    
+    # Cyclical Sectors
+    "XLF": XLF_PROFILE,
+    "XLE": XLE_PROFILE,
+    "XLI": XLI_PROFILE,
+    "XLY": XLY_PROFILE,
+    "XLRE": XLRE_PROFILE,
+    "XLB": XLB_PROFILE,
+    
+    # International
+    "EEM": EEM_PROFILE,
+    "EWZ": EWZ_PROFILE,
+    "FXI": FXI_PROFILE,
 }
 
 

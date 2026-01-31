@@ -36,7 +36,7 @@ jobs:
           
           # Deploy
           ssh -i ~/.ssh/ec2_key.pem $EC2_USER@$EC2_HOST << 'EOF'
-            cd ~/tastywork-trading
+            cd ~/tastywork-trading-1
             echo "Pulling latest changes..."
             git pull origin main
             

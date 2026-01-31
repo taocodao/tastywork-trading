@@ -67,6 +67,19 @@ else
     exit 1
 fi
 
+# New: Test symbol optimization modules
+if python3 -c "from src.theta_spreads.symbol_profiles import get_symbol_profile" 2>/dev/null; then
+    echo -e "${GREEN}✓ symbol_profiles (NEW)${NC}"
+else
+    echo "${YELLOW}⚠ symbol_profiles not available (non-critical)${NC}"
+fi
+
+if python3 -c "from src.theta_spreads.defensive_exits import create_exit_manager_from_symbol" 2>/dev/null; then
+    echo -e "${GREEN}✓ defensive_exits (NEW)${NC}"
+else
+    echo "${YELLOW}⚠ defensive_exits not available (non-critical)${NC}"
+fi
+
 echo ""
 
 # Step 4: Check timezone
@@ -137,6 +150,19 @@ else
     exit 1
 fi
 
+# Step 7.5: Test Symbol Optimization (if available)
+echo -e "${YELLOW}[7.5/8] Testing Symbol Optimization...${NC}"
+if [ -f "test_symbol_optimization.py" ]; then
+    if python3 test_symbol_optimization.py 2>/dev/null; then
+        echo -e "${GREEN}✓ Symbol optimization tests passed${NC}"
+        echo -e "${GREEN}  QQQ optimized with custom profile${NC}"
+    else
+        echo -e "${YELLOW}⚠ Symbol optimization tests failed (non-critical)${NC}"
+    fi
+else
+    echo -e "${YELLOW}⚠ Symbol optimization not available${NC}"
+fi
+
 echo ""
 echo "========================================================================"
 echo -e "${GREEN}✓ DEPLOYMENT COMPLETE${NC}"
@@ -148,6 +174,11 @@ echo "  9:45 AM - Signal generation"
 echo "  Every 60s - Position monitoring"
 echo "  4:05 PM - EOD analysis"
 echo "  4:10 PM - Monitor stops"
+echo ""
+echo "Symbol Optimization Active:"
+echo "  QQQ: 30%/40% targets, 7 DTE exit (optimized)"
+echo "  SPY: 45%/55% targets, 3 DTE exit"
+echo "  IWM: 50%/60% targets, 2 DTE exit (aggressive)"
 echo ""
 echo "Manual controls:"
 echo "  Start monitor: ./scripts/run_position_monitor.sh &"

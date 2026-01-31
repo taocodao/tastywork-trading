@@ -79,6 +79,7 @@ class OptionsAnalyzer:
         dte_max: int = 35,
         min_premium: float = 0.50,
         min_liquidity: int = 100,
+        min_iv: float = 0.15,  # NEW: Minimum implied volatility (15%)
         confidence_threshold: int = 60
     ):
         """
@@ -91,6 +92,7 @@ class OptionsAnalyzer:
             dte_max: Maximum days to expiration (default: 35)
             min_premium: Minimum bid price (default: $0.50)
             min_liquidity: Minimum open interest (default: 100)
+            min_iv: Minimum implied volatility (default: 0.15 = 15%)
             confidence_threshold: Minimum score to include (default: 60)
         """
         self.target_delta = target_delta
@@ -99,6 +101,7 @@ class OptionsAnalyzer:
         self.dte_max = dte_max
         self.min_premium = min_premium
         self.min_liquidity = min_liquidity
+        self.min_iv = min_iv  # NEW: Store min IV threshold
         self.confidence_threshold = confidence_threshold
     
     def analyze_symbol(
@@ -313,6 +316,12 @@ class OptionsAnalyzer:
         # Check minimum liquidity
         open_interest = option.get("open_interest", 0)
         if open_interest < self.min_liquidity:
+            return False
+        
+        # NEW: Check minimum IV (filters out low-volatility options)
+        iv = option.get("iv", 0)
+        if iv < self.min_iv:
+            logger.debug(f"Option rejected: IV {iv:.2%} < minimum {self.min_iv:.2%}")
             return False
         
         return True

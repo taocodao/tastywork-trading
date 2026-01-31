@@ -79,6 +79,7 @@ def run_morning_analysis():
     try:
         from ib_data_provider import IBDataProvider
         from src.theta_spreads import SymbolSelector, OptionsAnalyzer, ThetaSignalGenerator, ThetaPortfolioManager
+        from src.theta_spreads.symbol_profiles import THETA_EXCLUDE_SYMBOLS
         from datetime import timedelta, date
         
         # Initialize components
@@ -89,12 +90,17 @@ def run_morning_analysis():
             # Step 1: Symbol Selection
             logger.info("[1/4] Selecting symbols...")
             selector = SymbolSelector(
-                min_iv_percentile=20,  # Correct parameter name
+                min_iv_percentile=20,
                 select_top_n=5
             )
             
+            # Filter out excluded symbols (VXX, UVXY, etc.)
+            valid_universe = [s for s in config.THETA_UNIVERSE if s not in THETA_EXCLUDE_SYMBOLS]
+            logger.info(f"  Universe: {len(valid_universe)} symbols (excluded: {THETA_EXCLUDE_SYMBOLS})")
+            
+            # Use ETF universe from config (high-liquidity index ETFs only)
             symbols = selector.select_daily_watchlist(
-                candidates=["SPY", "QQQ", "IWM", "AMD", "NVDA", "AAPL"]
+                candidates=valid_universe  # Use filtered ETF universe
             )
             logger.info(f"  Selected: {symbols[:5]}")
             
@@ -106,6 +112,7 @@ def run_morning_analysis():
                 dte_min=7,  # Flexible for testing
                 dte_max=45,
                 min_premium=config.THETA_MIN_PREMIUM,
+                min_iv=config.THETA_MIN_IV,  # NEW: Add IV filtering
                 confidence_threshold=60
             )
             
