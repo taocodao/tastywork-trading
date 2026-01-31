@@ -2,7 +2,7 @@
 IB Order Executor
 ==================
 Direct order placement for theta strategy in IB paper trading.
-For testing purposes only - production uses Tastytrade API via trademind-app.
+Uses centralized hub for shared order connection (client ID 3001).
 """
 
 import logging
@@ -16,15 +16,34 @@ logger = logging.getLogger(__name__)
 class IBOrderExecutor:
     """Execute theta trades directly in IB paper trading account."""
     
-    def __init__(self, ib_provider):
+    def __init__(self, ib_provider=None):
         """
         Initialize executor with IB connection.
         
         Args:
-            ib_provider: IBDataProvider instance with active connection
+            ib_provider: IBDataProvider instance (optional, uses hub if None)
         """
-        self.ib = ib_provider.ib
-        self.ib_provider = ib_provider
+        # Try to use hub (new pattern)
+        try:
+            from ib_market_data_hub import get_hub
+            self._hub = get_hub()
+            self._use_hub = True
+            logger.info("IBOrderExecutor initialized with hub (order client 3001)")
+        except ImportError:
+            # Fallback to legacy mode
+            if ib_provider is None:
+                raise ValueError("Must provide ib_provider when hub not available")
+            self._use_hub = False
+            self._legacy_ib = ib_provider.ib
+            self._ib_provider = ib_provider
+            logger.info("IBOrderExecutor initialized with legacy connection")
+    
+    @property
+    def ib(self):
+        """Get IB client for order execution."""
+        if self._use_hub:
+            return self._hub.order_client
+        return self._legacy_ib
         
     def place_theta_entry(self, signal, dry_run: bool = False) -> Optional[int]:
         """

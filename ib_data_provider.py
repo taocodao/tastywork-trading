@@ -3,7 +3,7 @@ IB Data Provider
 ================
 
 Implementation of the data provider interface using Interactive Brokers (ib_insync).
-Fetches live market data from the IB Gateway.
+Fetches live market data from the IB Gateway via the centralized hub.
 """
 
 import logging
@@ -18,38 +18,73 @@ logger = logging.getLogger(__name__)
 class IBDataProvider:
     """
     Data provider that fetches real-time data from Interactive Brokers.
+    Uses the centralized IBMarketDataHub for shared connections.
     """
     
     def __init__(self, host: str = None, port: int = None, client_id: int = None):
-        # Use config values as defaults
-        import config
-        self.host = host or config.IB_HOST
-        self.port = port or config.IB_PORT
-        self.client_id = client_id or config.IB_CLIENT_ID
-        self.ib = IB()
-        self._connected = False
+        """
+        Initialize data provider.
+        
+        Note: host, port, client_id params are kept for backward compatibility
+        but are now managed by the hub.
+        """
+        # Try to use hub (new pattern)
+        try:
+            from ib_market_data_hub import get_hub
+            self._hub = get_hub()
+            self._use_hub = True
+            logger.info("IBDataProvider initialized with hub")
+        except ImportError:
+            # Fallback to direct connection (legacy)
+            import config
+            self.host = host or config.IB_HOST
+            self.port = port or config.IB_PORT
+            self.client_id = client_id or config.IB_CLIENT_ID
+            self.ib = IB()
+            self._use_hub = False
+            self._connected = False
+            logger.info("IBDataProvider initialized with direct connection (legacy)")
+    
+    @property
+    def ib(self):
+        """Get IB client - from hub or direct connection."""
+        if self._use_hub:
+            return self._hub.data_client
+        return self._ib
+    
+    @ib.setter
+    def ib(self, value):
+        """Set IB client (for legacy mode)."""
+        self._ib = value
         
     def connect(self, timeout: int = 10) -> bool:
         """Connect to IB Gateway with timeout."""
+        if self._use_hub:
+            return self._hub.connect_data(timeout)
+        
+        # Legacy direct connection
         try:
             if not self.ib.isConnected():
                 logger.info(f"Connecting to IB Gateway at {self.host}:{self.port}...")
-                self.ib.RequestTimeout = timeout  # Set timeout
+                self.ib.RequestTimeout = timeout
                 self.ib.connect(self.host, self.port, clientId=self.client_id, timeout=timeout)
                 self._connected = True
-                
-                # Switch to Delayed Data (Type 3) by default to avoid permission errors
-                # 1=Live, 2=Frozen, 3=Delayed, 4=Delayed Frozen
                 self.ib.reqMarketDataType(3)
-                logger.info("✅ Connected to IB Data Feed (Using Delayed Data)")
+                logger.info("Connected to IB Data Feed (Using Delayed Data)")
             return True
         except Exception as e:
-            logger.error(f"❌ Failed to connect to IB: {e}")
+            logger.error(f"Failed to connect to IB: {e}")
             self._connected = False
             return False
             
     def disconnect(self):
         """Disconnect from IB."""
+        if self._use_hub:
+            # Don't disconnect hub - other components may be using it
+            logger.debug("IBDataProvider: Not disconnecting hub (shared)")
+            return
+        
+        # Legacy
         if self.ib.isConnected():
             self.ib.disconnect()
             self._connected = False
