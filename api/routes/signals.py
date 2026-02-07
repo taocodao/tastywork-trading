@@ -58,12 +58,54 @@ async def list_signals(
     limit: int = 20
 ):
     """
-    Get list of trade signals.
+    Get list of trade signals from PostgreSQL database.
     
     Filter by status: pending, approved, rejected, executed
     """
-    filtered = [s for s in _signals_store if s["status"] == status or status is None]
-    return filtered[:limit]
+    try:
+        from src.earnings_intelligence.database import SignalRepository
+        repo = SignalRepository()
+        
+        # Fetch from PostgreSQL database
+        db_signals = repo.get_all_signals(status=status, include_expired=False)
+        
+        # Convert to response format
+        results = []
+        for sig in db_signals[:limit]:
+            signal_dict = sig.data if sig.data else {}
+            signal_dict.update({
+                'id': sig.id,
+                'symbol': sig.symbol,
+                'strategy': sig.strategy,  # CRITICAL: Include strategy from DB
+                'status': sig.status,
+                'created_at': sig.created_at
+            })
+            
+            # Ensure all required fields have defaults
+            if 'direction' not in signal_dict:
+                signal_dict['direction'] = 'neutral'
+            if 'cost' not in signal_dict:
+                signal_dict['cost'] = 0.0
+            if 'potential_return' not in signal_dict:
+                signal_dict['potential_return'] = 0.0
+            if 'return_percent' not in signal_dict:
+                signal_dict['return_percent'] = 0.0
+            if 'win_rate' not in signal_dict:
+                signal_dict['win_rate'] = 0.0
+            if 'risk_level' not in signal_dict:
+                signal_dict['risk_level'] = 'Medium'
+            if 'expiry' not in signal_dict:
+                signal_dict['expiry'] = ''
+                
+            results.append(SignalResponse(**signal_dict))
+        
+        return results
+        
+    except Exception as e:
+        logger.error(f"Failed to fetch signals from database: {e}")
+        # Fallback to in-memory store
+        filtered = [s for s in _signals_store if s["status"] == status or status is None]
+        return filtered[:limit]
 
 
 @router.post("", response_model=SignalResponse)
