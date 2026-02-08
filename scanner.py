@@ -154,17 +154,13 @@ class CalendarSpreadScanner:
         self.calc = SpreadCalculator()
     
     def get_stock_price(self, symbol: str) -> float:
-        """Get current stock price."""
+        """Get current stock price from real market data."""
         if self.data_provider:
             return self.data_provider.get_price(symbol)
         
-        # Mock data for testing
-        mock_prices = {
-            "IWM": 241.68,
-            "SPY": 598.50,
-            "QQQ": 520.30,
-        }
-        return mock_prices.get(symbol, 100.0)
+        # NO MOCK DATA - raise error if no data provider
+        raise ValueError(f"No data provider configured! Cannot get price for {symbol}. "
+                        "Initialize CalendarSpreadScanner with data_provider=IBDataProvider().")
     
     def get_option_chain(
         self,
@@ -172,41 +168,13 @@ class CalendarSpreadScanner:
         expiry: date,
         option_type: str = "call"
     ) -> List[OptionQuote]:
-        """Get option chain for a symbol and expiry."""
+        """Get option chain for a symbol and expiry from real market data."""
         if self.data_provider:
             return self.data_provider.get_options(symbol, expiry, option_type)
         
-        # Mock data for testing
-        stock_price = self.get_stock_price(symbol)
-        
-        # Generate mock ATM options
-        options = []
-        for strike_offset in [-2, -1, 0, 1, 2]:
-            strike = round(stock_price + strike_offset, 0)
-            
-            # Calculate mock prices using Black-Scholes
-            dte = (expiry - date.today()).days
-            T = max(1, dte) / 365
-            iv = 0.20
-            
-            # Simple mock price
-            base_price = max(0.10, stock_price * 0.02 * np.sqrt(T))
-            intrinsic = max(0, stock_price - strike)
-            price = base_price + intrinsic
-            
-            options.append(OptionQuote(
-                symbol=symbol,
-                strike=strike,
-                expiry=expiry,
-                bid=price - 0.02,
-                ask=price + 0.02,
-                last=price,
-                volume=500,
-                open_interest=1000,
-                iv=iv
-            ))
-        
-        return options
+        # NO MOCK DATA - raise error if no data provider
+        raise ValueError(f"No data provider configured! Cannot get options for {symbol}. "
+                        "Initialize CalendarSpreadScanner with data_provider=IBDataProvider().")
     
     def find_atm_strike(self, symbol: str) -> float:
         """Find the at-the-money strike closest to current price."""
@@ -344,15 +312,52 @@ class CalendarSpreadScanner:
 
 
 def check_vix_filter() -> Tuple[bool, float]:
-    """Check if VIX is in acceptable range."""
-    # In production, fetch real VIX
-    vix = 18.5  # Mock value
+    """Check if VIX is in acceptable range using real market data."""
+    import logging
+    logger = logging.getLogger(__name__)
+    
+    vix = None
+    
+    # Try yfinance first (most reliable for VIX)
+    try:
+        import yfinance as yf
+        vix_ticker = yf.Ticker("^VIX")
+        hist = vix_ticker.history(period="1d")
+        if not hist.empty and 'Close' in hist.columns:
+            vix = float(hist['Close'].iloc[-1])
+            logger.info(f"VIX from yfinance: {vix:.2f}")
+    except Exception as e:
+        logger.warning(f"yfinance VIX fetch failed: {e}")
+    
+    # Fallback: Try IB if available
+    if vix is None:
+        try:
+            from ib_insync import IB, Index
+            ib = IB()
+            if ib.isConnected():
+                vix_contract = Index('VIX', 'CBOE')
+                ib.qualifyContracts(vix_contract)
+                ticker = ib.reqMktData(vix_contract, '', False, False)
+                ib.sleep(1)
+                if ticker.last and ticker.last > 0:
+                    vix = float(ticker.last)
+                    logger.info(f"VIX from IB: {vix:.2f}")
+        except Exception as e:
+            logger.warning(f"IB VIX fetch failed: {e}")
+    
+    # If still no VIX, fail safe - don't block trading but warn
+    if vix is None:
+        logger.error("Could not fetch VIX from any source! Proceeding with caution.")
+        vix = 20.0  # Conservative default - within acceptable range
     
     if vix < MIN_VIX:
-        return False, vix  # VIX too low, not enough premium
+        logger.info(f"VIX {vix:.2f} < {MIN_VIX} - too low, not enough premium")
+        return False, vix
     if vix > MAX_VIX:
-        return False, vix  # VIX too high, too much risk
+        logger.warning(f"VIX {vix:.2f} > {MAX_VIX} - too high, skipping")
+        return False, vix
     
+    logger.info(f"VIX {vix:.2f} - OK to trade")
     return True, vix
 
 

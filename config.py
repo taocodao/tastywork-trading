@@ -141,18 +141,27 @@ VERTICAL_MIN_OPTIONS_LEVEL: int = 2     # Options approval level required
 # THETA STRATEGY SETTINGS (Cash-Secured Puts)
 # =============================================================================
 THETA_ENABLED: bool = True
-THETA_RISK_LEVEL: str = "MEDIUM"        # Risk Profile: LOW, MEDIUM, HIGH
-THETA_MIN_CONFIDENCE: int = 60          # Minimum put confidence score
+THETA_RISK_LEVEL: str = "MEDIUM"        # Default risk profile (client can override)
+
+# Server-side quality filters (generate signals meeting minimum bar)
+THETA_MIN_CONFIDENCE: int = 45          # Low bar - client filters by risk level
 THETA_TARGET_DELTA: float = 0.30        # Target put delta (30-delta)
 THETA_DELTA_TOLERANCE: float = 0.05     # Delta range tolerance (±5 delta)
-THETA_DTE_MIN: int = 28                 # Minimum days to expiration
-THETA_DTE_MAX: int = 35                 # Maximum days to expiration
-THETA_CONTRACTS_PER_TRADE: int = 1      # Number of contracts per signal (adjusted for capital)
-THETA_MAX_POSITIONS: int = 6            # Maximum open positions
-THETA_MAX_PORTFOLIO_HEAT: float = 50000 # Max capital at risk ($50K)
-THETA_MIN_PREMIUM: float = 0.50         # Minimum bid price ($0.50)
+THETA_DTE_MIN: int = 21                 # Minimum days to expiration (widened from 28)
+THETA_DTE_MAX: int = 45                 # Maximum days to expiration (widened from 35)
+THETA_MIN_PREMIUM: float = 0.30         # Minimum bid price ($0.30, lowered for more signals)
 THETA_MIN_IV: float = 0.15              # Minimum implied volatility (15%)
 THETA_MIN_LIQUIDITY: int = 100          # Minimum open interest
+
+# Client-side filters (defaults - client provides actual values)
+THETA_CONTRACTS_PER_TRADE: int = 1      # Default contracts per signal
+THETA_MAX_POSITIONS: int = 6            # Default max positions (client can change)
+THETA_MAX_PORTFOLIO_HEAT: float = 50000 # Default max heat (client can change)
+
+# Signal expiration (time-sensitive signals)
+THETA_SIGNAL_EXPIRY_MINUTES: int = 30   # Signals expire after 30 minutes
+THETA_SIGNAL_EXPIRY_SAME_DAY: bool = True  # Signals always expire at market close
+
 
 # Time-based exit targets (key differentiator)
 THETA_WEEK1_PROFIT_PCT: float = 50.0    # Days 1-7: Exit at 50% profit

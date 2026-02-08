@@ -1,0 +1,29 @@
+[Unit]
+Description=Theta Sprint Continuous Monitoring Service
+After=network.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=ubuntu
+WorkingDirectory=/home/ubuntu/tastywork-trading
+ExecStart=/usr/bin/python3 /home/ubuntu/tastywork-trading/theta_monitor_continuous.py
+
+# Restart policy
+Restart=always
+RestartSec=10
+StartLimitInterval=0
+
+# Logging
+StandardOutput=append:/home/ubuntu/theta_monitor.log
+StandardError=append:/home/ubuntu/theta_monitor_error.log
+
+# Environment
+Environment="PYTHONUNBUFFERED=1"
+
+# Security (optional hardening)
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

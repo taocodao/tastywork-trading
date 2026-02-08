@@ -113,7 +113,7 @@ class ThetaExitSignal:
 
 def publish_theta_entry_signal(signal: ThetaEntrySignal) -> bool:
     """
-    Publish theta entry signal to WebSocket channels.
+    Publish theta entry signal to WebSocket channels AND save to database.
     
     Args:
         signal: ThetaEntrySignal dataclass
@@ -126,7 +126,16 @@ def publish_theta_entry_signal(signal: ThetaEntrySignal) -> bool:
         data['strategy'] = 'theta'
         data['signal_type'] = 'entry'
         
-        # Broadcast to multiple channels
+        # STEP 1: Save to database for persistence
+        try:
+            from src.earnings_intelligence.database import SignalRepository
+            repo = SignalRepository()
+            repo.save_signal(data)
+            logger.info(f"✅ Theta signal saved to database: {signal.symbol}")
+        except Exception as db_error:
+            logger.warning(f"⚠️ Failed to save to DB (signal will still broadcast): {db_error}")
+        
+        # STEP 2: Broadcast to WebSocket channels
         success_puts = broadcast_to_channel('theta_puts', data)
         success_entry = broadcast_to_channel('theta_entry', data)
         

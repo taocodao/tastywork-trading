@@ -1,0 +1,32 @@
+Ticker,Name,Category,Tier,Avg Daily Vol,Expirations,Spreads
+SPY,S&P 500,Broad Market,Tier 1: Ultra,2806621,Daily (0DTE),0.01
+QQQ,Nasdaq 100,Broad Market,Tier 1: Ultra,926038,Daily (0DTE),0.02
+IWM,Russell 2000,Broad Market,Tier 1: Ultra,262005,M/W/F,0.03
+TLT,20+ Yr Treasury,Fixed Income,Tier 1: Ultra,62154,M/W/F,0.03
+SLV,Silver,Commodity,Tier 1: Ultra,61644,M/W/F,0.03
+GLD,Gold,Commodity,Tier 1: Ultra,47475,M/W/F,0.04
+EEM,EM Markets,International,Tier 2: High,44255,Weekly,0.04
+XLF,Financials,Sector,Tier 2: High,39705,Weekly,0.04
+HYG,HY Corp Bonds,Fixed Income,Tier 2: High,37550,Weekly,0.04
+KRE,Regional Banks,Sector,Tier 2: High,36691,Weekly,0.05
+GDX,Gold Miners,Commodity,Tier 2: High,26865,Weekly,0.05
+EWZ,Brazil,International,Tier 2: High,26670,Weekly,0.05
+XLE,Energy,Sector,Tier 2: High,26153,Weekly,0.05
+FXI,China Large-Cap,International,Tier 2: High,24270,Weekly,0.05
+EFA,EAFE (Dev Intl),International,Tier 2: High,21397,Weekly,0.05
+KWEB,China Internet,International,Tier 2: High,18926,Weekly,0.06
+XLI,Industrials,Sector,Tier 2: High,17505,Weekly,0.06
+XBI,Biotech,Sector,Tier 3: Moderate,14641,Weekly,0.07
+SMH,Semiconductors,Sector,Tier 3: Moderate,10317,Weekly,0.07
+USO,Crude Oil,Commodity,Tier 3: Moderate,8753,W/F,0.06
+XLU,Utilities,Sector,Tier 3: Moderate,8430,Weekly,0.08
+XOP,Oil & Gas E&P,Sector,Tier 3: Moderate,7178,Monthly+,0.08
+XLP,Cons. Staples,Sector,Tier 3: Moderate,4714,Monthly+,0.08
+IYR,Real Estate,Sector,Tier 3: Moderate,3988,Monthly+,0.09
+XRT,Retail,Sector,Tier 3: Moderate,3846,Monthly+,0.09
+XLK,Technology,Sector,Tier 3: Moderate,3844,Weekly,0.08
+XLV,Healthcare,Sector,Tier 3: Moderate,3691,Monthly+,0.09
+GDXJ,Jr Gold Miners,Commodity,Tier 3: Moderate,3686,Monthly+,0.09
+XHB,Homebuilders,Sector,Tier 3: Moderate,3103,Monthly+,0.09
+XLY,Cons. Discret.,Sector,Tier 3: Moderate,1870,Monthly+,0.10
+XLB,Materials,Sector,Tier 3: Moderate,1087,Monthly+,0.10

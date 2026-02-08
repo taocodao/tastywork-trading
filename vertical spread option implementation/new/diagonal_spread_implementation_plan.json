@@ -1,0 +1,738 @@
+{
+  "document_metadata": {
+    "title": "Diagonal Spread Strategy - Comprehensive Implementation Plan",
+    "version": "2.0",
+    "date": "2026-02-07",
+    "prepared_for": "Antigravity Development Team",
+    "strategy_type": "Poor Man's Covered Call (PMCC) / Diagonal Spread"
+  },
+  "executive_summary": {
+    "strategy_overview": "Diagonal spread combining directional bias (vertical spread) with time decay capture (calendar spread)",
+    "capital_efficiency": "60-90% less capital than traditional covered calls",
+    "win_rate_target": "70% (based on AI-optimized backtests)",
+    "primary_use_case": "Generate monthly income while maintaining directional exposure",
+    "recommended_underlyings": "Index ETFs (SPY, QQQ, IWM) - Superior to individual blue chips"
+  },
+  "research_findings": {
+    "index_etfs_vs_blue_chips": {
+      "winner": "Index ETFs (Strongly Recommended)",
+      "reasons": [
+        {
+          "factor": "Liquidity",
+          "etf_advantage": "SPY: $400B+ AUM, 99.2% of S&P 500 ETF options open interest",
+          "blue_chip_disadvantage": "Individual stocks have 5-10x wider spreads, lower volume",
+          "impact": "Critical for diagonal spreads requiring frequent rolling"
+        },
+        {
+          "factor": "Bid-Ask Spreads",
+          "etf_advantage": "SPY: ~0.01-0.02 spread, QQQ: ~0.02-0.03, IWM: ~0.03-0.05",
+          "blue_chip_disadvantage": "Blue chips: 0.05-0.15+ typical spread",
+          "impact": "Spreads erode 2-5% per trade, compounds with rolling"
+        },
+        {
+          "factor": "Diversification",
+          "etf_advantage": "SPY: 500 stocks, QQQ: 100 stocks, eliminates single-stock risk",
+          "blue_chip_disadvantage": "Exposed to earnings gaps, FDA approvals, CEO scandals",
+          "impact": "Reduces gap risk that can blow through stop losses"
+        },
+        {
+          "factor": "Volatility Consistency",
+          "etf_advantage": "IV remains stable, no earnings shocks, predictable patterns",
+          "blue_chip_disadvantage": "Earnings cause 20-50% IV spikes quarterly",
+          "impact": "More predictable theta decay, easier to model"
+        },
+        {
+          "factor": "24/7 Monitoring",
+          "etf_advantage": "Index moves during market hours only, futures provide advance signal",
+          "blue_chip_disadvantage": "After-hours earnings/news can gap 5-15%+",
+          "impact": "Less overnight risk, automation-friendly"
+        }
+      ],
+      "recommended_allocation": {
+        "primary": "SPY (70% of capital) - Most liquid, tightest spreads",
+        "secondary": "QQQ (20% of capital) - Tech exposure, slightly higher volatility",
+        "tertiary": "IWM (10% of capital) - Small cap, highest premium but wider spreads"
+      }
+    },
+    "diagonal_vs_alternatives": {
+      "comparison_matrix": [
+        {
+          "strategy": "Diagonal Spread (PMCC)",
+          "capital_required": "Low (10-30% of stock)",
+          "directional_exposure": "High",
+          "theta_capture": "Medium-High",
+          "vega_exposure": "Long (benefits from IV increase)",
+          "best_conditions": "Moderate directional bias + low IV"
+        },
+        {
+          "strategy": "Vertical Spread",
+          "capital_required": "Very Low",
+          "directional_exposure": "Very High",
+          "theta_capture": "Low",
+          "vega_exposure": "Minimal",
+          "best_conditions": "Strong directional conviction"
+        },
+        {
+          "strategy": "Calendar Spread",
+          "capital_required": "Low",
+          "directional_exposure": "Neutral",
+          "theta_capture": "Very High",
+          "vega_exposure": "Long",
+          "best_conditions": "Neutral outlook + low IV"
+        },
+        {
+          "strategy": "Covered Call",
+          "capital_required": "Very High (100% stock)",
+          "directional_exposure": "Medium",
+          "theta_capture": "High",
+          "vega_exposure": "Minimal",
+          "best_conditions": "Own stock already"
+        }
+      ],
+      "optimal_use_case": "Diagonal spreads excel when: 1) IV Rank < 50, 2) Directional confidence 60-80%, 3) Want to roll short leg multiple times"
+    },
+    "performance_data": {
+      "backtested_returns": {
+        "2024_annual": "100-106% ROI on capital deployed",
+        "max_drawdown": "34%",
+        "win_rate": "70%",
+        "sharpe_ratio": "Data suggests positive but variable"
+      },
+      "optimal_parameters_from_research": {
+        "long_leg_dte": "30-60 days (45 DTE sweet spot)",
+        "short_leg_dte": "7-14 days (10 DTE optimal per backtest)",
+        "long_leg_delta": "0.70-0.80 (deep ITM to mimic stock)",
+        "short_leg_delta": "0.25-0.35 (OTM to collect premium)",
+        "max_debit_rule": "Pay no more than 75% of strike width"
+      }
+    }
+  },
+  "implementation_architecture": {
+    "module_structure": {
+      "primary_module": "src/diagonal_spreads/",
+      "sub_modules": [
+        {
+          "name": "signal_generator.py",
+          "purpose": "Main entry point - orchestrates all diagonal spread logic",
+          "dependencies": [
+            "direction_predictor",
+            "dte_selector",
+            "spread_selector",
+            "greeks_monitor"
+          ]
+        },
+        {
+          "name": "direction_predictor.py",
+          "purpose": "Reuse from vertical_spreads - determines bull/bear bias",
+          "inputs": [
+            "RSI",
+            "Bollinger Bands",
+            "Moving Averages",
+            "Volume"
+          ],
+          "outputs": [
+            "direction (BULL/BEAR/NEUTRAL)",
+            "confidence_score (0-100)"
+          ]
+        },
+        {
+          "name": "dte_selector.py",
+          "purpose": "Reuse from calendar_spreads - selects optimal expiration dates",
+          "inputs": [
+            "current_date",
+            "available_expirations",
+            "strategy_type"
+          ],
+          "outputs": [
+            "long_leg_expiration",
+            "short_leg_expiration"
+          ]
+        },
+        {
+          "name": "strike_selector.py",
+          "purpose": "Selects strike prices for both legs based on delta targets",
+          "inputs": [
+            "underlying_price",
+            "direction",
+            "options_chain",
+            "delta_targets"
+          ],
+          "outputs": [
+            "long_strike",
+            "short_strike",
+            "debit_paid",
+            "max_profit"
+          ]
+        },
+        {
+          "name": "iv_analyzer.py",
+          "purpose": "Analyzes IV conditions for optimal entry timing",
+          "inputs": [
+            "iv_rank",
+            "iv_percentile",
+            "historical_iv"
+          ],
+          "outputs": [
+            "entry_score",
+            "iv_skew",
+            "vega_exposure"
+          ]
+        },
+        {
+          "name": "greeks_monitor.py",
+          "purpose": "Real-time monitoring of position Greeks for adjustments",
+          "inputs": [
+            "current_position",
+            "market_data"
+          ],
+          "outputs": [
+            "delta",
+            "gamma",
+            "theta",
+            "vega",
+            "adjustment_signals"
+          ]
+        },
+        {
+          "name": "position_manager.py",
+          "purpose": "Manages rolling, adjustments, and exits",
+          "inputs": [
+            "current_position",
+            "market_conditions",
+            "exit_rules"
+          ],
+          "outputs": [
+            "roll_recommendation",
+            "exit_signal",
+            "adjustment_action"
+          ]
+        }
+      ]
+    },
+    "integration_points": {
+      "existing_systems": [
+        {
+          "system": "vertical_spreads/direction_predictor.py",
+          "usage": "Import and use for directional bias",
+          "modification": "None required"
+        },
+        {
+          "system": "calendar_spreads/dte_selector.py",
+          "usage": "Import and use for DTE selection",
+          "modification": "Add diagonal_spread mode parameter"
+        },
+        {
+          "system": "combined_signal_generator.py",
+          "usage": "Add diagonal as new strategy option",
+          "modification": "Add priority logic: Diagonal > Vertical when conditions met"
+        }
+      ]
+    }
+  },
+  "detailed_logic_flow": {
+    "step_1_market_scan": {
+      "description": "Scan universe for diagonal spread candidates",
+      "process": [
+        "1. Query market data for SPY, QQQ, IWM",
+        "2. Get current price, IV Rank, IV Percentile",
+        "3. Get options chain (all strikes, all expirations)",
+        "4. Calculate technical indicators (RSI, BB, MA)"
+      ],
+      "data_requirements": {
+        "market_data": [
+          "current_price",
+          "bid",
+          "ask"
+        ],
+        "options_chain": [
+          "strikes",
+          "expirations",
+          "bid",
+          "ask",
+          "iv",
+          "greeks"
+        ],
+        "historical_data": [
+          "52_week_high_iv",
+          "52_week_low_iv",
+          "daily_closes"
+        ]
+      }
+    },
+    "step_2_entry_conditions": {
+      "description": "Evaluate if conditions are right for diagonal spread",
+      "conditions": [
+        {
+          "name": "Directional Confidence",
+          "requirement": "confidence_score >= 70%",
+          "calculation": "From direction_predictor using RSI, BB, MA confluence",
+          "example": "RSI > 60 + Price > Upper BB + Above 50 MA = Bullish 80%"
+        },
+        {
+          "name": "IV Environment",
+          "requirement": "IV_Rank < 50 (Low volatility)",
+          "calculation": "(current_iv - 52_week_low) / (52_week_high - 52_week_low) * 100",
+          "rationale": "Buying long-dated options cheaper in low IV"
+        },
+        {
+          "name": "IV Skew",
+          "requirement": "front_month_iv > back_month_iv (Positive skew)",
+          "calculation": "short_leg_iv - long_leg_iv > 0",
+          "rationale": "Selling expensive near-term, buying cheaper long-term"
+        },
+        {
+          "name": "Liquidity Check",
+          "requirement": "bid_ask_spread < 0.05 for both legs",
+          "calculation": "(ask - bid) / mid_price",
+          "rationale": "Tight spreads reduce slippage on entry and rolls"
+        }
+      ],
+      "composite_entry_score": {
+        "formula": "(directional_confidence * 0.4) + (iv_score * 0.3) + (skew_score * 0.2) + (liquidity_score * 0.1)",
+        "threshold": ">= 75 to trigger entry"
+      }
+    },
+    "step_3_strike_selection": {
+      "description": "Select optimal strikes for both legs",
+      "bullish_diagonal": {
+        "long_leg": {
+          "type": "CALL",
+          "expiration": "45 DTE (30-60 range)",
+          "strike_selection": "Delta 0.75 (Deep ITM)",
+          "calculation": "Find strike where delta ~= 0.75",
+          "purpose": "Mimics 75 shares of stock"
+        },
+        "short_leg": {
+          "type": "CALL",
+          "expiration": "10 DTE (7-14 range)",
+          "strike_selection": "Delta 0.30 (OTM)",
+          "calculation": "Find strike where delta ~= 0.30",
+          "purpose": "Collects premium, 70% probability expires worthless"
+        }
+      },
+      "bearish_diagonal": {
+        "long_leg": {
+          "type": "PUT",
+          "expiration": "45 DTE",
+          "strike_selection": "Delta -0.75 (Deep ITM)",
+          "calculation": "Find strike where delta ~= -0.75",
+          "purpose": "Mimics short 75 shares"
+        },
+        "short_leg": {
+          "type": "PUT",
+          "expiration": "10 DTE",
+          "strike_selection": "Delta -0.30 (OTM)",
+          "calculation": "Find strike where delta ~= -0.30",
+          "purpose": "Collects premium"
+        }
+      },
+      "validation_rules": {
+        "max_debit_rule": "net_debit <= (long_strike - short_strike) * 0.75",
+        "reason": "Short premium should cover or exceed long extrinsic decay",
+        "extrinsic_value_check": "short_leg_premium >= long_leg_extrinsic_value"
+      }
+    },
+    "step_4_position_monitoring": {
+      "description": "Continuous monitoring using Greeks",
+      "greek_thresholds": {
+        "delta": {
+          "target_range": "0.50 - 0.70 for bullish, -0.50 to -0.70 for bearish",
+          "adjustment_trigger": "Outside \u00b10.15 of target",
+          "action": "Roll short leg to re-center delta"
+        },
+        "theta": {
+          "target": "Positive theta (earning time decay daily)",
+          "monitoring": "Track daily P&L from theta decay",
+          "expectation": "$20-50 per day per contract"
+        },
+        "vega": {
+          "exposure": "Net long vega (benefits from IV increase)",
+          "risk": "IV crush can hurt long leg",
+          "mitigation": "Avoid earnings dates, use indices not stocks"
+        },
+        "gamma": {
+          "risk": "High gamma near expiration on short leg",
+          "management": "Roll short leg at 7 DTE to avoid pin risk"
+        }
+      }
+    },
+    "step_5_rolling_strategy": {
+      "description": "Most critical aspect - rolling the short leg to collect premium repeatedly",
+      "standard_roll": {
+        "trigger": "7 DTE on short leg OR 50% profit on short leg",
+        "action": "Buy back short leg, sell new short leg at same strike 7-14 DTE out",
+        "profit_taking": "If short leg decayed 50%+, roll for credit",
+        "goal": "Collect premium 3-6 times against same long leg"
+      },
+      "adjustment_roll": {
+        "trigger": "Stock moves significantly against position",
+        "action": "Roll short leg to different strike closer to current price",
+        "example": "Bullish PMCC, stock drops: Roll short call down to lower strike",
+        "reason": "Re-center position, collect more premium"
+      },
+      "defensive_roll": {
+        "trigger": "Short leg goes ITM (delta > 0.50 for call, < -0.50 for put)",
+        "action": "Roll short leg out in time AND up/down in strike",
+        "cost": "May need to pay debit to roll",
+        "decision_tree": "If cost > 25% of original debit, consider closing entire position"
+      }
+    },
+    "step_6_exit_strategy": {
+      "description": "When and how to exit the entire diagonal spread",
+      "profit_exits": {
+        "target_1": "50% of max profit achieved",
+        "target_2": "Stock moves strongly in favorable direction, spread worth 90%+ of max",
+        "target_3": "Successfully rolled short leg 4+ times, long leg has < 10 DTE"
+      },
+      "loss_exits": {
+        "stop_loss": "Position down 100% (lost entire debit paid)",
+        "time_stop": "Long leg < 21 DTE and position unprofitable",
+        "direction_reversal": "Technical indicators flip to opposite direction with 80%+ confidence"
+      },
+      "adjustment_exits": {
+        "roll_to_new_diagonal": "Close current, open new diagonal at better strikes",
+        "convert_to_vertical": "If strong conviction, close short, hold long",
+        "convert_to_calendar": "If direction unclear, adjust strikes to same level"
+      }
+    }
+  },
+  "code_specifications": {
+    "signal_generator_class": {
+      "class_name": "DiagonalSpreadSignalGenerator",
+      "initialization": {
+        "parameters": [
+          "underlying (str): Ticker symbol - 'SPY', 'QQQ', or 'IWM'",
+          "direction_predictor (DirectionPredictor): Instance for technical analysis",
+          "dte_selector (DTESelector): Instance for expiration selection",
+          "iv_analyzer (IVAnalyzer): Instance for IV analysis",
+          "greeks_monitor (GreeksMonitor): Instance for Greeks tracking"
+        ],
+        "configuration": {
+          "long_dte_target": 45,
+          "short_dte_target": 10,
+          "long_delta_target": 0.75,
+          "short_delta_target": 0.3,
+          "max_debit_ratio": 0.75,
+          "entry_confidence_threshold": 70,
+          "iv_rank_threshold": 50
+        }
+      },
+      "methods": [
+        {
+          "name": "generate_signal()",
+          "returns": "DiagonalSpreadSignal object or None",
+          "logic": [
+            "1. Get directional bias and confidence",
+            "2. Check IV conditions",
+            "3. If conditions met, proceed to strike selection",
+            "4. Validate spread setup",
+            "5. Return signal with all parameters"
+          ]
+        },
+        {
+          "name": "select_strikes(direction, options_chain)",
+          "returns": "dict with long_strike, short_strike, debit, max_profit",
+          "logic": [
+            "1. Filter options by direction (calls for bull, puts for bear)",
+            "2. Find long leg: closest to delta_target in back month",
+            "3. Find short leg: closest to delta_target in front month",
+            "4. Calculate net debit (long_premium - short_premium)",
+            "5. Validate debit <= 75% of strike width"
+          ]
+        },
+        {
+          "name": "validate_spread(long_leg, short_leg)",
+          "returns": "bool, str (is_valid, reason)",
+          "checks": [
+            "Debit <= 75% of strike width",
+            "Short premium >= Long extrinsic value",
+            "Bid-ask spread < 5% on both legs",
+            "Sufficient open interest (> 100 contracts)",
+            "Strike width reasonable (not too wide)"
+          ]
+        },
+        {
+          "name": "calculate_greeks(position)",
+          "returns": "dict with all Greeks",
+          "implementation": "Use Black-Scholes or broker API for real-time Greeks"
+        }
+      ]
+    },
+    "position_manager_class": {
+      "class_name": "DiagonalPositionManager",
+      "purpose": "Manages open diagonal positions, rolling, and exits",
+      "methods": [
+        {
+          "name": "check_roll_conditions(position)",
+          "returns": "bool, str (should_roll, reason)",
+          "triggers": [
+            "Short leg at 7 DTE",
+            "Short leg profit >= 50%",
+            "Short leg went ITM (delta breach)",
+            "Position delta outside target range"
+          ]
+        },
+        {
+          "name": "execute_roll(position, roll_type)",
+          "parameters": [
+            "position: Current DiagonalPosition",
+            "roll_type: 'standard', 'adjustment', 'defensive'"
+          ],
+          "logic": [
+            "1. Buy back current short leg (BTC)",
+            "2. Select new short strike and expiration",
+            "3. Sell new short leg (STO)",
+            "4. Update position object",
+            "5. Log roll transaction"
+          ]
+        },
+        {
+          "name": "check_exit_conditions(position)",
+          "returns": "bool, str (should_exit, reason)",
+          "exits": [
+            "Profit target reached",
+            "Stop loss hit",
+            "Time stop triggered",
+            "Direction reversal signal"
+          ]
+        },
+        {
+          "name": "execute_exit(position)",
+          "logic": [
+            "1. Close short leg (BTC)",
+            "2. Close long leg (STC)",
+            "3. Calculate final P&L",
+            "4. Update position status to CLOSED",
+            "5. Log transaction"
+          ]
+        }
+      ]
+    },
+    "data_models": {
+      "DiagonalSpreadSignal": {
+        "fields": [
+          "underlying: str",
+          "direction: enum (BULL, BEAR)",
+          "confidence_score: float",
+          "entry_date: datetime",
+          "long_leg: OptionLeg",
+          "short_leg: OptionLeg",
+          "net_debit: float",
+          "max_profit: float",
+          "max_loss: float",
+          "breakeven: float",
+          "iv_rank: float",
+          "iv_skew: float"
+        ]
+      },
+      "OptionLeg": {
+        "fields": [
+          "type: enum (CALL, PUT)",
+          "strike: float",
+          "expiration: date",
+          "dte: int",
+          "premium: float",
+          "delta: float",
+          "gamma: float",
+          "theta: float",
+          "vega: float",
+          "iv: float",
+          "bid: float",
+          "ask: float",
+          "open_interest: int"
+        ]
+      },
+      "DiagonalPosition": {
+        "fields": [
+          "position_id: str",
+          "signal: DiagonalSpreadSignal",
+          "entry_price: float",
+          "current_value: float",
+          "pnl: float",
+          "pnl_percent: float",
+          "days_in_trade: int",
+          "rolls_executed: int",
+          "current_greeks: dict",
+          "status: enum (OPEN, CLOSED)",
+          "exit_reason: str",
+          "transactions: list"
+        ]
+      }
+    }
+  },
+  "api_integrations": {
+    "required_data": {
+      "market_data": {
+        "source": "Your existing market data provider",
+        "endpoints": [
+          "GET /quotes/{ticker} - Real-time price, bid, ask",
+          "GET /history/{ticker} - Historical prices for indicators",
+          "GET /options/chain/{ticker} - Full options chain"
+        ]
+      },
+      "options_data": {
+        "requirements": [
+          "All strikes for given expiration",
+          "Bid, ask, last, volume, open interest",
+          "Implied volatility per option",
+          "Greeks (delta, gamma, theta, vega, rho)",
+          "Historical IV data for IV Rank calculation"
+        ]
+      }
+    },
+    "broker_integration": {
+      "order_execution": [
+        "Multi-leg order support (enter both legs simultaneously)",
+        "Support for diagonal spread order type OR",
+        "Ability to leg in/out manually (less preferred)",
+        "Real-time fill confirmation",
+        "Position tracking and P&L updates"
+      ],
+      "required_order_types": [
+        "BTO (Buy To Open) - Opening long leg",
+        "STO (Sell To Open) - Opening short leg",
+        "BTC (Buy To Close) - Closing short leg for roll",
+        "STC (Sell To Close) - Closing long leg"
+      ]
+    }
+  },
+  "risk_management": {
+    "position_sizing": {
+      "rule_1": "Never allocate > 5% of portfolio to single diagonal",
+      "rule_2": "Max 3 concurrent diagonals on same underlying",
+      "rule_3": "Total diagonal exposure < 25% of portfolio",
+      "calculation": "Position_size = Portfolio_Value * 0.05 / Net_Debit"
+    },
+    "portfolio_greeks": {
+      "monitoring": [
+        "Track portfolio-level delta (should be near 0 for market-neutral)",
+        "Track portfolio theta (should be positive - earning time decay)",
+        "Track portfolio vega (watch for IV crush risk)",
+        "Set alerts when portfolio Greeks breach thresholds"
+      ],
+      "thresholds": {
+        "delta": "Portfolio delta should stay between -0.5 and +0.5",
+        "theta": "Target $100-300 daily theta decay for typical portfolio",
+        "vega": "Limit vega exposure to \u00b10.50 per $10k portfolio"
+      }
+    },
+    "drawdown_protection": {
+      "daily_loss_limit": "Close all positions if portfolio down 3% in single day",
+      "weekly_loss_limit": "Stop new entries if portfolio down 7% in week",
+      "max_drawdown": "Close all positions if portfolio down 15% from peak",
+      "correlation_check": "Don't open multiple diagonals on highly correlated underlyings"
+    }
+  },
+  "testing_strategy": {
+    "phase_1_backtesting": {
+      "description": "Test on historical data",
+      "requirements": [
+        "Historical options data (bid, ask, Greeks) for SPY, QQQ, IWM",
+        "Date range: 2022-2025 (covers bull, bear, and sideways markets)",
+        "Walk-forward analysis (train on 2022-2023, test on 2024-2025)"
+      ],
+      "metrics_to_track": [
+        "Total return %",
+        "Win rate %",
+        "Average profit per trade",
+        "Average loss per trade",
+        "Max drawdown",
+        "Sharpe ratio",
+        "Number of rolls per position",
+        "Average days in trade"
+      ]
+    },
+    "phase_2_paper_trading": {
+      "description": "Test with real-time data, simulated execution",
+      "duration": "30 days minimum",
+      "requirements": [
+        "Real-time options chain data",
+        "Simulated order fills at mid-price",
+        "Track slippage assumptions",
+        "Daily Greeks monitoring"
+      ],
+      "success_criteria": [
+        "Win rate >= 65%",
+        "Average profit >= 30% per trade",
+        "Max drawdown < 20%",
+        "System stability (no crashes, data feed issues)"
+      ]
+    },
+    "phase_3_live_trading": {
+      "description": "Start with minimal capital",
+      "initial_capital": "$5,000 - $10,000",
+      "position_size": "1 contract per diagonal initially",
+      "duration": "60 days before scaling",
+      "monitoring": [
+        "Daily P&L tracking",
+        "Execution quality (slippage vs expected)",
+        "Roll timing and efficiency",
+        "Greeks accuracy vs predicted"
+      ],
+      "scale_up_criteria": [
+        "Consistent profitability over 60 days",
+        "All systems working reliably",
+        "Comfortable with position management",
+        "Win rate >= target (70%)"
+      ]
+    }
+  },
+  "performance_monitoring": {
+    "daily_metrics": [
+      "Position-level P&L",
+      "Portfolio-level P&L",
+      "Greeks exposure (delta, theta, vega)",
+      "Upcoming expirations (short legs at 7 DTE)",
+      "Positions needing rolls"
+    ],
+    "weekly_metrics": [
+      "Win rate for closed positions",
+      "Average profit/loss per trade",
+      "Number of rolls executed",
+      "Average premium collected per roll",
+      "Slippage analysis"
+    ],
+    "monthly_metrics": [
+      "Total return %",
+      "Sharpe ratio",
+      "Max drawdown",
+      "Best performing underlying (SPY/QQQ/IWM)",
+      "Strategy vs benchmark (SPY buy-and-hold)"
+    ],
+    "alerts": [
+      "Position delta outside range",
+      "Short leg ITM (delta > 0.50)",
+      "IV spike (IV Rank jumps > 20 points)",
+      "Daily loss exceeds threshold",
+      "Position needs roll (7 DTE or 50% profit)"
+    ]
+  },
+  "optimization_opportunities": {
+    "machine_learning_enhancements": [
+      {
+        "feature": "Optimal DTE selection",
+        "approach": "Train model on historical data to predict best long/short DTE combos",
+        "inputs": "IV Rank, IV Percentile, Historical volatility, Time to earnings, Market regime",
+        "target": "Maximize profit per trade"
+      },
+      {
+        "feature": "Dynamic delta targets",
+        "approach": "Adjust delta targets based on market conditions",
+        "inputs": "VIX level, Market trend, Sector rotation",
+        "target": "Optimize risk-adjusted returns"
+      },
+      {
+        "feature": "Roll timing optimization",
+        "approach": "Predict optimal time to roll short leg",
+        "inputs": "Days to expiration, Current profit %, IV change, Gamma exposure",
+        "target": "Maximize total premium collected"
+      }
+    ],
+    "ai_agent_integration": [
+      "Voice alerts for position management ('SPY short leg needs roll')",
+      "Natural language queries ('How are my diagonals performing?')",
+      "Automated roll execution with voice confirmation",
+      "Risk assessment reports on demand"
+    ]
+  }
+}

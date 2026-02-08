@@ -1,0 +1,62 @@
+{
+  "results": [
+    {
+      "strategy_name": "Fixed Targets (+35%/-40%)",
+      "total_trades": 500,
+      "winners": 295,
+      "losers": 205,
+      "win_rate": 59.0,
+      "total_pnl": 127.95220034716814,
+      "avg_pnl": 0.2559044006943363,
+      "avg_win": 0.7833816319289741,
+      "avg_loss": -0.5031482003506315,
+      "max_drawdown": 105.90111096978686,
+      "sharpe_ratio": 2.6123102681524366,
+      "profit_factor": 2.240503442980168
+    },
+    {
+      "strategy_name": "Trailing (20% act, 50% trail)",
+      "total_trades": 500,
+      "winners": 328,
+      "losers": 172,
+      "win_rate": 65.60000000000001,
+      "total_pnl": 123.15194061021305,
+      "avg_pnl": 0.2463038812204261,
+      "avg_win": 0.6483917772602339,
+      "avg_loss": -0.5204683856461857,
+      "max_drawdown": 105.90111096978686,
+      "sharpe_ratio": 2.2746152314630717,
+      "profit_factor": 2.375683277710696
+    },
+    {
+      "strategy_name": "Trailing (15% act, 40% trail)",
+      "total_trades": 500,
+      "winners": 347,
+      "losers": 153,
+      "win_rate": 69.39999999999999,
+      "total_pnl": 131.32900559708136,
+      "avg_pnl": 0.2626580111941627,
+      "avg_win": 0.6072495837689981,
+      "avg_loss": -0.5188666664755623,
+      "max_drawdown": 100.71300782371809,
+      "sharpe_ratio": 2.504883148119848,
+      "profit_factor": 2.6542968919874537
+    },
+    {
+      "strategy_name": "Trailing (25% act, 60% trail)",
+      "total_trades": 500,
+      "winners": 316,
+      "losers": 184,
+      "win_rate": 63.2,
+      "total_pnl": 130.04013493363524,
+      "avg_pnl": 0.2600802698672705,
+      "avg_win": 0.712199903276357,
+      "avg_loss": -0.5163860570744225,
+      "max_drawdown": 105.90111096978686,
+      "sharpe_ratio": 2.2618781360896745,
+      "profit_factor": 2.368626929576255
+    }
+  ],
+  "recommendation": "fixed_targets",
+  "best_strategy": "Fixed Targets (+35%/-40%)"
+}

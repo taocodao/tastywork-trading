@@ -23,7 +23,8 @@ from config import (
     ENTRY_TIME, EXIT_CHECK_TIME, UNDERLYINGS,
     ACCOUNT_SIZE, PROFIT_TARGET_PCT, STOP_LOSS_PCT,
     TASTYTRADE_USERNAME, TASTYTRADE_PASSWORD, TASTYTRADE_USE_SANDBOX,
-    EARNINGS_ENABLED
+    EARNINGS_ENABLED,
+    IB_HOST, IB_PORT
 )
 from scanner import CalendarSpreadScanner, check_vix_filter, SpreadSetup
 from position_manager import PositionManager, ExitReason
@@ -74,8 +75,8 @@ class CalendarSpreadsBot:
         self.use_tastytrade = use_tastytrade
         self.tastytrade_client = None
         
-        # Initialize IB Data Provider (AWS Gateway)
-        self.ib_provider = IBDataProvider(host="34.235.119.67", port=4004, client_id=5000)
+        # Initialize IB Data Provider using centralized config
+        self.ib_provider = IBDataProvider(host=IB_HOST, port=IB_PORT, client_id=5000)
         
         # Scanner uses IB Gateway for market data
         self.scanner = CalendarSpreadScanner(data_provider=self.ib_provider)
@@ -249,13 +250,21 @@ class CalendarSpreadsBot:
         print("-" * 70)
         
         for pos in positions:
-            # Update current value (in production, fetch from market)
-            # For demo, simulate based on theta decay
-            hours_held = (datetime.now() - datetime.fromisoformat(pos.entry_time)).total_seconds() / 3600
-            
-            # Simulate ~5% gain overnight due to theta decay
-            simulated_gain_pct = min(8, hours_held * 0.4)  # ~0.4%/hour
-            new_value = pos.entry_debit * (1 + simulated_gain_pct / 100)
+            # Get REAL current value from IB market data
+            try:
+                # Build OCC symbol for option price lookup
+                occ_symbol = f"{pos.symbol}{pos.short_expiry.strftime('%y%m%d')}C{int(pos.strike * 1000):08d}"
+                price_data = self.ib_provider.get_option_price_by_symbol(occ_symbol)
+                if price_data:
+                    _, _, mid = price_data
+                    new_value = mid * 100  # Convert to dollar value
+                    logger.info(f"Real price for {pos.symbol} ${pos.strike}: ${mid:.2f}")
+                else:
+                    logger.warning(f"Could not get real price for {pos.symbol}, using last known value")
+                    new_value = pos.current_value if hasattr(pos, 'current_value') else pos.entry_debit
+            except Exception as e:
+                logger.warning(f"Error getting price for {pos.symbol}: {e}")
+                new_value = pos.current_value if hasattr(pos, 'current_value') else pos.entry_debit
             
             self.position_manager.update_position(pos.id, new_value)
             

@@ -511,6 +511,7 @@ class SignalRepository:
                 strategy=signal_data.get('strategy'),
                 status=signal_data.get('status', 'pending'),
                 data=signal_data,
+                expires_at=signal_data.get('expires_at'),  # Store signal expiration
                 created_at=datetime.utcnow()
             )
             self.session.add(signal)
@@ -532,6 +533,51 @@ class SignalRepository:
     def get_signal(self, signal_id: str) -> Optional[Signal]:
         """Get a specific signal."""
         return self.session.query(Signal).filter(Signal.id == signal_id).first()
+    
+    def get_signals_by_risk_level(
+        self, 
+        risk_level: str = "MEDIUM", 
+        include_expired: bool = False,
+        strategy: str = None
+    ) -> List[Signal]:
+        """
+        Get signals filtered by risk level (confidence threshold).
+        
+        Risk levels:
+            LOW: Confidence > 75 (only best signals)
+            MEDIUM: Confidence > 60 (balanced)
+            HIGH: Confidence > 45 (more signals, broader criteria)
+        
+        Args:
+            risk_level: "LOW", "MEDIUM", or "HIGH"
+            include_expired: Whether to include expired signals
+            strategy: Optional strategy filter ("theta", "calendar")
+            
+        Returns:
+            List of signals meeting the confidence threshold
+        """
+        # Map risk level to confidence threshold
+        thresholds = {
+            "LOW": 75,
+            "MEDIUM": 60,
+            "HIGH": 45
+        }
+        min_confidence = thresholds.get(risk_level.upper(), 60)
+        
+        signals = self.get_all_signals(
+            status="pending", 
+            include_expired=include_expired
+        )
+        
+        # Filter by confidence in JSON data
+        filtered = []
+        for signal in signals:
+            confidence = signal.data.get('confidence', 0)
+            if confidence >= min_confidence:
+                if strategy is None or signal.strategy == strategy:
+                    filtered.append(signal)
+        
+        return filtered
     
     def expire_old_signals(self) -> int:
         """Mark expired signals as 'expired'. Returns count of updated signals."""

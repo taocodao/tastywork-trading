@@ -192,6 +192,40 @@ def run_morning_analysis():
         logger.error(traceback.format_exc())
 
 
+def _build_occ_symbol(pos) -> str:
+    """
+    Build OCC symbol from position data.
+    
+    OCC Format: SYMBOL[YY][MM][DD][P/C][strike*1000 padded to 8 digits]
+    Example: SPY260220P00485000 = SPY Put expiring 2026-02-20 at $485 strike
+    """
+    try:
+        symbol = pos.symbol.upper()
+        # Get expiration - handle both date and string formats
+        if hasattr(pos, 'expiration'):
+            exp = pos.expiration
+            if isinstance(exp, str):
+                # Parse YYYY-MM-DD format
+                from datetime import datetime
+                exp = datetime.strptime(exp, '%Y-%m-%d').date()
+            exp_str = exp.strftime('%y%m%d')
+        else:
+            return None
+        
+        # Build strike portion (8 digits, strike * 1000)
+        strike_int = int(pos.strike * 1000)
+        strike_str = f"{strike_int:08d}"
+        
+        # Option type (P for put, C for call)
+        opt_type = 'P' if hasattr(pos, 'option_type') and pos.option_type.upper().startswith('P') else 'P'  # Default to put for theta
+        
+        occ = f"{symbol}{exp_str}{opt_type}{strike_str}"
+        return occ
+    except Exception as e:
+        logger.warning(f"Could not build OCC symbol: {e}")
+        return None
+
+
 def run_position_check():
     """
     Check all open positions for exit signals:
@@ -225,11 +259,22 @@ def run_position_check():
             
             for pos in positions:
                 try:
-                    # Get current option price
-                    # For now, use mock data - in production, get live quotes
-                    current_mid = pos.entry_price * 0.5  # Simulated 50% decay
+                    # Get REAL current option price from IB
+                    occ_symbol = self._build_occ_symbol(pos)
+                    if occ_symbol:
+                        price_data = ib.get_option_price_by_symbol(occ_symbol)
+                        if price_data:
+                            bid, ask, mid = price_data
+                            current_mid = mid
+                            logger.info(f"  {pos.symbol} ${pos.strike}P: bid=${bid:.2f} ask=${ask:.2f} mid=${mid:.2f}")
+                        else:
+                            logger.warning(f"  {pos.symbol}: Could not get live price, skipping")
+                            continue
+                    else:
+                        logger.warning(f"  {pos.symbol}: Could not build OCC symbol")
+                        continue
                     
-                    # Check exit conditions
+                    # Check exit conditions with REAL price
                     exit_signals = signal_gen.generate_exit_signals(
                         positions=[pos],
                         current_prices={pos.position_id: current_mid}

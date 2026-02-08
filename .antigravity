@@ -1,0 +1,37 @@
+# .antigravity
+
+## Project
+- Name: TradeMind.bot Backend
+- Domain: Options trading, calendar spreads, automation
+- Primary knowledge directory: ./brain
+
+## Agent Behavior
+- On every new conversation:
+  - Read ./brain/00_INDEX.md
+  - Skim file headings in ./brain/*.md
+  - Ask user which module(s) to load deeper if context is ambiguous.
+- Never assume prior chat history; always ground answers in ./brain/*.md.
+
+## Documentation Rules
+- All specs, plans, and design docs must be stored in ./brain, not ad hoc files.
+- When making a non-trivial change, update:
+  - 90_DECISIONS_LOG.md with an ADR-style entry.
+  - Relevant module file (e.g. 20_TRADING_LOGIC.md).
+- Prefer short, focused documents per topic over huge monoliths.
+
+## Coding Rules
+- Keep code and docs in sync: if code changes architectural behavior, update ./brain docs in the same session.
+- Test changes before committing.
+- Follow existing patterns in codebase.
+
+## Session Workflow
+1. **Start**: Read ./brain/00_INDEX.md and latest snapshot
+2. **During**: Update relevant docs as decisions are made
+3. **End**: Create session snapshot in ./brain/snapshots/
+
+## Key Files Reference
+- `config.py` - All configuration parameters
+- `theta_monitor_continuous.py` - 24/7 scheduler daemon
+- `run_theta_scheduler.py` - Theta strategy logic
+- `ib_data_provider.py` - IB Gateway integration
+- `websocket_server.py` - Real-time signal broadcast

@@ -33,6 +33,7 @@ class IBDataProvider:
             from ib_market_data_hub import get_hub
             self._hub = get_hub()
             self._use_hub = True
+            self._connected = True  # Hub manages connection state
             logger.info("IBDataProvider initialized with hub")
         except ImportError:
             # Fallback to direct connection (legacy)

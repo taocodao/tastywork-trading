@@ -218,9 +218,9 @@ class RealHistoricalDataGenerator:
     """
     Fetches REAL historical data from IB Gateway.
     """
-    def __init__(self, ib_host="34.235.119.67", ib_port=4004, client_id=999):
-        self.host = ib_host
-        self.port = ib_port
+    def __init__(self, ib_host=None, ib_port=None, client_id=999):
+        self.ib_host = ib_host or IB_HOST
+        self.ib_port = ib_port or IB_PORT
         self.client_id = client_id
         
     def fetch_data(

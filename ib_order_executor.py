@@ -148,6 +148,115 @@ class IBOrderExecutor:
             logger.error(f"❌ Failed to place exit order for {position.symbol}: {e}")
             return None
     
+    def place_calendar_spread(self, symbol: str, strike: float, front_expiry: str, 
+                                back_expiry: str, quantity: int = 1, 
+                                net_debit: float = None, dry_run: bool = False) -> Optional[int]:
+        """
+        Place calendar spread combo order (SELL front-month, BUY back-month CALL).
+        
+        Args:
+            symbol: Underlying symbol (SPY, QQQ, IWM)
+            strike: Strike price for both legs
+            front_expiry: Front-month expiration (YYYYMMDD format)
+            back_expiry: Back-month expiration (YYYYMMDD format)
+            quantity: Number of spreads
+            net_debit: Optional limit price for the spread
+            dry_run: If True, log order but don't place
+            
+        Returns:
+            Order ID if successful, None if failed
+        """
+        try:
+            from ib_insync import ComboLeg
+            
+            # Create front-month contract (SELL)
+            front_contract = Contract()
+            front_contract.symbol = symbol
+            front_contract.secType = "OPT"
+            front_contract.exchange = "SMART"
+            front_contract.currency = "USD"
+            front_contract.lastTradeDateOrContractMonth = front_expiry.replace('-', '')
+            front_contract.strike = strike
+            front_contract.right = "C"  # Call option
+            front_contract.multiplier = "100"
+            
+            # Create back-month contract (BUY)
+            back_contract = Contract()
+            back_contract.symbol = symbol
+            back_contract.secType = "OPT"
+            back_contract.exchange = "SMART"
+            back_contract.currency = "USD"
+            back_contract.lastTradeDateOrContractMonth = back_expiry.replace('-', '')
+            back_contract.strike = strike
+            back_contract.right = "C"  # Call option
+            back_contract.multiplier = "100"
+            
+            if dry_run:
+                logger.info(f"🔍 DRY RUN CALENDAR: {symbol} ${strike}C")
+                logger.info(f"   SELL {front_expiry}, BUY {back_expiry}")
+                return None
+            
+            # Qualify contracts to get conId
+            qualified_front = self.ib.qualifyContracts(front_contract)
+            qualified_back = self.ib.qualifyContracts(back_contract)
+            
+            if not qualified_front or not qualified_back:
+                logger.error(f"Failed to qualify contracts for {symbol} calendar spread")
+                return None
+            
+            front_conId = qualified_front[0].conId
+            back_conId = qualified_back[0].conId
+            
+            logger.info(f"Qualified contracts: front={front_conId}, back={back_conId}")
+            
+            # Create combo contract
+            combo = Contract()
+            combo.symbol = symbol
+            combo.secType = "BAG"  # Combo/Bag order
+            combo.exchange = "SMART"
+            combo.currency = "USD"
+            
+            # Create combo legs
+            # Leg 1: SELL front-month (action=2 for SELL)
+            leg1 = ComboLeg()
+            leg1.conId = front_conId
+            leg1.ratio = 1
+            leg1.action = "SELL"
+            leg1.exchange = "SMART"
+            
+            # Leg 2: BUY back-month (action=1 for BUY)
+            leg2 = ComboLeg()
+            leg2.conId = back_conId
+            leg2.ratio = 1
+            leg2.action = "BUY"
+            leg2.exchange = "SMART"
+            
+            combo.comboLegs = [leg1, leg2]
+            
+            # Create order
+            order = Order()
+            order.action = "BUY"  # Buy the spread (debit)
+            order.orderType = "LMT" if net_debit else "MKT"
+            order.totalQuantity = quantity
+            if net_debit:
+                order.lmtPrice = net_debit
+            order.transmit = True
+            
+            # Place order in IB
+            trade = self.ib.placeOrder(combo, order)
+            order_id = trade.order.orderId
+            
+            logger.info(f"✅ IB Calendar #{order_id}: {symbol} ${strike}C x{quantity}")
+            logger.info(f"   SELL {front_expiry}, BUY {back_expiry}")
+            
+            return order_id
+            
+        except Exception as e:
+            logger.error(f"❌ Failed to place calendar spread for {symbol}: {e}")
+            import traceback
+            logger.error(traceback.format_exc())
+            return None
+    
     def get_order_status(self, order_id: int) -> dict:
         """
         Get current status of an order.

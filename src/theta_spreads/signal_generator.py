@@ -17,7 +17,7 @@ Exit Signals:
 
 import logging
 from dataclasses import dataclass
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from typing import List, Dict, Optional
 from enum import Enum
 import uuid
@@ -69,7 +69,8 @@ class ThetaEntrySignal:
     
     # Metadata
     created_at: datetime
-    status: str  # "pending", "approved", "executed", "rejected"
+    expires_at: datetime  # Signal expiration time (30 min default)
+    status: str  # "pending", "approved", "executed", "rejected", "expired"
 
 
 @dataclass
@@ -332,10 +333,11 @@ class ThetaSignalGenerator:
             if put.total_score < self.min_confidence:
                 continue
             
-            # Filter 2: Max positions check
-            if position_count >= self.max_positions:
-                logger.debug("Max positions reached")
-                break
+            # Filter 2: Max positions - MOVED TO CLIENT (log only)
+            # Server publishes all qualifying signals, client filters by their max positions
+            # if position_count >= self.max_positions:
+            #     logger.debug("Max positions reached")
+            #     break
             
             # Filter 3: Symbol overlap (no duplicate positions)
             if put.symbol in open_symbols:
@@ -364,15 +366,21 @@ class ThetaSignalGenerator:
             capital_required = put.strike * 100 * adjusted_contracts
             premium_received = put.bid * 100 * adjusted_contracts
             
-            # Filter 4: Available capital check
-            if capital_required > available_capital:
-                logger.debug(f"{put.symbol}: Insufficient capital (need ${capital_required:,.0f}, have ${available_capital:,.0f})")
-                continue
+            # Capital and heat checks - MOVED TO CLIENT
+            # Server generates signals for all qualifying puts,
+            # client filters based on their account size and risk tolerance
+            # Old filters kept as comments for reference:
+            # if capital_required > available_capital:
+            #     logger.debug(f"{put.symbol}: Insufficient capital")
+            #     continue
+            # if current_heat + capital_required > self.max_portfolio_heat:
+            #     logger.debug(f"{put.symbol}: Would exceed max heat")
+            #     continue
             
-            # Filter 5: Max heat check
-            if current_heat + capital_required > self.max_portfolio_heat:
-                logger.debug(f"{put.symbol}: Would exceed max heat")
-                continue
+            # Calculate signal expiration (30 minutes default)
+            import config
+            expiry_minutes = getattr(config, 'THETA_SIGNAL_EXPIRY_MINUTES', 30)
+            expires_at = datetime.now() + timedelta(minutes=expiry_minutes)
             
             # Create entry signal
             signal = ThetaEntrySignal(
@@ -397,15 +405,14 @@ class ThetaSignalGenerator:
                 total_premium=premium_received,
                 total_capital_required=capital_required,
                 created_at=datetime.now(),
+                expires_at=expires_at,  # Signal expires after 30 min
                 status="pending"
             )
             
             signals.append(signal)
             
-            # Update counters for next iteration
-            available_capital -= capital_required
-            current_heat += capital_required
-            position_count += 1
+            # Track symbols to avoid duplicates within this batch
+            # (counters removed - client handles position limits)
             open_symbols.add(put.symbol)
             open_symbols_list.append(put.symbol)  # For correlation filter
         

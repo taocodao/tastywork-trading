@@ -6,12 +6,17 @@ Handles broadcasting signals to WebSocket server.
 
 import requests
 import logging
+import os
 from typing import Dict, Any
 
 logger = logging.getLogger(__name__)
 
 # WebSocket HTTP broadcast endpoint
-WEBSOCKET_BROADCAST_URL = "http://localhost:8004/"
+# Use environment variable or fall back to EC2 production URL
+WEBSOCKET_BROADCAST_URL = os.getenv(
+    'WEBSOCKET_BROADCAST_URL',
+    'http://ec2-34-235-119-67.compute-1.amazonaws.com:8004/'
+)
 
 
 def broadcast_to_channel(channel: str, data: Dict[str, Any]) -> bool:

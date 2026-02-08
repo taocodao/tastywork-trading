@@ -129,7 +129,7 @@ class TastytradeDataProvider:
             return self.client.get_stock_price('VIX')
         except Exception as e:
             logger.warning(f"Could not fetch VIX: {e}")
-            return 18.0  # Return neutral value if VIX unavailable
+            return 0.0  # Return 0.0 to indicate failure, upstream should handle this
 
 
 def create_tastytrade_scanner():

@@ -34,6 +34,7 @@ except ImportError:
 
 from greeks_calculator import BlackScholesCalculator
 from src.theta_spreads import ThetaPortfolioManager
+from src.theta_spreads.symbol_profiles import get_symbol_profile, SYMBOL_PROFILES
 import config
 
 logging.basicConfig(level=logging.INFO)
@@ -164,7 +165,8 @@ class ThetaStrategyBacktester:
         initial_capital: float = None,
         target_delta: float = 0.30,
         dte_min: int = 28,
-        dte_max: int = 35
+        dte_max: int = 35,
+        use_profile: bool = True  # NEW: Use symbol-specific profile
     ):
         self.symbol = symbol
         self.start_date = start_date or date(2024, 1, 1)
@@ -173,6 +175,16 @@ class ThetaStrategyBacktester:
         self.target_delta = target_delta
         self.dte_min = dte_min
         self.dte_max = dte_max
+        self.use_profile = use_profile
+        
+        # Get symbol profile if enabled
+        if self.use_profile and symbol in SYMBOL_PROFILES:
+            self.profile = get_symbol_profile(symbol)
+            logger.info(f"Using optimized profile for {symbol}")
+            logger.info(f"  Week1: {self.profile.week1_profit_pct}%, Breach: {self.profile.breach_threshold_pct*100}%")
+        else:
+            self.profile = None
+            logger.info(f"Using default config parameters for {symbol}")
         
         self.bs_calc = BlackScholesCalculator()
         
@@ -201,7 +213,7 @@ class ThetaStrategyBacktester:
         df.index = pd.to_datetime(df.index).date
         
         # Calculate historical volatility as proxy for IV
-        returns = pd.Series([df['close'][i] / df['close'][i-1] - 1 
+        returns = pd.Series([df['close'].iloc[i] / df['close'].iloc[i-1] - 1 
                             for i in range(1, len(df))], 
                            index=df.index[1:])
         
@@ -214,7 +226,7 @@ class ThetaStrategyBacktester:
             iv_premium = 1.30  # Tech has higher IV premium
         
         iv_series = hv * iv_premium
-        iv_series = iv_series.fillna(method='bfill').fillna(0.25)
+        iv_series = iv_series.bfill().fillna(0.25)
         
         # Clamp IV to reasonable range
         iv_series = iv_series.clip(0.10, 0.60)
@@ -289,17 +301,29 @@ class ThetaStrategyBacktester:
     def _calculate_exit_target(self, premium_collected: float, days_held: int) -> float:
         """
         Calculate profit target based on time-based exit rules.
+        Uses symbol profile if available, otherwise falls back to config.
         Returns target closing price.
         """
-        # Week 1: 50%, Week 2: 60%, Week 3: 75%, Week 4: 90%
-        if days_held <= 7:
-            target_pct = config.THETA_WEEK1_PROFIT_PCT / 100
-        elif days_held <= 14:
-            target_pct = config.THETA_WEEK2_PROFIT_PCT / 100
-        elif days_held <= 21:
-            target_pct = config.THETA_WEEK3_PROFIT_PCT / 100
+        # Use profile-specific targets if available
+        if self.profile:
+            if days_held <= 7:
+                target_pct = self.profile.week1_profit_pct / 100
+            elif days_held <= 14:
+                target_pct = self.profile.week2_profit_pct / 100
+            elif days_held <= 21:
+                target_pct = self.profile.week3_profit_pct / 100
+            else:
+                target_pct = self.profile.week4_profit_pct / 100
         else:
-            target_pct = config.THETA_WEEK4_PROFIT_PCT / 100
+            # Fallback to config defaults
+            if days_held <= 7:
+                target_pct = config.THETA_WEEK1_PROFIT_PCT / 100
+            elif days_held <= 14:
+                target_pct = config.THETA_WEEK2_PROFIT_PCT / 100
+            elif days_held <= 21:
+                target_pct = config.THETA_WEEK3_PROFIT_PCT / 100
+            else:
+                target_pct = config.THETA_WEEK4_PROFIT_PCT / 100
         
         # We want to capture target_pct of the premium
         # Close when value decays to (1 - target_pct) * entry_premium
@@ -375,8 +399,14 @@ class ThetaStrategyBacktester:
                 
                 # Check exit conditions
                 
-                # 1. Defensive close (stock breached 98% of strike)
-                if stock_price_current <= strike * 0.98:
+                # 1. Defensive close (stock breached threshold)
+                # Use profile-specific breach threshold if available
+                if self.profile:
+                    breach_threshold = 1 - self.profile.breach_threshold_pct
+                else:
+                    breach_threshold = 1 - (config.THETA_DEFENSIVE_BREACH_PCT / 100)
+                
+                if stock_price_current <= strike * breach_threshold:
                     exit_date = current_date
                     exit_reason = "DEFENSIVE_CLOSE"
                     premium_exit = premium_current
@@ -390,8 +420,14 @@ class ThetaStrategyBacktester:
                     premium_exit = premium_current
                     break
                 
-                # 3. Expiration (DTE <= 3)
-                if dte_current <= 3:
+                # 3. Expiration (DTE <= threshold)
+                # Use profile-specific DTE exit if available
+                if self.profile:
+                    dte_threshold = self.profile.dte_exit_threshold
+                else:
+                    dte_threshold = config.THETA_EXPIRATION_THRESHOLD
+                
+                if dte_current <= dte_threshold:
                     exit_date = current_date
                     exit_reason = "EXPIRATION"
                     premium_exit = premium_current

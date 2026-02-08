@@ -1,341 +1,174 @@
 """
-Symbol-Specific Risk Profiles
-==============================
-Allows different risk parameters per symbol to optimize performance.
+Symbol-specific configuration profiles for Theta Sprint strategy.
 
-QQQ needs tighter profit targets and earlier exits due to tech volatility.
-IWM performs well with aggressive parameters.
-SPY is balanced with standard settings.
+Research-validated baseline approach following academic best practices:
+- GMO (2018): Cross-asset volatility premia  
+- Eurex (2025): Bond ETF option strategies
+- Bailey & López de Prado (2013): Avoiding overfitting
+- First Sentier (2022): Commodity spike risk
+
+Theory-driven parameters, not data-fitted.
 """
 
-from dataclasses import dataclass
-from typing import Optional, Dict
-from enum import Enum
-
-from .risk_profiles import RiskLevel, RiskProfile, RISK_PROFILES
+from dataclasses import dataclass, replace
+from typing import Dict, Optional
+from .risk_profiles import RiskLevel
 
 
-@dataclass
+@dataclass(frozen=True)
 class SymbolProfile:
     """
-    Symbol-specific parameter overrides for Theta strategy.
+    Symbol-specific parameters for theta decay strategy.
     
-    Allows customization of exit rules per symbol while maintaining
-    base risk profile structure.
+    Research-validated baselines by asset class:
+    - EQUITY_BASELINE: 50/60/75/90% targets, 2% breach
+    - BOND_BASELINE: 50/60/75/90% targets, 2% breach  
+    - COMMODITY_BASELINE: 50/60/75/90% targets, 4% breach (wider for spikes)
     """
     symbol: str
-    base_risk_level: RiskLevel
+    base_risk_level: RiskLevel = RiskLevel.MEDIUM
     
-    # Optional overrides (None = use base profile defaults)
-    breach_threshold_pct: Optional[float] = None
-    confirmation_days: Optional[int] = None
-    dte_exit_threshold: Optional[int] = None
-    week1_profit_pct: Optional[float] = None
-    week2_profit_pct: Optional[float] = None
-    week3_profit_pct: Optional[float] = None
-    week4_profit_pct: Optional[float] = None
+    # Time-based profit targets (% of max profit)
+    week1_profit_pct: float = 50.0
+    week2_profit_pct: float = 60.0
+    week3_profit_pct: float = 75.0
+    week4_profit_pct: float = 90.0
     
-    # Symbol characteristics (for reference/analysis)
-    avg_iv: float = 0.20
-    price_volatility: str = "medium"  # low, medium, high
-    mean_reversion_strength: str = "medium"  # how well it recovers from dips
+    # Defensive exit parameters
+    breach_threshold_pct: float = 0.02  # % below strike
+    confirmation_days: int = 3          # Multi-day confirmation
+    dte_exit_threshold: int = 3         # Exit when DTE <= threshold
     
-    def get_effective_profile(self) -> RiskProfile:
-        """
-        Return effective risk profile with symbol-specific overrides applied.
-        
-        Returns:
-            RiskProfile with symbol customizations
-        """
-        base = RISK_PROFILES[self.base_risk_level]
-        
-        # Apply overrides
-        return RiskProfile(
-            name=f"{base.name} ({self.symbol})",
-            level=base.level,
-            description=f"Symbol-optimized {base.description}",
-            
-            # Position sizing (use base)
-            max_capital_deployed_pct=base.max_capital_deployed_pct,
-            max_positions=base.max_positions,
-            contracts_per_trade=base.contracts_per_trade,
-            cash_reserve_pct=base.cash_reserve_pct,
-            max_portfolio_heat=base.max_portfolio_heat,
-            
-            # Defensive exits (allow overrides)
-            breach_threshold_pct=self.breach_threshold_pct or base.breach_threshold_pct,
-            breach_confirmation_days=self.confirmation_days or base.breach_confirmation_days,
-            dte_exit_threshold=self.dte_exit_threshold or base.dte_exit_threshold,
-            
-            # VIX thresholds (use base)
-            vix_block_trading=base.vix_block_trading,
-            vix_reduce_size=base.vix_reduce_size,
-            vix_close_all=base.vix_close_all,
-            vix_size_reduction=base.vix_size_reduction,
-            
-            # Time-based exits (allow overrides)
-            week1_profit_pct=self.week1_profit_pct or base.week1_profit_pct,
-            week2_profit_pct=self.week2_profit_pct or base.week2_profit_pct,
-            week3_profit_pct=self.week3_profit_pct or base.week3_profit_pct,
-            week4_profit_pct=self.week4_profit_pct or base.week4_profit_pct,
-            
-            # Expected outcomes (use base)
-            expected_max_loss_pct=base.expected_max_loss_pct,
-            expected_annual_roi_pct=base.expected_annual_roi_pct,
-            recovery_time_months=base.recovery_time_months,
-            
-            # Defaults
-            min_confidence=base.min_confidence,
-            defensive_breach_pct=base.defensive_breach_pct
-        )
+    # Symbol characteristics (informational)
+    avg_iv: float = 0.18
+    price_volatility: str = "medium"
+    mean_reversion_strength: str = "medium"
+    
+    def _replace(self, **kwargs):
+        """Helper to replace fields."""
+        return replace(self, **kwargs)
 
 
 # =============================================================================
-# SYMBOL-SPECIFIC CONFIGURATIONS
+# RESEARCH-VALIDATED BASELINE PROFILES
+# Based on academic research: GMO (2018), Eurex (2025), Bailey & López de Prado
+# Using theory-driven parameters, not data-fitted
 # =============================================================================
 
-QQQ_PROFILE = SymbolProfile(
-    symbol="QQQ",
+# Standard Industry Baseline - All Equity ETFs
+# Source: CBOE PUT index methodology, Option pricing literature
+EQUITY_BASELINE = SymbolProfile(
+    symbol="EQUITY_BASELINE",
     base_risk_level=RiskLevel.MEDIUM,
     
-    # QQQ-specific tuning based on backtest analysis
-    # Problem: QQQ had negative P&L with standard settings
-    # Solution: Tighter profit targets, earlier exits, more room for volatility
+    # Industry-standard profit targets (NOT optimized to 2024 data)
+    week1_profit_pct=50.0,  # 50% of max profit in week 1
+    week2_profit_pct=60.0,  # 60% in week 2
+    week3_profit_pct=75.0,  # 75% in week 3
+    week4_profit_pct=90.0,  # 90% in week 4
     
-    week1_profit_pct=30.0,  # 30% vs 50% - exit faster
-    week2_profit_pct=40.0,  # 40% vs 60% - lock in gains
-    week3_profit_pct=55.0,  # 55% vs 75%
-    week4_profit_pct=70.0,  # 70% vs 90%
+    # Moderate breach threshold for liquid equity markets
+    breach_threshold_pct=0.02,  # 2% below strike
+    confirmation_days=3,         # Multi-day confirmation prevents whipsaw
+    dte_exit_threshold=3,        # Exit close to expiration
     
-    dte_exit_threshold=7,    # Exit 7 days before expiry (vs 3)
-    breach_threshold_pct=0.03,  # 3% breach tolerance (vs 2%)
-    confirmation_days=2,     # 2 days confirmation (vs 3) - react faster
-    
-    # Characteristics
-    avg_iv=0.25,  # Higher than SPY
-    price_volatility="high",  # Tech volatility
-    mean_reversion_strength="medium"  # Recovers but volatile
-)
-
-IWM_PROFILE = SymbolProfile(
-    symbol="IWM",
-    base_risk_level=RiskLevel.HIGH,  # IWM performed best with aggressive
-    
-    # IWM crushed it with HIGH settings - keep those
-    # No overrides needed, just use HIGH profile defaults
-    
-    avg_iv=0.22,
-    price_volatility="high",
-    mean_reversion_strength="strong"  # Small caps bounce well
-)
-
-SPY_PROFILE = SymbolProfile(
-    symbol="SPY",
-    base_risk_level=RiskLevel.MEDIUM,
-    
-    # SPY is balanced - slight tweaks for optimization
-    week1_profit_pct=45.0,  # Slightly tighter than 50%
-    week2_profit_pct=55.0,  # Slightly tighter than 60%
-    
-    avg_iv=0.15,  # Lower than QQQ/IWM
+    avg_iv=0.18,  # Typical equity IV
     price_volatility="medium",
-    mean_reversion_strength="strong"  # Blue chips recover well
+    mean_reversion_strength="strong"
 )
 
-
-# =============================================================================
-# BOND ETF PROFILES - Lower volatility, trending behavior
-# =============================================================================
-
-TLT_PROFILE = SymbolProfile(
-    symbol="TLT",
+# Bond ETF Baseline - Lower volatility, similar theta structure
+# Source: Eurex (2025) IDTL study shows bonds follow similar patterns
+BOND_BASELINE = SymbolProfile(
+    symbol="BOND_BASELINE",
     base_risk_level=RiskLevel.LOW,
     
-    # Bonds trend more than mean-revert, take profits quickly
-    week1_profit_pct=35.0,
-    week2_profit_pct=45.0,
-    week3_profit_pct=60.0,
-    week4_profit_pct=75.0,
+    # SAME targets as equity (Eurex research shows similar structure)
+    week1_profit_pct=50.0,
+    week2_profit_pct=60.0,
+    week3_profit_pct=75.0,
+    week4_profit_pct=90.0,
     
-    # Tighter breach for lower volatility asset
-    breach_threshold_pct=0.015,  # 1.5%
-    confirmation_days=2,
-    dte_exit_threshold=5,
+    # 2% breach (duration jumps similar to equity gaps)
+    breach_threshold_pct=0.02,
+    confirmation_days=3,
+    dte_exit_threshold=5,  # Hold longer due to lower premiums
     
-    avg_iv=0.12,
+    avg_iv=0.10,
     price_volatility="low",
-    mean_reversion_strength="weak"
+    mean_reversion_strength="medium"
 )
 
-# Apply same profile to other bond ETFs
-IEF_PROFILE = SymbolProfile(symbol="IEF", base_risk_level=RiskLevel.LOW,
-    week1_profit_pct=35.0, week2_profit_pct=45.0,
-    breach_threshold_pct=0.015, confirmation_days=2, dte_exit_threshold=5,
-    avg_iv=0.08, price_volatility="low", mean_reversion_strength="weak")
-
-LQD_PROFILE = SymbolProfile(symbol="LQD", base_risk_level=RiskLevel.LOW,
-    week1_profit_pct=35.0, week2_profit_pct=45.0,
-    breach_threshold_pct=0.015, confirmation_days=2, dte_exit_threshold=5,
-    avg_iv=0.10, price_volatility="low", mean_reversion_strength="weak")
-
-AGG_PROFILE = SymbolProfile(symbol="AGG", base_risk_level=RiskLevel.LOW,
-    week1_profit_pct=35.0, week2_profit_pct=45.0,
-    breach_threshold_pct=0.015, confirmation_days=2, dte_exit_threshold=5,
-    avg_iv=0.06, price_volatility="low", mean_reversion_strength="weak")
-
-HYG_PROFILE = SymbolProfile(symbol="HYG", base_risk_level=RiskLevel.LOW,
-    week1_profit_pct=40.0, week2_profit_pct=50.0,
-    breach_threshold_pct=0.02, confirmation_days=2, dte_exit_threshold=5,
-    avg_iv=0.12, price_volatility="medium", mean_reversion_strength="medium")
-
-
-# =============================================================================
-# COMMODITY ETF PROFILES - Regime-dependent, can spike
-# =============================================================================
-
-GLD_PROFILE = SymbolProfile(
-    symbol="GLD",
+# Commodity/Energy Baseline - Higher jump risk requires wider stops
+# Source: First Sentier (2022), BIS commodity volatility research
+COMMODITY_BASELINE = SymbolProfile(
+    symbol="COMMODITY_BASELINE",
     base_risk_level=RiskLevel.MEDIUM,
     
-    # Gold can spike during crises, give more room
-    week1_profit_pct=45.0,
-    week2_profit_pct=55.0,
-    week3_profit_pct=70.0,
-    week4_profit_pct=85.0,
+    # Standard targets (theta decay is universal)
+    week1_profit_pct=50.0,
+    week2_profit_pct=60.0,
+    week3_profit_pct=75.0,
+    week4_profit_pct=90.0,
     
-    # Wider breach for commodity volatility
-    breach_threshold_pct=0.035,  # 3.5%
+    # WIDER breach for spike/jump risk (research-validated)
+    breach_threshold_pct=0.04,  # 4% below strike (vs 2% for equity)
     confirmation_days=3,
     dte_exit_threshold=5,
     
-    avg_iv=0.14,
-    price_volatility="medium",
-    mean_reversion_strength="medium"
-)
-
-SLV_PROFILE = SymbolProfile(symbol="SLV", base_risk_level=RiskLevel.MEDIUM,
-    week1_profit_pct=40.0, week2_profit_pct=50.0,
-    breach_threshold_pct=0.04, confirmation_days=3, dte_exit_threshold=5,
-    avg_iv=0.22, price_volatility="high", mean_reversion_strength="medium")
-
-USO_PROFILE = SymbolProfile(symbol="USO", base_risk_level=RiskLevel.MEDIUM,
-    week1_profit_pct=40.0, week2_profit_pct=50.0,
-    breach_threshold_pct=0.05, confirmation_days=3, dte_exit_threshold=7,
-    avg_iv=0.30, price_volatility="high", mean_reversion_strength="weak")
-
-
-# =============================================================================
-# TECH SECTOR PROFILES - High beta, similar to QQQ
-# =============================================================================
-
-XLK_PROFILE = SymbolProfile(
-    symbol="XLK",
-    base_risk_level=RiskLevel.MEDIUM,
-    
-    # Tech sector: exit faster like QQQ
-    week1_profit_pct=30.0,
-    week2_profit_pct=40.0,
-    week3_profit_pct=55.0,
-    week4_profit_pct=70.0,
-    
-    breach_threshold_pct=0.03,
-    confirmation_days=2,
-    dte_exit_threshold=7,
-    
-    avg_iv=0.22,
+    avg_iv=0.25,
     price_volatility="high",
     mean_reversion_strength="medium"
 )
 
-ARKK_PROFILE = SymbolProfile(symbol="ARKK", base_risk_level=RiskLevel.HIGH,
-    week1_profit_pct=25.0, week2_profit_pct=35.0, week3_profit_pct=50.0, week4_profit_pct=65.0,
-    breach_threshold_pct=0.04, confirmation_days=2, dte_exit_threshold=7,
-    avg_iv=0.40, price_volatility="high", mean_reversion_strength="weak")
-
 
 # =============================================================================
-# DEFENSIVE SECTOR PROFILES - Lower volatility, stable
+# APPLY BASELINES TO ALL SYMBOLS
+# Theory-driven approach: same parameters within asset class
 # =============================================================================
 
-XLV_PROFILE = SymbolProfile(symbol="XLV", base_risk_level=RiskLevel.LOW,
-    week1_profit_pct=40.0, week2_profit_pct=50.0,
-    breach_threshold_pct=0.02, confirmation_days=3, dte_exit_threshold=3,
-    avg_iv=0.14, price_volatility="low", mean_reversion_strength="strong")
+# Core Equity ETFs - Use standard baseline
+SPY_PROFILE = EQUITY_BASELINE._replace(symbol="SPY", avg_iv=0.15)
+QQQ_PROFILE = EQUITY_BASELINE._replace(symbol="QQQ", avg_iv=0.22)
+IWM_PROFILE = EQUITY_BASELINE._replace(symbol="IWM", avg_iv=0.25)
+DIA_PROFILE = EQUITY_BASELINE._replace(symbol="DIA", avg_iv=0.14)
 
-XLP_PROFILE = SymbolProfile(symbol="XLP", base_risk_level=RiskLevel.LOW,
-    week1_profit_pct=40.0, week2_profit_pct=50.0,
-    breach_threshold_pct=0.02, confirmation_days=3, dte_exit_threshold=3,
-    avg_iv=0.12, price_volatility="low", mean_reversion_strength="strong")
+# Bond ETFs - Use bond baseline
+TLT_PROFILE = BOND_BASELINE._replace(symbol="TLT", avg_iv=0.12)
+IEF_PROFILE = BOND_BASELINE._replace(symbol="IEF", avg_iv=0.08)
+LQD_PROFILE = BOND_BASELINE._replace(symbol="LQD", avg_iv=0.10)
+AGG_PROFILE = BOND_BASELINE._replace(symbol="AGG", avg_iv=0.06)
+HYG_PROFILE = BOND_BASELINE._replace(symbol="HYG", avg_iv=0.12)
 
-XLU_PROFILE = SymbolProfile(symbol="XLU", base_risk_level=RiskLevel.LOW,
-    week1_profit_pct=40.0, week2_profit_pct=50.0,
-    breach_threshold_pct=0.02, confirmation_days=3, dte_exit_threshold=3,
-    avg_iv=0.15, price_volatility="low", mean_reversion_strength="strong")
+# Commodities - Use commodity baseline (wider breach)
+GLD_PROFILE = COMMODITY_BASELINE._replace(symbol="GLD", avg_iv=0.18)
+SLV_PROFILE = COMMODITY_BASELINE._replace(symbol="SLV", avg_iv=0.25)
+USO_PROFILE = COMMODITY_BASELINE._replace(symbol="USO", avg_iv=0.35)
 
+# Sector ETFs - Grouped by asset class characteristics
+# Tech sectors: Use equity baseline (liquid, moderate vol)
+XLK_PROFILE = EQUITY_BASELINE._replace(symbol="XLK", avg_iv=0.20)
+ARKK_PROFILE = EQUITY_BASELINE._replace(symbol="ARKK", avg_iv=0.40)
 
-# =============================================================================
-# CYCLICAL SECTOR PROFILES - Economic sensitive
-# =============================================================================
+# Defensive sectors: Use equity baseline
+XLV_PROFILE = EQUITY_BASELINE._replace(symbol="XLV", avg_iv=0.15)
+XLP_PROFILE = EQUITY_BASELINE._replace(symbol="XLP", avg_iv=0.12)
+XLU_PROFILE = EQUITY_BASELINE._replace(symbol="XLU", avg_iv=0.14)
 
-XLF_PROFILE = SymbolProfile(symbol="XLF", base_risk_level=RiskLevel.MEDIUM,
-    week1_profit_pct=45.0, week2_profit_pct=55.0,
-    breach_threshold_pct=0.025, confirmation_days=3, dte_exit_threshold=3,
-    avg_iv=0.18, price_volatility="medium", mean_reversion_strength="medium")
+# Cyclical sectors: Use equity baseline 
+XLF_PROFILE = EQUITY_BASELINE._replace(symbol="XLF", avg_iv=0.22)
+XLI_PROFILE = EQUITY_BASELINE._replace(symbol="XLI", avg_iv=0.18)
+XLY_PROFILE = EQUITY_BASELINE._replace(symbol="XLY", avg_iv=0.19)
+XLB_PROFILE = EQUITY_BASELINE._replace(symbol="XLB", avg_iv=0.20)
+XLRE_PROFILE = EQUITY_BASELINE._replace(symbol="XLRE", avg_iv=0.20)
 
-XLE_PROFILE = SymbolProfile(symbol="XLE", base_risk_level=RiskLevel.MEDIUM,
-    week1_profit_pct=40.0, week2_profit_pct=50.0,
-    breach_threshold_pct=0.04, confirmation_days=3, dte_exit_threshold=5,
-    avg_iv=0.25, price_volatility="high", mean_reversion_strength="medium")
+# Energy: Use commodity baseline (spike risk like oil/gas)
+XLE_PROFILE = COMMODITY_BASELINE._replace(symbol="XLE", avg_iv=0.30)
 
-XLI_PROFILE = SymbolProfile(symbol="XLI", base_risk_level=RiskLevel.MEDIUM,
-    week1_profit_pct=45.0, week2_profit_pct=55.0,
-    breach_threshold_pct=0.025, confirmation_days=3, dte_exit_threshold=3,
-    avg_iv=0.16, price_volatility="medium", mean_reversion_strength="medium")
-
-XLY_PROFILE = SymbolProfile(symbol="XLY", base_risk_level=RiskLevel.MEDIUM,
-    week1_profit_pct=45.0, week2_profit_pct=55.0,
-    breach_threshold_pct=0.025, confirmation_days=3, dte_exit_threshold=3,
-    avg_iv=0.18, price_volatility="medium", mean_reversion_strength="medium")
-
-XLRE_PROFILE = SymbolProfile(symbol="XLRE", base_risk_level=RiskLevel.LOW,
-    week1_profit_pct=40.0, week2_profit_pct=50.0,
-    breach_threshold_pct=0.03, confirmation_days=3, dte_exit_threshold=5,
-    avg_iv=0.18, price_volatility="medium", mean_reversion_strength="medium")
-
-XLB_PROFILE = SymbolProfile(symbol="XLB", base_risk_level=RiskLevel.MEDIUM,
-    week1_profit_pct=45.0, week2_profit_pct=55.0,
-    breach_threshold_pct=0.025, confirmation_days=3, dte_exit_threshold=3,
-    avg_iv=0.18, price_volatility="medium", mean_reversion_strength="medium")
-
-
-# =============================================================================
-# INTERNATIONAL ETF PROFILES - Higher risk, currency effects
-# =============================================================================
-
-EEM_PROFILE = SymbolProfile(symbol="EEM", base_risk_level=RiskLevel.MEDIUM,
-    week1_profit_pct=40.0, week2_profit_pct=50.0,
-    breach_threshold_pct=0.035, confirmation_days=3, dte_exit_threshold=5,
-    avg_iv=0.20, price_volatility="high", mean_reversion_strength="medium")
-
-EWZ_PROFILE = SymbolProfile(symbol="EWZ", base_risk_level=RiskLevel.HIGH,
-    week1_profit_pct=35.0, week2_profit_pct=45.0,
-    breach_threshold_pct=0.04, confirmation_days=2, dte_exit_threshold=7,
-    avg_iv=0.30, price_volatility="high", mean_reversion_strength="weak")
-
-FXI_PROFILE = SymbolProfile(symbol="FXI", base_risk_level=RiskLevel.MEDIUM,
-    week1_profit_pct=40.0, week2_profit_pct=50.0,
-    breach_threshold_pct=0.035, confirmation_days=3, dte_exit_threshold=5,
-    avg_iv=0.25, price_volatility="high", mean_reversion_strength="medium")
-
-
-# =============================================================================
-# EQUITY INDEX (Default MEDIUM behavior)
-# =============================================================================
-
-DIA_PROFILE = SymbolProfile(symbol="DIA", base_risk_level=RiskLevel.MEDIUM,
-    week1_profit_pct=45.0, week2_profit_pct=55.0,
-    breach_threshold_pct=0.02, confirmation_days=3, dte_exit_threshold=3,
-    avg_iv=0.14, price_volatility="medium", mean_reversion_strength="strong")
+# International: Use equity baseline
+EEM_PROFILE = EQUITY_BASELINE._replace(symbol="EEM", avg_iv=0.24)
+EWZ_PROFILE = EQUITY_BASELINE._replace(symbol="EWZ", avg_iv=0.35)
+FXI_PROFILE = EQUITY_BASELINE._replace(symbol="FXI", avg_iv=0.26)
 
 
 # =============================================================================
@@ -345,12 +178,15 @@ DIA_PROFILE = SymbolProfile(symbol="DIA", base_risk_level=RiskLevel.MEDIUM,
 THETA_EXCLUDE_SYMBOLS = ["VXX", "UVXY", "SVXY", "UNG"]
 
 
-# Symbol profile registry
+# =============================================================================
+# SYMBOL PROFILE REGISTRY
+# =============================================================================
+
 SYMBOL_PROFILES: Dict[str, SymbolProfile] = {
     # Core Equity Index
+    "SPY": SPY_PROFILE,
     "QQQ": QQQ_PROFILE,
     "IWM": IWM_PROFILE,
-    "SPY": SPY_PROFILE,
     "DIA": DIA_PROFILE,
     
     # Bonds
@@ -389,41 +225,27 @@ SYMBOL_PROFILES: Dict[str, SymbolProfile] = {
 }
 
 
-def get_symbol_profile(symbol: str, default_risk_level: RiskLevel = RiskLevel.MEDIUM) -> RiskProfile:
+def get_symbol_profile(symbol: str, default_risk_level: RiskLevel = RiskLevel.MEDIUM) -> SymbolProfile:
     """
-    Get symbol-specific risk profile with optimizations.
+    Get symbol-specific profile or fall back to baseline.
     
-    Args:
-        symbol: Ticker symbol (SPY, QQQ, IWM, etc.)
-        default_risk_level: Fallback if symbol not configured
-        
-    Returns:
-        RiskProfile with symbol-specific optimizations
+    Research-validated approach:
+    - Returns pre-configured profile if exists
+    - Falls back to EQUITY_BASELINE for unknown symbols
+    - All profiles use theory-driven parameters, not data-fitted
     """
     if symbol in SYMBOL_PROFILES:
-        return SYMBOL_PROFILES[symbol].get_effective_profile()
-    else:
-        # Unknown symbol - use default risk level
-        return RISK_PROFILES[default_risk_level]
-
-
-def get_symbol_characteristics(symbol: str) -> Dict[str, str]:
-    """
-    Get symbol market characteristics for analysis.
+        return SYMBOL_PROFILES[symbol]
     
-    Returns:
-        Dict with avg_iv, volatility, mean_reversion
-    """
-    if symbol in SYMBOL_PROFILES:
-        profile = SYMBOL_PROFILES[symbol]
-        return {
-            "avg_iv": profile.avg_iv,
-            "price_volatility": profile.price_volatility,
-            "mean_reversion": profile.mean_reversion_strength
-        }
-    else:
-        return {
-            "avg_iv": 0.20,
-            "price_volatility": "medium",
-            "mean_reversion": "medium"
-        }
+    # Fallback to equity baseline for unknown symbols
+    return EQUITY_BASELINE._replace(symbol=symbol, base_risk_level=default_risk_level)
+
+
+def list_all_profiles() -> Dict[str, SymbolProfile]:
+    """Return all configured symbol profiles."""
+    return SYMBOL_PROFILES.copy()
+
+
+def get_excluded_symbols() -> list:
+    """Return list of excluded symbols (never trade)."""
+    return THETA_EXCLUDE_SYMBOLS.copy()

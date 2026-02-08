@@ -1,0 +1,203 @@
+{
+  "analysis_type": "trailing_stop_sensitivity",
+  "results": {
+    "theta_-20": {
+      "strategy": "theta",
+      "trailing_stop_pct": -20,
+      "avg_annual_return": 353.65,
+      "sharpe_ratio": 9.58,
+      "max_drawdown_95th": 5.42,
+      "max_drawdown_99th": 7.05,
+      "pct_stopped_early": 100.0
+    },
+    "theta_-25": {
+      "strategy": "theta",
+      "trailing_stop_pct": -25,
+      "avg_annual_return": 309.34,
+      "sharpe_ratio": 8.29,
+      "max_drawdown_95th": 6.87,
+      "max_drawdown_99th": 8.74,
+      "pct_stopped_early": 100.0
+    },
+    "theta_-30": {
+      "strategy": "theta",
+      "trailing_stop_pct": -30,
+      "avg_annual_return": 272.18,
+      "sharpe_ratio": 7.2,
+      "max_drawdown_95th": 8.77,
+      "max_drawdown_99th": 10.8,
+      "pct_stopped_early": 100.0
+    },
+    "theta_-35": {
+      "strategy": "theta",
+      "trailing_stop_pct": -35,
+      "avg_annual_return": 236.26,
+      "sharpe_ratio": 6.21,
+      "max_drawdown_95th": 10.17,
+      "max_drawdown_99th": 13.57,
+      "pct_stopped_early": 100.0
+    },
+    "theta_-40": {
+      "strategy": "theta",
+      "trailing_stop_pct": -40,
+      "avg_annual_return": 203.83,
+      "sharpe_ratio": 5.35,
+      "max_drawdown_95th": 12.51,
+      "max_drawdown_99th": 14.87,
+      "pct_stopped_early": 100.0
+    },
+    "theta_-45": {
+      "strategy": "theta",
+      "trailing_stop_pct": -45,
+      "avg_annual_return": 179.53,
+      "sharpe_ratio": 4.64,
+      "max_drawdown_95th": 15.11,
+      "max_drawdown_99th": 18.35,
+      "pct_stopped_early": 100.0
+    },
+    "theta_-50": {
+      "strategy": "theta",
+      "trailing_stop_pct": -50,
+      "avg_annual_return": 149.3,
+      "sharpe_ratio": 3.92,
+      "max_drawdown_95th": 16.55,
+      "max_drawdown_99th": 21.96,
+      "pct_stopped_early": 100.0
+    },
+    "theta_-55": {
+      "strategy": "theta",
+      "trailing_stop_pct": -55,
+      "avg_annual_return": 130.05,
+      "sharpe_ratio": 3.38,
+      "max_drawdown_95th": 20.64,
+      "max_drawdown_99th": 25.57,
+      "pct_stopped_early": 100.0
+    },
+    "theta_-60": {
+      "strategy": "theta",
+      "trailing_stop_pct": -60,
+      "avg_annual_return": 105.92,
+      "sharpe_ratio": 2.78,
+      "max_drawdown_95th": 24.22,
+      "max_drawdown_99th": 31.72,
+      "pct_stopped_early": 100.0
+    },
+    "theta_-65": {
+      "strategy": "theta",
+      "trailing_stop_pct": -65,
+      "avg_annual_return": 87.59,
+      "sharpe_ratio": 2.31,
+      "max_drawdown_95th": 27.99,
+      "max_drawdown_99th": 34.96,
+      "pct_stopped_early": 100.0
+    },
+    "theta_-70": {
+      "strategy": "theta",
+      "trailing_stop_pct": -70,
+      "avg_annual_return": 72.33,
+      "sharpe_ratio": 1.91,
+      "max_drawdown_95th": 31.51,
+      "max_drawdown_99th": 37.31,
+      "pct_stopped_early": 100.0
+    },
+    "calendar_-20": {
+      "strategy": "calendar",
+      "trailing_stop_pct": -20,
+      "avg_annual_return": 120.09,
+      "sharpe_ratio": 5.65,
+      "max_drawdown_95th": 7.6,
+      "max_drawdown_99th": 9.08,
+      "pct_stopped_early": 100.0
+    },
+    "calendar_-25": {
+      "strategy": "calendar",
+      "trailing_stop_pct": -25,
+      "avg_annual_return": 94.35,
+      "sharpe_ratio": 4.34,
+      "max_drawdown_95th": 10.22,
+      "max_drawdown_99th": 12.47,
+      "pct_stopped_early": 100.0
+    },
+    "calendar_-30": {
+      "strategy": "calendar",
+      "trailing_stop_pct": -30,
+      "avg_annual_return": 69.61,
+      "sharpe_ratio": 3.15,
+      "max_drawdown_95th": 14.33,
+      "max_drawdown_99th": 16.63,
+      "pct_stopped_early": 100.0
+    },
+    "calendar_-35": {
+      "strategy": "calendar",
+      "trailing_stop_pct": -35,
+      "avg_annual_return": 50.41,
+      "sharpe_ratio": 2.25,
+      "max_drawdown_95th": 17.75,
+      "max_drawdown_99th": 23.04,
+      "pct_stopped_early": 100.0
+    },
+    "calendar_-40": {
+      "strategy": "calendar",
+      "trailing_stop_pct": -40,
+      "avg_annual_return": 33.34,
+      "sharpe_ratio": 1.47,
+      "max_drawdown_95th": 23.46,
+      "max_drawdown_99th": 27.48,
+      "pct_stopped_early": 100.0
+    },
+    "calendar_-45": {
+      "strategy": "calendar",
+      "trailing_stop_pct": -45,
+      "avg_annual_return": 15.51,
+      "sharpe_ratio": 0.68,
+      "max_drawdown_95th": 31.49,
+      "max_drawdown_99th": 39.43,
+      "pct_stopped_early": 100.0
+    },
+    "calendar_-50": {
+      "strategy": "calendar",
+      "trailing_stop_pct": -50,
+      "avg_annual_return": 1.11,
+      "sharpe_ratio": 0.06,
+      "max_drawdown_95th": 38.7,
+      "max_drawdown_99th": 44.83,
+      "pct_stopped_early": 100.0
+    },
+    "calendar_-55": {
+      "strategy": "calendar",
+      "trailing_stop_pct": -55,
+      "avg_annual_return": -8.45,
+      "sharpe_ratio": -0.38,
+      "max_drawdown_95th": 47.49,
+      "max_drawdown_99th": 52.96,
+      "pct_stopped_early": 100.0
+    },
+    "calendar_-60": {
+      "strategy": "calendar",
+      "trailing_stop_pct": -60,
+      "avg_annual_return": -20.69,
+      "sharpe_ratio": -0.93,
+      "max_drawdown_95th": 53.43,
+      "max_drawdown_99th": 61.19,
+      "pct_stopped_early": 100.0
+    },
+    "calendar_-65": {
+      "strategy": "calendar",
+      "trailing_stop_pct": -65,
+      "avg_annual_return": -30.68,
+      "sharpe_ratio": -1.37,
+      "max_drawdown_95th": 60.93,
+      "max_drawdown_99th": 67.0,
+      "pct_stopped_early": 100.0
+    },
+    "calendar_-70": {
+      "strategy": "calendar",
+      "trailing_stop_pct": -70,
+      "avg_annual_return": -39.2,
+      "sharpe_ratio": -1.77,
+      "max_drawdown_95th": 65.33,
+      "max_drawdown_99th": 72.35,
+      "pct_stopped_early": 100.0
+    }
+  }
+}

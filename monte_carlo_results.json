@@ -1,0 +1,82 @@
+{
+  "simulation_params": {
+    "simulations": 1000,
+    "weeks": 52,
+    "capital": 10000,
+    "generated_at": "2026-02-07"
+  },
+  "results": {
+    "theta_safe": {
+      "strategy": "theta",
+      "risk_level": "safe",
+      "max_drawdown_95th": 3.98,
+      "max_drawdown_99th": 5.28,
+      "var_95": -30.0,
+      "var_99": -30.0,
+      "avg_annual_return": 81.55,
+      "sharpe_ratio": 5.25,
+      "avg_recovery_days": 589,
+      "win_rate": 82.0
+    },
+    "theta_smart": {
+      "strategy": "theta",
+      "risk_level": "smart",
+      "max_drawdown_95th": 14.38,
+      "max_drawdown_99th": 17.75,
+      "var_95": -45.0,
+      "var_99": -45.0,
+      "avg_annual_return": 185.32,
+      "sharpe_ratio": 2.79,
+      "avg_recovery_days": 724,
+      "win_rate": 75.0
+    },
+    "theta_bold": {
+      "strategy": "theta",
+      "risk_level": "bold",
+      "max_drawdown_95th": 61.46,
+      "max_drawdown_99th": 70.88,
+      "var_95": -60.0,
+      "var_99": -60.0,
+      "avg_annual_return": 210.77,
+      "sharpe_ratio": 0.77,
+      "avg_recovery_days": 773,
+      "win_rate": 65.0
+    },
+    "calendar_safe": {
+      "strategy": "calendar",
+      "risk_level": "safe",
+      "max_drawdown_95th": 7.34,
+      "max_drawdown_99th": 10.03,
+      "var_95": -30.0,
+      "var_99": -30.0,
+      "avg_annual_return": 38.71,
+      "sharpe_ratio": 2.01,
+      "avg_recovery_days": 683,
+      "win_rate": 72.0
+    },
+    "calendar_smart": {
+      "strategy": "calendar",
+      "risk_level": "smart",
+      "max_drawdown_95th": 33.91,
+      "max_drawdown_99th": 39.97,
+      "var_95": -45.0,
+      "var_99": -45.0,
+      "avg_annual_return": 37.2,
+      "sharpe_ratio": 0.53,
+      "avg_recovery_days": 716,
+      "win_rate": 67.0
+    },
+    "calendar_bold": {
+      "strategy": "calendar",
+      "risk_level": "bold",
+      "max_drawdown_95th": 92.19,
+      "max_drawdown_99th": 93.21,
+      "var_95": -60.0,
+      "var_99": -60.0,
+      "avg_annual_return": -83.53,
+      "sharpe_ratio": -0.86,
+      "avg_recovery_days": 112,
+      "win_rate": 58.0
+    }
+  }
+}
