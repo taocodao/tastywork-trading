@@ -1,0 +1,62 @@
+{
+  "summary": {
+    "total_trades": 151,
+    "total_pnl": 12527.28,
+    "win_rate": 75.5,
+    "avg_win": 133.52,
+    "avg_loss": -72.82,
+    "sharpe_ratio": 11.36,
+    "initial_capital": 10000,
+    "final_capital": 22527.28,
+    "total_return_pct": 125.3
+  },
+  "by_strategy": {
+    "BULL_DIAGONAL": {
+      "trades": 27,
+      "total_pnl": 4694.1198717254265,
+      "win_rate": 88.88888888888889,
+      "avg_pnl": 173.85629154538617
+    },
+    "BEAR_DIAGONAL": {
+      "trades": 25,
+      "total_pnl": 4277.747449912694,
+      "win_rate": 80.0,
+      "avg_pnl": 171.10989799650775
+    },
+    "NEUTRAL_DIAGONAL": {
+      "trades": 99,
+      "total_pnl": 3555.4143955704753,
+      "win_rate": 70.70707070707071,
+      "avg_pnl": 35.91327672293409
+    }
+  },
+  "by_exit_reason": {
+    "PROFIT_TARGET": {
+      "count": 33,
+      "avg_pnl": 159.10169209522937
+    },
+    "STOP_LOSS": {
+      "count": 5,
+      "avg_pnl": -96.58115878601134
+    },
+    "DTE_EXIT": {
+      "count": 113,
+      "avg_pnl": 68.67107674332814
+    }
+  },
+  "parameters": {
+    "directional_threshold": 70,
+    "neutral_threshold": 50,
+    "symbols": [
+      "SPY",
+      "QQQ",
+      "IWM",
+      "AAPL",
+      "MSFT",
+      "GOOGL",
+      "AMZN",
+      "META"
+    ],
+    "period": "2024-01-01 to 2024-12-31"
+  }
+}

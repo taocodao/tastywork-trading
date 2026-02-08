@@ -84,7 +84,7 @@ def spread_setup_to_signal(setup) -> Dict[str, Any]:
 
 def publish_calendar_signal(setup, channel: str = "calendar_spread") -> bool:
     """
-    Publish a calendar spread signal to WebSocket channels.
+    Publish a calendar/diagonal spread signal to WebSocket channels AND save to database.
     
     Args:
         setup: SpreadSetup object from scanner
@@ -98,6 +98,15 @@ def publish_calendar_signal(setup, channel: str = "calendar_spread") -> bool:
         
         # Add to pending signals for backward compatibility
         _pending_signals.append(signal)
+        
+        # SAVE TO DATABASE (so /api/signals endpoint returns it)
+        try:
+            from src.earnings_intelligence.database import SignalRepository
+            repo = SignalRepository()
+            repo.save_signal(signal)
+            logger.info(f"💾 Saved signal to database: {signal['symbol']}")
+        except Exception as db_err:
+            logger.warning(f"⚠️ Could not save to database: {db_err}")
         
         # Broadcast to WebSocket channel
         success = broadcast_to_channel(channel, {"signal": signal})
