@@ -130,7 +130,7 @@ def publish_signal(setup, channel: str = "calendar_spread") -> bool:
 
 
 def save_signal_to_db(signal_data: Dict[str, Any]):
-    """Save signal to database with expiration info."""
+    """Save signal to database with expiration info and trigger auto-approve if eligible."""
     try:
         import sys
         import os
@@ -174,6 +174,22 @@ def save_signal_to_db(signal_data: Dict[str, Any]):
         repo.session.commit()
         
         logger.info(f"✅ Signal {signal_data.get('id')} saved to DB (expires: {expires_at})")
+        
+        # ✅ AUTO-APPROVE: Check if signal should be automatically executed
+        try:
+            from auto_approve import auto_approve_signal
+            result = auto_approve_signal(signal_data)
+            if result:
+                logger.info(f"🤖 Auto-approved: {result.get('orderId')}")
+                # Update signal status in database
+                signal.status = 'executed'
+                signal.data = signal.data or {}
+                signal.data['autoApproved'] = True
+                signal.data['orderId'] = result.get('orderId')
+                repo.session.commit()
+        except Exception as auto_err:
+            logger.debug(f"Auto-approve skipped: {auto_err}")
+        
         return True
         
     except Exception as e:

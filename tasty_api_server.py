@@ -165,6 +165,15 @@ class TastyHandler(BaseHTTPRequestHandler):
                 self.handle_get_risk_profiles()
             elif self.path == '/health':
                 self._send_json({'status': 'ok', 'service': 'TradeMind Tastytrade API'})
+            # ============================================
+            # DIAGONAL SPREAD ROUTES
+            # ============================================
+            elif self.path == '/diagonal/status':
+                self._handle_diagonal_status()
+            elif self.path == '/diagonal/universe':
+                self._handle_diagonal_universe()
+            elif self.path == '/diagonal/signals':
+                self._handle_diagonal_signals()
             else:
                 self._send_json({'error': 'Not found'}, 404)
         except Exception as e:
@@ -782,8 +791,29 @@ class TastyHandler(BaseHTTPRequestHandler):
                 )
             ]
             
-            # Create order
-            price = signal.get('cost', 2.50)  # Limit price for the spread
+            # ✅ FETCH LIVE PRICES FROM IB GATEWAY - Critical fix for order fills!
+            try:
+                from ib_data_provider import IBDataProvider
+                ib_data = IBDataProvider()
+                
+                # Get live quotes for both legs
+                short_quote = ib_data.get_option_price_by_symbol(short_symbol.strip())
+                long_quote = ib_data.get_option_price_by_symbol(long_symbol.strip())
+                
+                if short_quote and long_quote:
+                    # Calendar spread: SELL front (bid), BUY back (ask)
+                    # Net debit = back ask - front bid
+                    net_debit = long_quote[1] - short_quote[0]  # ask - bid
+                    price = round(net_debit, 2)
+                    print(f"✅ Using LIVE IB prices: Sell @ ${short_quote[0]:.2f} / Buy @ ${long_quote[1]:.2f}")
+                    print(f"   Net debit: ${price:.2f}")
+                else:
+                    # Fallback to signal price with warning
+                    price = signal.get('cost', 2.50)
+                    print(f"⚠️ Could not fetch IB quotes, using signal price: ${price}")
+            except Exception as ib_err:
+                print(f"⚠️ IB data fetch failed: {ib_err}, using signal price")
+                price = signal.get('cost', 2.50)
             
             order = NewOrder(
                 time_in_force=OrderTimeInForce.DAY,
@@ -925,12 +955,170 @@ class TastyHandler(BaseHTTPRequestHandler):
         except Exception as e:
             self._send_json({'error': str(e)}, 500)
 
+    # ========================================================================
+    # DIAGONAL SPREAD HANDLERS
+    # ========================================================================
+    
+    def _handle_diagonal_status(self):
+        """
+        Get circuit breaker status for diagonal spreads.
+        
+        Returns VIX-VXV term structure analysis:
+        - can_trade: Boolean - whether trading is allowed
+        - regime: contango/flat/backwardation
+        - early_warning: True when ratio > 0.95
+        """
+        try:
+            from src.diagonal_spreads import check_term_structure_circuit_breaker
+            status = check_term_structure_circuit_breaker()
+            
+            self._send_json({
+                'regime': status.regime.value,
+                'can_trade': status.can_trade,
+                'vix': round(status.vix, 2),
+                'vxv': round(status.vxv, 2),
+                'diff': round(status.diff, 2),
+                'ratio': round(status.ratio, 4),
+                'early_warning': status.early_warning,
+                'position_multiplier': status.position_size_multiplier,
+                'message': status.message,
+                'timestamp': status.timestamp.isoformat() if status.timestamp else None
+            })
+        except Exception as e:
+            print(f"Error in diagonal status: {e}")
+            import traceback
+            traceback.print_exc()
+            # Return safe default on error
+            self._send_json({
+                'regime': 'unknown',
+                'can_trade': False,
+                'vix': 0,
+                'vxv': 0,
+                'diff': 0,
+                'ratio': 1.0,
+                'early_warning': True,
+                'position_multiplier': 0,
+                'message': f'Error checking circuit breaker: {str(e)}',
+                'timestamp': None
+            }, 500)
+    
+    def _handle_diagonal_universe(self):
+        """
+        Get the ETF universe for diagonal spreads.
+        
+        Returns tiered universe with symbols grouped by allocation.
+        """
+        try:
+            from src.diagonal_spreads import get_etf_universe, LiquidityScreener
+            
+            universe = get_etf_universe()
+            screener = LiquidityScreener()
+            
+            # Get symbols by tier
+            tier1 = [s for s, info in universe.securities.items() if info.tier == 1]
+            tier2 = [s for s, info in universe.securities.items() if info.tier == 2]
+            tier3 = [s for s, info in universe.securities.items() if info.tier == 3]
+            
+            self._send_json({
+                'total_symbols': len(universe.get_all_symbols()),
+                'tiers': {
+                    'tier1_core': {
+                        'symbols': tier1,
+                        'count': len(tier1),
+                        'allocation': '60-70%',
+                        'description': 'Always included, no earnings risk'
+                    },
+                    'tier2_rotation': {
+                        'symbols': tier2,
+                        'count': len(tier2),
+                        'allocation': '20-25%',
+                        'description': 'Sector rotation, quarterly updates'
+                    },
+                    'tier3_opportunistic': {
+                        'symbols': tier3,
+                        'count': len(tier3),
+                        'allocation': '5-15%',
+                        'description': 'High IV opportunities only'
+                    }
+                },
+                'iv_floors': screener.asset_class_iv_floors,
+                'prioritized_scan_list': universe.get_prioritized_scan_list(
+                    include_tier2=True, include_tier3=False
+                )
+            })
+        except Exception as e:
+            print(f"Error in diagonal universe: {e}")
+            import traceback
+            traceback.print_exc()
+            self._send_json({'error': str(e)}, 500)
+    
+    def _handle_diagonal_signals(self):
+        """
+        Get current diagonal spread opportunities.
+        
+        Combines circuit breaker check with universe filtering.
+        """
+        try:
+            from src.diagonal_spreads import check_term_structure_circuit_breaker, get_etf_universe
+            
+            # Check circuit breaker first
+            status = check_term_structure_circuit_breaker()
+            
+            if not status.can_trade:
+                self._send_json({
+                    'signals': [],
+                    'circuit_breaker': {
+                        'blocked': True,
+                        'reason': status.message,
+                        'regime': status.regime.value
+                    },
+                    'message': 'Trading halted by circuit breaker'
+                })
+                return
+            
+            # Get universe
+            universe = get_etf_universe()
+            scan_list = universe.get_prioritized_scan_list(include_tier2=True)
+            
+            # For now, return placeholder signals (real signals come from scheduler)
+            signals = []
+            for symbol in scan_list[:5]:  # Top 5 for display
+                signals.append({
+                    'id': f'diag-{symbol.lower()}-{status.timestamp.strftime("%Y%m%d") if status.timestamp else "today"}',
+                    'symbol': symbol,
+                    'strategy': 'diagonal_spread',
+                    'status': 'opportunity',
+                    'direction': 'bullish',
+                    'term_structure': status.regime.value,
+                    'position_size_multiplier': status.position_size_multiplier
+                })
+            
+            self._send_json({
+                'signals': signals,
+                'circuit_breaker': {
+                    'blocked': False,
+                    'regime': status.regime.value,
+                    'ratio': status.ratio,
+                    'early_warning': status.early_warning
+                },
+                'total_symbols_available': len(scan_list)
+            })
+        except Exception as e:
+            print(f"Error in diagonal signals: {e}")
+            import traceback
+            traceback.print_exc()
+            self._send_json({'error': str(e)}, 500)
+
 
 def run_server(port=8002):
     print(f"🚀 Starting TradeMind API server on port {port}")
     print(f"   Account: http://localhost:{port}/api/account")
     print(f"   Signals: http://localhost:{port}/api/signals")
     print(f"   Trade:   POST http://localhost:{port}/api/trade")
+    print(f"   ── Diagonal Spreads ──")
+    print(f"   Status:   http://localhost:{port}/diagonal/status")
+    print(f"   Universe: http://localhost:{port}/diagonal/universe")
+    print(f"   Signals:  http://localhost:{port}/diagonal/signals")
     
     # Initialize session on startup
     try:

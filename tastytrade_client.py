@@ -189,43 +189,74 @@ class TastytradeClient:
     
     def get_stock_price(self, symbol: str) -> float:
         """
-        Get current stock price.
+        Get the current stock price.
+        
+        Uses IB Gateway for reliable real-time pricing.
         
         Args:
             symbol: Stock symbol (e.g., 'SPY')
             
         Returns:
-            Current mid price
+            Current price as float
+        """
+        try:
+            from ib_data_provider import IBDataProvider
+            ib_data = IBDataProvider()
+            price = ib_data.get_price(symbol)
+            if price > 0:
+                logger.info(f"Stock price for {symbol}: ${price:.2f}")
+                return price
+        except Exception as e:
+            logger.warning(f"IB data provider failed for {symbol}: {e}")
+        
+        # Fallback: try tastytrade API
+        try:
+            from tastytrade.instruments import Equity
+            equity = Equity.get(self._session, symbol)
+            # Try different attribute names that might exist
+            for attr in ['mark', 'last', 'close', 'bid']:
+                if hasattr(equity, attr):
+                    price = getattr(equity, attr)
+                    if price and float(price) > 0:
+                        logger.info(f"Stock price for {symbol} from tastytrade: ${float(price):.2f}")
+                        return float(price)
+        except Exception as e:
+            logger.error(f"Could not get price for {symbol}: {e}")
+        
+        logger.error(f"All price sources failed for {symbol}")
+        return 0.0
+    
+    def get_live_option_quote(self, option_symbol: str) -> Optional[Tuple[float, float, float]]:
+        """
+        Get live quote (bid, ask, mid) for an option.
+        
+        Fetches real-time prices from IB data provider.
+        Note: DXLinkStreamer integration requires async context which causes
+        recursion issues when called from sync methods. Using IB as primary source.
+        
+        Args:
+            option_symbol: Option OCC symbol (e.g., 'SPY  250213P00575000')
+            
+        Returns:
+            Tuple of (bid, ask, mid) or None if unavailable
         """
         if not self.is_connected:
-            raise RuntimeError("Not connected. Call connect() first.")
+            logger.warning("Not connected, cannot fetch live quote")
+            return None
         
-        from tastytrade.instruments import Equity
-        
+        # Use IB data provider for live quotes
         try:
-            equity = Equity.get(self._session, symbol)
-            # Get quote via streamer for real-time price
-            # For now, use the last price from the instrument
-            # In production, use DXLinkStreamer for real-time quotes
-            return float(equity.last_price or 0)
+            from ib_data_provider import IBDataProvider
+            ib_data = IBDataProvider()
+            ib_quote = ib_data.get_option_price_by_symbol(option_symbol)
+            if ib_quote and ib_quote[0] > 0:
+                logger.info(f"Live quote for {option_symbol}: bid=${ib_quote[0]:.2f} ask=${ib_quote[1]:.2f}")
+                return ib_quote
         except Exception as e:
-            logger.warning(f"Could not get price for {symbol}: {e}")
-            # Fallback: try to get from market data
-            return self._get_stock_price_via_streamer(symbol)
+            logger.warning(f"IB data provider failed for {option_symbol}: {e}")
+        
+        return None
     
-    def _get_stock_price_via_streamer(self, symbol: str) -> float:
-        """Get stock price using streaming API."""
-        import asyncio
-        from tastytrade import DXLinkStreamer
-        from tastytrade.dxfeed import Quote
-        
-        async def fetch_quote():
-            async with DXLinkStreamer(self._session) as streamer:
-                await streamer.subscribe(Quote, [symbol])
-                quote = await streamer.get_event(Quote)
-                return (quote.bid_price + quote.ask_price) / 2
-        
-        return asyncio.run(fetch_quote())
     
     def get_option_chain(
         self,
@@ -357,16 +388,21 @@ class TastytradeClient:
         limit_price: Optional[float] = None
     ):
         """
-        Build a calendar spread order.
+        Build a calendar spread order (same strike, different expirations).
         
         Args:
-            short_option: Near-term option to SELL
-            long_option: Longer-term option to BUY
+            short_option: Near-term option to SELL (same strike as long)
+            long_option: Longer-term option to BUY (same strike as short)
             quantity: Number of contracts
             limit_price: Optional limit price (negative for debit)
             
         Returns:
             NewOrder object ready for submission
+            
+        Note:
+            - Calendar spread: SAME strike, different expiration (neutral play)
+            - Diagonal spread: DIFFERENT strikes + expirations (directional play)
+            - Use build_diagonal_spread_order() for different strikes
         """
         from tastytrade.order import NewOrder, OrderAction, OrderTimeInForce, OrderType
         from tastytrade.instruments import Option
@@ -385,10 +421,20 @@ class TastytradeClient:
             OrderAction.BUY_TO_OPEN
         )
         
-        # Calculate price if not provided
+        # Calculate price if not provided - use LIVE quotes for better fills
         if limit_price is None:
-            # Net debit = long ask - short bid (what we pay)
-            limit_price = -(long_option.ask - short_option.bid)
+            # Try live quotes first
+            short_quote = self.get_live_option_quote(short_option.streamer_symbol)
+            long_quote = self.get_live_option_quote(long_option.streamer_symbol)
+            
+            if short_quote and long_quote and short_quote[0] > 0 and long_quote[1] > 0:
+                # Net debit = long ask - short bid (what we pay)
+                limit_price = -(long_quote[1] - short_quote[0])
+                logger.info(f"Calendar spread LIVE: sell @ ${short_quote[0]:.2f}, buy @ ${long_quote[1]:.2f}, net ${limit_price:.2f}")
+            else:
+                # Fallback to stale data
+                limit_price = -(long_option.ask - short_option.bid)
+                logger.warning(f"Calendar spread using stale prices: net ${limit_price:.2f}")
         
         order = NewOrder(
             time_in_force=OrderTimeInForce.DAY,
@@ -398,6 +444,41 @@ class TastytradeClient:
         )
         
         return order
+    
+    def build_diagonal_spread_order(
+        self,
+        short_option: OptionData,
+        long_option: OptionData,
+        quantity: int = 1,
+        limit_price: Optional[float] = None
+    ):
+        """
+        Build a diagonal spread order.
+        
+        A diagonal spread is similar to a calendar spread but with different strikes.
+        Combines directional bias (different strikes) with time decay (different expirations).
+        
+        Args:
+            short_option: Near-term option to SELL (typically different strike)
+            long_option: Longer-term option to BUY (typically different strike)
+            quantity: Number of contracts
+            limit_price: Optional limit price (negative for debit)
+            
+        Returns:
+            NewOrder object ready for submission
+            
+        Note:
+            - True calendar spread: same strike, different expiration
+            - Diagonal spread: different strikes AND different expirations (PMCC)
+        """
+        # Diagonal spreads use the same mechanics as calendar spreads
+        return self.build_calendar_spread_order(
+            short_option=short_option,
+            long_option=long_option,
+            quantity=quantity,
+            limit_price=limit_price
+        )
+    
     
     def build_calendar_spread_close_order(
         self,
@@ -561,14 +642,24 @@ class TastytradeClient:
             OrderAction.SELL_TO_OPEN
         )
         
-        # Calculate price if not provided
+        # Calculate price if not provided - use LIVE quotes for better fills
         if limit_price is None:
-            # For debit spreads: we pay (buy_ask - sell_bid)
-            # For credit spreads: we receive (sell_bid - buy_ask)
-            # Use midpoints for better fill probability
-            buy_mid = buy_option.mid
-            sell_mid = sell_option.mid
-            limit_price = -(buy_mid - sell_mid)  # Negative = debit
+            # Try live quotes first
+            buy_quote = self.get_live_option_quote(buy_option.streamer_symbol)
+            sell_quote = self.get_live_option_quote(sell_option.streamer_symbol)
+            
+            if buy_quote and sell_quote and buy_quote[1] > 0 and sell_quote[0] > 0:
+                # Use live mid prices for vertical spreads
+                buy_mid = buy_quote[2]  # live mid
+                sell_mid = sell_quote[2]  # live mid
+                limit_price = -(buy_mid - sell_mid)  # Negative = debit
+                logger.info(f"Vertical spread LIVE: buy mid ${buy_mid:.2f}, sell mid ${sell_mid:.2f}, net ${limit_price:.2f}")
+            else:
+                # Fallback to stale data
+                buy_mid = buy_option.mid
+                sell_mid = sell_option.mid
+                limit_price = -(buy_mid - sell_mid)  # Negative = debit
+                logger.warning(f"Vertical spread using stale mids: net ${limit_price:.2f}")
         
         order = NewOrder(
             time_in_force=OrderTimeInForce.DAY,
@@ -655,9 +746,17 @@ class TastytradeClient:
             OrderAction.SELL_TO_OPEN
         )
         
-        # Calculate limit price if not provided (use bid for premium)
+        # Calculate limit price if not provided - use LIVE quote for better fills
         if limit_price is None:
-            limit_price = put_option.bid  # Credit received
+            # Try to get live quote first
+            live_quote = self.get_live_option_quote(put_option.streamer_symbol)
+            if live_quote and live_quote[0] > 0:
+                limit_price = live_quote[0]  # bid (credit we receive)
+                logger.info(f"Using LIVE bid: ${limit_price:.2f}")
+            else:
+                # Fallback to stale REST API data
+                limit_price = put_option.bid
+                logger.warning(f"Using stale bid (no live quote): ${limit_price:.2f}")
         
         order = NewOrder(
             time_in_force=OrderTimeInForce.DAY,

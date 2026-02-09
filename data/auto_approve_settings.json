@@ -1,0 +1,17 @@
+{
+    "enabled": true,
+    "min_confidence": 65,
+    "max_contracts": 2,
+    "max_capital_per_trade": 5000,
+    "max_daily_trades": 5,
+    "allowed_strategies": [
+        "theta",
+        "calendar_spread",
+        "Calendar Spread",
+        "Theta Cash-Secured Put"
+    ],
+    "allowed_risk_levels": [
+        "Low",
+        "Medium"
+    ]
+}
