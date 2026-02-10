@@ -973,15 +973,15 @@ class TastyHandler(BaseHTTPRequestHandler):
             status = check_term_structure_circuit_breaker()
             
             self._send_json({
-                'regime': status.regime.value,
-                'can_trade': status.can_trade,
-                'vix': round(status.vix, 2),
-                'vxv': round(status.vxv, 2),
-                'diff': round(status.diff, 2),
-                'ratio': round(status.ratio, 4),
-                'early_warning': status.early_warning,
-                'position_multiplier': status.position_size_multiplier,
-                'message': status.message,
+                'regime': str(status.regime.value),
+                'can_trade': bool(status.can_trade),
+                'vix': float(round(status.vix, 2)),
+                'vxv': float(round(status.vxv, 2)),
+                'diff': float(round(status.diff, 2)),
+                'ratio': float(round(status.ratio, 4)),
+                'early_warning': bool(status.early_warning),
+                'position_multiplier': float(status.position_size_multiplier),
+                'message': str(status.message),
                 'timestamp': status.timestamp.isoformat() if status.timestamp else None
             })
         except Exception as e:
