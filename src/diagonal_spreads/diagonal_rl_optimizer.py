@@ -28,14 +28,15 @@ try:
     from stable_baselines3 import PPO
     from stable_baselines3.common.vec_env import DummyVecEnv
     from stable_baselines3.common.callbacks import BaseCallback, EvalCallback
+    SB3_AVAILABLE = True
 except ImportError:
-    print("Installing stable-baselines3...")
-    import subprocess
-    import sys
-    subprocess.check_call([sys.executable, "-m", "pip", "install", "stable-baselines3[extra]"])
-    from stable_baselines3 import PPO
-    from stable_baselines3.common.vec_env import DummyVecEnv
-    from stable_baselines3.common.callbacks import BaseCallback, EvalCallback
+    SB3_AVAILABLE = False
+    PPO = None
+    DummyVecEnv = None
+    BaseCallback = None
+    EvalCallback = None
+    logger = logging.getLogger(__name__)
+    # Don't auto-install - just log the warning
 
 logger = logging.getLogger(__name__)
 

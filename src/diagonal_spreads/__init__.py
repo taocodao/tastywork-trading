@@ -48,7 +48,7 @@ try:
         walk_forward_train
     )
     _HAS_RL_OPTIMIZER = True
-except ImportError as e:
+except Exception as e:
     # RL optimizer requires stable-baselines3, which is optional
     _HAS_RL_OPTIMIZER = False
     # Define dummy classes so __all__ doesn't break
