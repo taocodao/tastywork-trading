@@ -37,14 +37,27 @@ from .liquidity_screener import (
 )
 
 # Edge 3: ML Roll Timing (Diagonal RL Optimizer)
-from .diagonal_rl_optimizer import (
-    DiagonalRLOptimizer,
-    DiagonalTradeEnv,
-    DiagonalTradeSnapshot,
-    DiagonalAction,
-    RuleBasedRollDecider,
-    walk_forward_train
-)
+# Optional import - only needed for ML-based roll timing
+try:
+    from .diagonal_rl_optimizer import (
+        DiagonalRLOptimizer,
+        DiagonalTradeEnv,
+        DiagonalTradeSnapshot,
+        DiagonalAction,
+        RuleBasedRollDecider,
+        walk_forward_train
+    )
+    _HAS_RL_OPTIMIZER = True
+except ImportError as e:
+    # RL optimizer requires stable-baselines3, which is optional
+    _HAS_RL_OPTIMIZER = False
+    # Define dummy classes so __all__ doesn't break
+    DiagonalRLOptimizer = None
+    DiagonalTradeEnv = None
+    DiagonalTradeSnapshot = None
+    DiagonalAction = None
+    RuleBasedRollDecider = None
+    walk_forward_train = None
 
 __all__ = [
     # Core signal generation
