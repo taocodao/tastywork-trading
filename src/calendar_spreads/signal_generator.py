@@ -101,6 +101,7 @@ class CalendarSpreadSignal:
             'long_expiry': self.long_expiry.isoformat() if self.long_expiry else None,
             'option_type': self.option_type,
             'net_debit': round(self.net_debit, 2),
+            'price': round(self.net_debit, 2),  # Alias for frontend compatibility
             'stock_price': round(self.stock_price, 2),
             'net_delta': round(self.net_delta, 3),
             'net_theta': round(self.net_theta, 3),
