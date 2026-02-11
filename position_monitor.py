@@ -250,7 +250,7 @@ class PositionMonitor:
             return None
     
     def _execute_exit(self, position: ThetaPosition, exit_reason: str):
-        """Close position by buying back the put."""
+        """Close position by buying back the put, with smart fill monitoring."""
         logger.info(f"\n{'=' * 70}")
         logger.info(f"🔴 EXECUTING EXIT: {position.symbol} {position.strike}P")
         logger.info(f"{'=' * 70}")
@@ -285,11 +285,42 @@ class PositionMonitor:
                 position.exit_order_id = order_id
                 logger.info(f"✅ Exit order #{order_id} placed successfully")
                 
-                # Wait briefly for fill (in production, use order status callback)
-                time.sleep(2)
+                # Smart fill monitoring via Tastytrade API
+                actual_exit_price = exit_price
+                try:
+                    from tastytrade_client import TastytradeClient
+                    client = TastytradeClient()
+                    client.connect()
+                    fill_result = client.monitor_and_fill(
+                        order_id=str(order_id),
+                        initial_price=exit_price,
+                        is_credit=False,  # BTC = debit order
+                    )
+                    client.disconnect()
+                    
+                    if fill_result.get("filled"):
+                        actual_exit_price = fill_result.get("fill_price", exit_price)
+                        logger.info(
+                            f"✅ Exit order filled @ ${actual_exit_price:.2f} | "
+                            f"Adjustments: {fill_result.get('adjustments_made', 0)}"
+                        )
+                    else:
+                        logger.warning(
+                            f"⚠️ Exit order not filled: {fill_result.get('final_status')} | "
+                            f"Using estimated price ${exit_price:.2f}"
+                        )
+                        # Revert status if not filled
+                        position.status = PositionStatus.OPEN
+                        self.portfolio.save()
+                        return
+                        
+                except Exception as e:
+                    logger.warning(f"Smart fill monitoring unavailable: {e}, using estimated price")
+                    # Fallback: wait briefly like before
+                    time.sleep(2)
                 
-                # Finalize position
-                self._finalize_exit(position, exit_price)
+                # Finalize position with actual fill price
+                self._finalize_exit(position, actual_exit_price)
             else:
                 logger.error(f"❌ Failed to place exit order for {position.symbol}")
                 # Revert status

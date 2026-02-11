@@ -24,6 +24,9 @@ import uuid
 
 from .options_analyzer import PutScore
 
+# Import signal dataclasses from signal_publisher (they have to_dict() method)
+from signal_publisher.theta import ThetaEntrySignal, ThetaExitSignal
+
 logger = logging.getLogger(__name__)
 
 
@@ -33,78 +36,6 @@ class ExitReason(Enum):
     EXPIRATION_IMMINENT = "EXPIRATION_IMMINENT"
     DEFENSIVE_CLOSE = "DEFENSIVE_CLOSE"
     MAX_LOSS = "MAX_LOSS"
-
-
-@dataclass
-class ThetaEntrySignal:
-    """Entry signal for selling a cash-secured put."""
-    id: str
-    symbol: str
-    action: str  # "SELL_TO_OPEN"
-    strike: float
-    expiration: date
-    dte: int
-    
-    # Pricing
-    entry_price: float  # Bid price (what we'll receive)
-    ask: float
-    mid: float
-    
-    # Greeks
-    delta: float
-    theta: float
-    vega: float
-    iv: float
-    
-    # Analysis
-    confidence: int  # 0-100
-    probability_otm: float
-    expected_premium: float
-    capital_required: float
-    
-    # Position sizing
-    contracts: int
-    total_premium: float
-    total_capital_required: float
-    
-    # Metadata
-    created_at: datetime
-    expires_at: datetime  # Signal expiration time (30 min default)
-    status: str  # "pending", "approved", "executed", "rejected", "expired"
-
-
-@dataclass
-class ThetaExitSignal:
-    """Exit signal for closing a put position."""
-    id: str
-    position_id: str
-    symbol: str
-    action: str  # "BUY_TO_CLOSE"
-    strike: float
-    
-    # Pricing
-    exit_price: float  # Ask price (what we'll pay)
-    entry_price: float
-    current_bid: float
-    current_ask: float
-    
-    # P&L
-    unrealized_pnl: float
-    unrealized_pnl_pct: float
-    
-    # Exit logic
-    reason: ExitReason
-    urgency: str  # "LOW", "MEDIUM", "HIGH", "CRITICAL"
-    days_in_trade: int
-    target_profit_pct: float
-    
-    # Position details
-    contracts: int
-    capital_to_release: float
-    
-    # Metadata
-    created_at: datetime
-    status: str
 
 
 class ThetaSignalGenerator:

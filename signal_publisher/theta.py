@@ -29,7 +29,7 @@ class ThetaEntrySignal:
     
     # Option details (required)
     strike: float
-    expiration: str  # ISO format date
+    expiration: 'str | date'  # ISO format date string OR date object
     dte: int
     
     # Pricing (required)
@@ -60,6 +60,7 @@ class ThetaEntrySignal:
     # Fields with default values must come last
     action: str = "SELL_TO_OPEN"
     status: str = "pending"
+    expires_at: 'datetime | None' = None  # Optional signal expiration
     
     def to_dict(self):
         """Convert to dictionary for JSON serialization."""
@@ -67,6 +68,12 @@ class ThetaEntrySignal:
         # Convert datetime to ISO format
         if isinstance(data['created_at'], datetime):
             data['created_at'] = data['created_at'].isoformat()
+        if isinstance(data.get('expires_at'), datetime):
+            data['expires_at'] = data['expires_at'].isoformat()
+        # Convert date to ISO format (for expiration)
+        from datetime import date
+        if isinstance(data['expiration'], date):
+            data['expiration'] = data['expiration'].isoformat()
         return data
 
 

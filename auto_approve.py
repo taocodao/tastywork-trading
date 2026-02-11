@@ -277,9 +277,10 @@ def auto_approve_signal(
 
 
 def _execute_theta_auto_approve(signal: Dict, session, account) -> Dict[str, Any]:
-    """Execute auto-approved Theta trade."""
+    """Execute auto-approved Theta trade with smart fill monitoring."""
     from tastytrade.order import NewOrder, OrderLeg, OrderAction, OrderType, OrderTimeInForce, PriceEffect
     from ib_data_provider import IBDataProvider
+    from tastytrade_client import TastytradeClient
     
     symbol = signal.get("symbol", "")
     strike = float(signal.get("strike", 0))
@@ -323,14 +324,30 @@ def _execute_theta_auto_approve(signal: Dict, session, account) -> Dict[str, Any
     response = account.place_order(session, order, dry_run=False)
     order_id = str(response.order.id) if hasattr(response, 'order') else "auto-submitted"
     
-    logger.info(f"✅ Auto-approved Theta: {symbol} {strike}P @ ${price}, Order ID: {order_id}")
+    logger.info(f"📡 Auto-approved Theta: {symbol} {strike}P @ ${price}, Order ID: {order_id}")
+    
+    # Monitor order until filled (with automatic price adjustments)
+    client = TastytradeClient()
+    client.connect()
+    fill_result = client.monitor_and_fill(
+        order_id=order_id,
+        initial_price=price,
+        is_credit=True,  # STO = credit order
+    )
+    client.disconnect()
+    
+    actual_price = fill_result.get("fill_price", price)
     
     return {
         "orderId": order_id,
         "symbol": symbol,
         "strategy": "Theta Cash-Secured Put",
         "strike": strike,
-        "price": price,
+        "limitPrice": price,
+        "fillPrice": actual_price,
+        "filled": fill_result.get("filled", False),
+        "adjustments": fill_result.get("adjustments_made", 0),
+        "finalStatus": fill_result.get("final_status", "Unknown"),
         "contracts": contracts,
         "autoApproved": True,
         "timestamp": datetime.now().isoformat()
@@ -338,9 +355,10 @@ def _execute_theta_auto_approve(signal: Dict, session, account) -> Dict[str, Any
 
 
 def _execute_calendar_auto_approve(signal: Dict, session, account) -> Dict[str, Any]:
-    """Execute auto-approved Calendar Spread trade."""
+    """Execute auto-approved Calendar Spread trade with smart fill monitoring."""
     from tastytrade.order import NewOrder, OrderLeg, OrderAction, OrderType, OrderTimeInForce, PriceEffect
     from ib_data_provider import IBDataProvider
+    from tastytrade_client import TastytradeClient
     
     symbol = signal.get("symbol", "")
     strike = float(signal.get("strike", 0))
@@ -394,14 +412,30 @@ def _execute_calendar_auto_approve(signal: Dict, session, account) -> Dict[str, 
     response = account.place_order(session, order, dry_run=False)
     order_id = str(response.order.id) if hasattr(response, 'order') else "auto-submitted"
     
-    logger.info(f"✅ Auto-approved Calendar: {symbol} @ ${price}, Order ID: {order_id}")
+    logger.info(f"📡 Auto-approved Calendar: {symbol} @ ${price}, Order ID: {order_id}")
+    
+    # Monitor order until filled (with automatic price adjustments)
+    client = TastytradeClient()
+    client.connect()
+    fill_result = client.monitor_and_fill(
+        order_id=order_id,
+        initial_price=price,
+        is_credit=False,  # Calendar spread = debit order
+    )
+    client.disconnect()
+    
+    actual_price = fill_result.get("fill_price", price)
     
     return {
         "orderId": order_id,
         "symbol": symbol,
         "strategy": "Calendar Spread",
         "strike": strike,
-        "price": price,
+        "limitPrice": price,
+        "fillPrice": actual_price,
+        "filled": fill_result.get("filled", False),
+        "adjustments": fill_result.get("adjustments_made", 0),
+        "finalStatus": fill_result.get("final_status", "Unknown"),
         "autoApproved": True,
         "timestamp": datetime.now().isoformat()
     }

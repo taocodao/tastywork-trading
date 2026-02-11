@@ -205,6 +205,21 @@ THETA_UNIVERSE: List[str] = [
 
 
 # =============================================================================
+# SMART ORDER MANAGEMENT
+# =============================================================================
+# Controls how limit orders are monitored and adjusted for fills.
+# After placing a limit order, the system polls status every MONITOR_INTERVAL
+# seconds. If still "Working" after PRICE_ADJUST_INTERVAL, the limit price is
+# adjusted by PRICE_STEP (reducing credit asked or increasing debit offered).
+# This repeats up to MAX_PRICE_ADJUSTMENTS times over MAX_WAIT seconds total.
+# If still unfilled after all adjustments, the order expires (no market fallback).
+ORDER_MONITOR_INTERVAL: int = 5         # Seconds between status checks
+ORDER_PRICE_ADJUST_INTERVAL: int = 30   # Seconds before each price adjustment
+ORDER_PRICE_STEP: float = 0.05          # Price adjustment per step ($)
+ORDER_MAX_WAIT: int = 120               # Max seconds to wait for fill
+ORDER_MAX_PRICE_ADJUSTMENTS: int = 3    # Max number of price adjustments
+
+# =============================================================================
 # COMMISSION ESTIMATES (for P&L calculation)
 # =============================================================================
 COMMISSION_PER_CONTRACT: float = 1.00   # $1 per contract per leg

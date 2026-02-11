@@ -63,8 +63,12 @@ class IBOrderExecutor:
             contract.secType = "OPT"
             contract.exchange = "SMART"
             contract.currency = "USD"
-            # Format expiration: YYYYMMDD
-            contract.lastTradeDateOrContractMonth = signal.expiration.replace('-', '')
+            # Format expiration: YYYYMMDD (handle both date objects and strings)
+            exp = signal.expiration
+            if hasattr(exp, 'strftime'):
+                contract.lastTradeDateOrContractMonth = exp.strftime('%Y%m%d')
+            else:
+                contract.lastTradeDateOrContractMonth = str(exp).replace('-', '')
             contract.strike = signal.strike
             contract.right = "P"  # Put option
             contract.multiplier = "100"
@@ -115,7 +119,12 @@ class IBOrderExecutor:
             contract.secType = "OPT"
             contract.exchange = "SMART"
             contract.currency = "USD"
-            contract.lastTradeDateOrContractMonth = position.expiration.replace('-', '')
+            # Handle both date objects and strings
+            exp = position.expiration
+            if hasattr(exp, 'strftime'):
+                contract.lastTradeDateOrContractMonth = exp.strftime('%Y%m%d')
+            else:
+                contract.lastTradeDateOrContractMonth = str(exp).replace('-', '')
             contract.strike = position.strike
             contract.right = "P"
             contract.multiplier = "100"
