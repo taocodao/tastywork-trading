@@ -8,8 +8,9 @@ Provides session management, options chain fetching, order placement, and positi
 
 import os
 import logging
+import time as time_module
 from decimal import Decimal
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Optional, Tuple, Any
 from datetime import date, datetime, timedelta
 from dataclasses import dataclass
 
@@ -801,17 +802,18 @@ class TastytradeClient:
             OrderAction.BUY_TO_CLOSE
         )
         
+        if not limit_price:
+            raise ValueError("limit_price is required — Tastytrade rejects market orders for options")
+        
         order_params = {
             'time_in_force': OrderTimeInForce.DAY,
-            'order_type': OrderType.LIMIT if limit_price else OrderType.MARKET,
+            'order_type': OrderType.LIMIT,
             'legs': [put_leg],
+            'price': Decimal(str(round(-abs(limit_price), 2))),  # Negative = debit
         }
         
-        if limit_price:
-            order_params['price'] = Decimal(str(round(-abs(limit_price), 2)))  # Negative = debit
-        
         order = NewOrder(**order_params)
-        logger.info(f"Built close order: BUY TO CLOSE {put_option_symbol} x{quantity}")
+        logger.info(f"Built close order: BUY TO CLOSE {put_option_symbol} x{quantity} @ ${limit_price:.2f}")
         
         return order
     
@@ -953,6 +955,224 @@ class TastytradeClient:
         except Exception as e:
             logger.error(f"Failed to cancel order {order_id}: {e}")
             return False
+
+    def replace_order(self, order_id: str, new_price: float) -> bool:
+        """
+        Replace an existing order with a new limit price.
+        
+        Only the price can be modified; to change quantity or legs,
+        cancel and re-submit a new order.
+        
+        Args:
+            order_id: ID of the order to modify
+            new_price: New limit price (positive = credit, negative = debit)
+            
+        Returns:
+            True if replacement was accepted
+        """
+        account = self.get_account()
+        
+        try:
+            # Get the existing order
+            orders = account.get_orders(self._session)
+            target = None
+            for o in orders:
+                if str(o.id) == str(order_id):
+                    target = o
+                    break
+            
+            if not target:
+                logger.error(f"Order {order_id} not found for replacement")
+                return False
+            
+            # Update the price on the order object
+            target.price = Decimal(str(round(new_price, 2)))
+            
+            # Submit replacement
+            account.replace_order(self._session, order_id, target)
+            logger.info(f"Order {order_id} price replaced to ${new_price:.2f}")
+            return True
+            
+        except Exception as e:
+            logger.error(f"Failed to replace order {order_id}: {e}")
+            return False
+    
+    def monitor_and_fill(
+        self,
+        order_id: str,
+        initial_price: float,
+        is_credit: bool = True,
+        monitor_interval: int = None,
+        price_adjust_interval: int = None,
+        price_step: float = None,
+        max_wait: int = None,
+        max_adjustments: int = None,
+    ) -> Dict[str, Any]:
+        """
+        Monitor an order until filled, adjusting the limit price periodically.
+        
+        For CREDIT orders (selling puts): reduces the credit demanded.
+        For DEBIT orders (buying to close): increases the debit offered.
+        
+        If the order is still unfilled after all adjustments + max_wait,
+        it is left to expire (no market fallback per user preference).
+        
+        Args:
+            order_id: Order ID to monitor
+            initial_price: The original limit price
+            is_credit: True for STO credit orders, False for BTC debit orders
+            monitor_interval: Seconds between polls (default from config)
+            price_adjust_interval: Seconds before each adjustment (default from config)
+            price_step: Dollar amount to adjust per step (default from config)
+            max_wait: Max total seconds to wait (default from config)
+            max_adjustments: Max price adjustments (default from config)
+            
+        Returns:
+            Dict with keys:
+                - filled: bool
+                - fill_price: float or None
+                - adjustments_made: int
+                - final_status: str
+                - order_id: str
+        """
+        from config import (
+            ORDER_MONITOR_INTERVAL, ORDER_PRICE_ADJUST_INTERVAL,
+            ORDER_PRICE_STEP, ORDER_MAX_WAIT, ORDER_MAX_PRICE_ADJUSTMENTS,
+        )
+        
+        monitor_interval = monitor_interval or ORDER_MONITOR_INTERVAL
+        price_adjust_interval = price_adjust_interval or ORDER_PRICE_ADJUST_INTERVAL
+        price_step = price_step or ORDER_PRICE_STEP
+        max_wait = max_wait or ORDER_MAX_WAIT
+        max_adjustments = max_adjustments or ORDER_MAX_PRICE_ADJUSTMENTS
+        
+        start_time = time_module.time()
+        current_price = initial_price
+        adjustments_made = 0
+        last_adjust_time = start_time
+        
+        logger.info(
+            f"📡 Monitoring order {order_id} | "
+            f"Price: ${current_price:.2f} | "
+            f"Max wait: {max_wait}s | "
+            f"Adjust every {price_adjust_interval}s by ${price_step:.2f}"
+        )
+        
+        while True:
+            elapsed = time_module.time() - start_time
+            
+            # Check timeout
+            if elapsed >= max_wait:
+                logger.warning(
+                    f"⏰ Order {order_id} timed out after {elapsed:.0f}s | "
+                    f"Adjustments made: {adjustments_made} | "
+                    f"Last price: ${current_price:.2f}"
+                )
+                return {
+                    "filled": False,
+                    "fill_price": None,
+                    "adjustments_made": adjustments_made,
+                    "final_status": "Expired",
+                    "order_id": order_id,
+                }
+            
+            # Poll order status
+            try:
+                orders = self.get_orders()
+                target = None
+                for o in orders:
+                    if str(o.id) == str(order_id):
+                        target = o
+                        break
+                
+                if target is None:
+                    # Order no longer in list — check if it was filled
+                    # (filled orders may be removed from live list)
+                    logger.info(f"Order {order_id} no longer live — checking if filled")
+                    
+                    # Check positions to confirm fill
+                    positions = self.get_positions()
+                    if positions:
+                        logger.info(f"✅ Order {order_id} likely FILLED (found {len(positions)} positions)")
+                    
+                    return {
+                        "filled": True,
+                        "fill_price": current_price,
+                        "adjustments_made": adjustments_made,
+                        "final_status": "Filled",
+                        "order_id": order_id,
+                    }
+                
+                status = target.status.value if hasattr(target.status, 'value') else str(target.status)
+                
+                if status in ("Filled", "filled"):
+                    avg_fill = float(target.price) if target.price else current_price
+                    logger.info(
+                        f"✅ Order {order_id} FILLED @ ${avg_fill:.2f} | "
+                        f"Adjustments: {adjustments_made}"
+                    )
+                    return {
+                        "filled": True,
+                        "fill_price": avg_fill,
+                        "adjustments_made": adjustments_made,
+                        "final_status": "Filled",
+                        "order_id": order_id,
+                    }
+                
+                if status in ("Cancelled", "Rejected", "Expired", "cancelled", "rejected", "expired"):
+                    logger.warning(f"❌ Order {order_id} {status}")
+                    return {
+                        "filled": False,
+                        "fill_price": None,
+                        "adjustments_made": adjustments_made,
+                        "final_status": status,
+                        "order_id": order_id,
+                    }
+                
+                # Order is still Working — check if we should adjust price
+                time_since_last_adjust = time_module.time() - last_adjust_time
+                
+                if (time_since_last_adjust >= price_adjust_interval and
+                        adjustments_made < max_adjustments):
+                    
+                    # Adjust price to improve fill chances
+                    if is_credit:
+                        # Credit order: lower the credit we demand
+                        new_price = round(current_price - price_step, 2)
+                    else:
+                        # Debit order: increase the debit we're willing to pay
+                        new_price = round(current_price + price_step, 2)
+                    
+                    # Safety: don't adjust below $0.01 for credit orders
+                    if is_credit and new_price < 0.01:
+                        logger.warning(f"Price adjustment would go below $0.01, skipping")
+                    else:
+                        success = self.replace_order(order_id, new_price)
+                        if success:
+                            adjustments_made += 1
+                            current_price = new_price
+                            last_adjust_time = time_module.time()
+                            logger.info(
+                                f"🔄 Price adjusted #{adjustments_made}: "
+                                f"${current_price:.2f} | "
+                                f"Elapsed: {elapsed:.0f}s"
+                            )
+                        else:
+                            logger.warning(f"Price adjustment failed, will retry")
+                
+                # Log periodic status
+                if int(elapsed) % 15 == 0 and int(elapsed) > 0:
+                    logger.info(
+                        f"⏳ Order {order_id} still {status} | "
+                        f"Price: ${current_price:.2f} | "
+                        f"Elapsed: {elapsed:.0f}s"
+                    )
+                    
+            except Exception as e:
+                logger.error(f"Error monitoring order {order_id}: {e}")
+            
+            # Wait before next poll
+            time_module.sleep(monitor_interval)
 
 
 # Convenience function for quick testing
