@@ -244,8 +244,8 @@ def auto_approve_signal(
     try:
         logger.info(f"🤖 Auto-approving signal: {signal.get('symbol')} {signal.get('strategy')}")
         
-        # Import server handlers to execute trade
-        from tasty_api_server import create_user_session, get_user_account
+        # Import trade execution utilities
+        from tastytrade_utils import create_user_session, get_user_account
         from tastytrade import Account
         
         # Create session

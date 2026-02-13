@@ -142,7 +142,25 @@ def publish_theta_entry_signal(signal: ThetaEntrySignal) -> bool:
         except Exception as db_error:
             logger.warning(f"⚠️ Failed to save to DB (signal will still broadcast): {db_error}")
         
-        # STEP 2: Broadcast to WebSocket channels
+        # STEP 2: Auto-approve if criteria met
+        try:
+            from auto_approve import auto_approve_signal
+            result = auto_approve_signal(data)
+            if result:
+                logger.info(f"🤖 Auto-approved theta signal: {signal.symbol} → Order {result.get('orderId')}")
+                data['status'] = 'executed'
+                data['autoApproved'] = True
+                data['orderId'] = result.get('orderId')
+                # Update DB status
+                try:
+                    repo = SignalRepository()
+                    repo.save_signal(data)
+                except Exception:
+                    pass
+        except Exception as auto_err:
+            logger.debug(f"Auto-approve skipped for {signal.symbol}: {auto_err}")
+        
+        # STEP 3: Broadcast to WebSocket channels
         success_puts = broadcast_to_channel('theta_puts', data)
         success_entry = broadcast_to_channel('theta_entry', data)
         

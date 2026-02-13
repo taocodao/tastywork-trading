@@ -163,6 +163,8 @@ class TastyHandler(BaseHTTPRequestHandler):
                 self.handle_get_risk_level()
             elif self.path == '/api/settings/risk-profiles':
                 self.handle_get_risk_profiles()
+            elif self.path == '/api/settings/auto-approve':
+                self.handle_get_auto_approve_settings()
             elif self.path == '/health':
                 self._send_json({'status': 'ok', 'service': 'TradeMind Tastytrade API'})
             # ============================================
@@ -213,6 +215,8 @@ class TastyHandler(BaseHTTPRequestHandler):
             
             if self.path == '/api/settings/risk-level':
                 self.handle_set_risk_level(data)
+            elif self.path == '/api/settings/auto-approve':
+                self.handle_set_auto_approve_settings(data)
             else:
                 self._send_json({'error': 'Not found'}, 404)
         except Exception as e:
@@ -480,6 +484,87 @@ class TastyHandler(BaseHTTPRequestHandler):
             
         except Exception as e:
             print(f"Set risk level error: {e}")
+            import traceback
+            traceback.print_exc()
+            self._send_json({'error': str(e)}, 500)
+
+
+    def handle_get_auto_approve_settings(self):
+        """Get auto-approve settings from local JSON file."""
+        try:
+            from auto_approve import get_auto_approve_settings
+            settings = get_auto_approve_settings()
+            
+            # Convert to frontend format (camelCase)
+            response = {
+                "enabled": settings.get("enabled", False),
+                "maxDailyTrades": settings.get("max_daily_trades", 5),
+                "theta": {
+                    "enabled": settings.get("theta", {}).get("enabled", True),
+                    "riskLevel": settings.get("theta", {}).get("risk_level", "MEDIUM"),
+                    "customOverrides": settings.get("theta", {}).get("custom_overrides", {}),
+                },
+                "diagonal": {
+                    "enabled": settings.get("diagonal", {}).get("enabled", False),
+                    "riskLevel": settings.get("diagonal", {}).get("risk_level", "MEDIUM"),
+                    "customOverrides": settings.get("diagonal", {}).get("custom_overrides", {}),
+                },
+            }
+            self._send_json(response)
+        except Exception as e:
+            print(f"Auto-approve settings error: {e}")
+            self._send_json({'error': str(e)}, 500)
+
+
+    def handle_set_auto_approve_settings(self, data: dict):
+        """Update auto-approve settings and save to local JSON file."""
+        try:
+            from auto_approve import get_auto_approve_settings
+            import json as json_mod
+            from pathlib import Path
+            
+            # Load current settings
+            settings = get_auto_approve_settings()
+            
+            # Update from request data (handle both camelCase and snake_case)
+            if "enabled" in data:
+                settings["enabled"] = data["enabled"]
+            if "maxDailyTrades" in data or "max_daily_trades" in data:
+                settings["max_daily_trades"] = data.get("maxDailyTrades", data.get("max_daily_trades", 5))
+            
+            # Update theta settings
+            if "theta" in data:
+                theta = data["theta"]
+                settings["theta"]["enabled"] = theta.get("enabled", settings["theta"]["enabled"])
+                settings["theta"]["risk_level"] = theta.get("riskLevel", theta.get("risk_level", settings["theta"]["risk_level"]))
+                if "customOverrides" in theta or "custom_overrides" in theta:
+                    settings["theta"]["custom_overrides"] = theta.get("customOverrides", theta.get("custom_overrides", {}))
+            
+            # Update diagonal settings
+            if "diagonal" in data:
+                diag = data["diagonal"]
+                settings["diagonal"]["enabled"] = diag.get("enabled", settings["diagonal"]["enabled"])
+                settings["diagonal"]["risk_level"] = diag.get("riskLevel", diag.get("risk_level", settings["diagonal"]["risk_level"]))
+                if "customOverrides" in diag or "custom_overrides" in diag:
+                    settings["diagonal"]["custom_overrides"] = diag.get("customOverrides", diag.get("custom_overrides", {}))
+            
+            # Save to file
+            settings_file = Path("data/auto_approve_settings.json")
+            settings_file.parent.mkdir(parents=True, exist_ok=True)
+            with open(settings_file, 'w') as f:
+                json_mod.dump(settings, f, indent=2)
+            
+            print(f"✅ Auto-approve settings updated: enabled={settings['enabled']}, "
+                  f"theta={settings['theta']['enabled']}, diagonal={settings['diagonal']['enabled']}")
+            
+            self._send_json({
+                "status": "success",
+                "message": "Auto-approve settings updated",
+                "settings": settings
+            })
+            
+        except Exception as e:
+            print(f"Set auto-approve error: {e}")
             import traceback
             traceback.print_exc()
             self._send_json({'error': str(e)}, 500)

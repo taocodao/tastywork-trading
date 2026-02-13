@@ -108,6 +108,24 @@ def publish_calendar_signal(setup, channel: str = "calendar_spread") -> bool:
         except Exception as db_err:
             logger.warning(f"⚠️ Could not save to database: {db_err}")
         
+        # AUTO-APPROVE: Check if signal should be automatically executed
+        try:
+            from auto_approve import auto_approve_signal
+            result = auto_approve_signal(signal)
+            if result:
+                logger.info(f"🤖 Auto-approved calendar signal: {signal['symbol']} → Order {result.get('orderId')}")
+                signal['status'] = 'executed'
+                signal['autoApproved'] = True
+                signal['orderId'] = result.get('orderId')
+                # Update DB status
+                try:
+                    repo = SignalRepository()
+                    repo.save_signal(signal)
+                except Exception:
+                    pass
+        except Exception as auto_err:
+            logger.debug(f"Auto-approve skipped for {signal['symbol']}: {auto_err}")
+        
         # Broadcast to WebSocket channel
         success = broadcast_to_channel(channel, {"signal": signal})
         
