@@ -49,7 +49,7 @@ def run_scheduler():
         # Use current script's directory as CWD
         cwd = os.path.dirname(os.path.abspath(__file__))
         result = subprocess.run(
-            ['python', 'run_theta_scheduler.py', '--once'],  # Use 'python' instead of 'python3' for better cross-platform compatibility
+            ['python3', 'run_theta_scheduler.py', '--once'],  # Must use 'python3' on Ubuntu EC2
             cwd=cwd,
             capture_output=True,
             text=True,
