@@ -5,13 +5,18 @@ Uses the working Python SDK to serve account data via HTTP.
 Includes: Account data, Signals, Trade execution
 """
 
+
+print("DEBUG: Script starting", flush=True)
 from http.server import HTTPServer, BaseHTTPRequestHandler
+print("DEBUG: HTTP Server imported", flush=True)
 import json
 import os
 import uuid
 from datetime import datetime, timedelta
 from dotenv import load_dotenv
+print("DEBUG: Standard libs imported", flush=True)
 from tastytrade import Session, Account
+print("DEBUG: tastytrade SDK imported", flush=True)
 from tastytrade.instruments import Option, get_option_chain
 from tastytrade.order import NewOrder, OrderAction, OrderTimeInForce, OrderType, PriceEffect
 from tastytrade_client import TastytradeClient
@@ -1425,6 +1430,13 @@ def run_server(port=8002):
 
 
 if __name__ == '__main__':
-    run_server()
+    try:
+        run_server()
+    except Exception as e:
+        import traceback
+        with open('server_crash.log', 'w') as f:
+            f.write(f"Server crashed: {e}\n")
+            traceback.print_exc(file=f)
+        print(f"CRITICAL ERROR: {e}")
 
 

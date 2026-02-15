@@ -85,10 +85,13 @@ class ZebraConstructionEngine:
         """
         structures = []
         
-        # 1. Determine target expiry window (2x rule)
-        target_dte = thesis_horizon_days * 2
-        min_dte = int(target_dte * 0.8)
-        max_dte = int(target_dte * 1.5)
+        # 1. Determine target expiry window
+        # ZEBRA usually targets 60-90 DTE to reduce gamma and theta decay on long legs
+        # and sell appropriate extrinsic.
+        # If thesis is 30 days, we want >45 DTE options.
+        min_dte = max(30, int(thesis_horizon_days * 1.5))
+        max_dte = int(max(90, thesis_horizon_days * 3))
+        target_dte = int((min_dte + max_dte) / 2)
         
         logger.info(f"Scanning {symbol} ({direction}) for ZEBRA. Target DTE: {target_dte} ({min_dte}-{max_dte}d)")
         

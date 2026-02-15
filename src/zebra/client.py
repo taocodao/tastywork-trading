@@ -12,6 +12,7 @@ from datetime import date
 from tastytrade_client import TastytradeClient
 from tastytrade.order import NewOrder, OrderAction, OrderTimeInForce, OrderType
 from tastytrade.instruments import Option
+import pandas as pd
 
 logger = logging.getLogger(__name__)
 

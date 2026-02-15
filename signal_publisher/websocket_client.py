@@ -33,7 +33,7 @@ def broadcast_to_channel(channel: str, data: Dict[str, Any]) -> bool:
     try:
         payload = {
             "channel": channel,
-            "data": data
+            "signal": data
         }
         
         response = requests.post(

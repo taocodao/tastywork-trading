@@ -1,0 +1,19 @@
+DEBUG: Script starting
+DEBUG: HTTP Server imported
+DEBUG: Standard libs imported
+DEBUG: tastytrade SDK imported
+C:\Users\erich\AppData\Roaming\Python\Python310\site-packages\google\api_core\_python_version_support.py:275: FutureWarning: You are using a Python version (3.10.7) which Google will stop supporting in new releases of google.api_core once it reaches its end of life (2026-10-04). Please upgrade to the latest Python version, or at least Python 3.11, to continue receiving updates for google.api_core past that date.
+  warnings.warn(message, FutureWarning)
+C:\Users\erich\AppData\Roaming\Python\Python310\site-packages\google\api_core\_python_version_support.py:275: FutureWarning: You are using a Python version (3.10.7) which Google will stop supporting in new releases of google.cloud.secretmanager_v1 once it reaches its end of life (2026-10-04). Please upgrade to the latest Python version, or at least Python 3.11, to continue receiving updates for google.cloud.secretmanager_v1 past that date.
+  warnings.warn(message, FutureWarning)
+Google Cloud credentials not found. Run 'gcloud auth application-default login' to authenticate.
+Google Cloud credentials not found. Run 'gcloud auth application-default login' to authenticate.
+Google Cloud credentials not found. Run 'gcloud auth application-default login' to authenticate.
+Google Cloud credentials not found. Run 'gcloud auth application-default login' to authenticate.
+Google Cloud credentials not found. Run 'gcloud auth application-default login' to authenticate.
+Traceback (most recent call last):
+  File "D:\Projects\tastywork-trading-1\tasty_api_server.py", line 47, in <module>
+    print(f"\u2705 Environment loaded from {ENV_FILE}")
+  File "C:\Python310\lib\encodings\cp1252.py", line 19, in encode
+    return codecs.charmap_encode(input,self.errors,encoding_table)[0]
+UnicodeEncodeError: 'charmap' codec can't encode character '\u2705' in position 0: character maps to <undefined>
