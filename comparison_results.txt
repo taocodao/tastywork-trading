@@ -1,0 +1,150 @@
+============================================================
+BASELINE BACKTEST (Original Simple Logic)
+============================================================
+
+--- Starting ZEBRA Backtest (Start: 2024-01-01) ---
+Strategy: Target=50%, Stop=-40%, TimeExit=30d
+
+Scanning SPY for opportunities...
+  2024-04-04 [BUY ] ZEBRA Long  | Stock: $502.25 | Est. Debit: $251.12
+  2024-05-06 [SELL] TIME_EXIT    | Days: 32 | P&L: $ 308.36 ( 1.2%)
+  2024-05-30 [BUY ] ZEBRA Long  | Stock: $511.59 | Est. Debit: $255.79
+  2024-07-01 [SELL] TIME_EXIT    | Days: 32 | P&L: $2157.55 ( 8.4%)
+  2024-07-23 [BUY ] ZEBRA Long  | Stock: $543.85 | Est. Debit: $271.92
+  2024-08-22 [SELL] TIME_EXIT    | Days: 30 | P&L: $ 215.65 ( 0.8%)
+  2024-09-05 [BUY ] ZEBRA Long  | Stock: $539.75 | Est. Debit: $269.88
+  2024-10-07 [SELL] TIME_EXIT    | Days: 32 | P&L: $1761.67 ( 6.5%)
+  2024-11-05 [BUY ] ZEBRA Long  | Stock: $568.09 | Est. Debit: $284.05
+  2024-12-05 [SELL] TIME_EXIT    | Days: 30 | P&L: $2656.16 ( 9.4%)
+  2024-12-23 [BUY ] ZEBRA Long  | Stock: $587.79 | Est. Debit: $293.89
+  2025-01-22 [SELL] TIME_EXIT    | Days: 30 | P&L: $1045.22 ( 3.6%)
+  2025-02-07 [BUY ] ZEBRA Long  | Stock: $593.80 | Est. Debit: $296.90
+  2025-03-10 [SELL] TIME_EXIT    | Days: 31 | P&L: $-3575.12 (-12.0%)
+  2025-06-05 [BUY ] ZEBRA Long  | Stock: $587.93 | Est. Debit: $293.96
+  2025-07-07 [SELL] TIME_EXIT    | Days: 32 | P&L: $2628.95 ( 8.9%)
+  2025-08-01 [BUY ] ZEBRA Long  | Stock: $618.17 | Est. Debit: $309.09
+  2025-09-02 [SELL] TIME_EXIT    | Days: 32 | P&L: $1659.98 ( 5.4%)
+  2025-09-03 [BUY ] ZEBRA Long  | Stock: $640.07 | Est. Debit: $320.03
+  2025-10-03 [SELL] TIME_EXIT    | Days: 30 | P&L: $2445.26 ( 7.6%)
+  2025-10-13 [BUY ] ZEBRA Long  | Stock: $661.09 | Est. Debit: $330.54
+  2025-11-12 [SELL] TIME_EXIT    | Days: 30 | P&L: $1825.21 ( 5.5%)
+  2025-11-13 [BUY ] ZEBRA Long  | Stock: $670.06 | Est. Debit: $335.03
+  2025-12-15 [SELL] TIME_EXIT    | Days: 32 | P&L: $ 779.80 ( 2.3%)
+  2025-12-18 [BUY ] ZEBRA Long  | Stock: $674.48 | Est. Debit: $337.24
+  2026-01-20 [SELL] TIME_EXIT    | Days: 33 | P&L: $ 279.28 ( 0.8%)
+  2026-01-21 [BUY ] ZEBRA Long  | Stock: $685.40 | Est. Debit: $342.70
+
+Scanning NVDA for opportunities...
+  2024-03-27 [BUY ] ZEBRA Long  | Stock: $90.20 | Est. Debit: $45.10
+  2024-04-26 [SELL] TIME_EXIT    | Days: 30 | P&L: $-226.23 (-5.0%)
+  2024-04-29 [BUY ] ZEBRA Long  | Stock: $87.71 | Est. Debit: $43.86
+  2024-05-28 [SELL] TAKE_PROFIT  | Days: 29 | P&L: $2351.76 (53.6%)
+  2024-06-24 [BUY ] ZEBRA Long  | Stock: $118.06 | Est. Debit: $59.03
+  2024-07-24 [SELL] TIME_EXIT    | Days: 30 | P&L: $-347.25 (-5.9%)
+  2024-09-12 [BUY ] ZEBRA Long  | Stock: $119.10 | Est. Debit: $59.55
+  2024-10-14 [SELL] TIME_EXIT    | Days: 32 | P&L: $1703.12 (28.6%)
+  2024-10-31 [BUY ] ZEBRA Long  | Stock: $132.71 | Est. Debit: $66.36
+  2024-12-02 [SELL] TIME_EXIT    | Days: 32 | P&L: $ 528.12 ( 8.0%)
+  2024-12-04 [BUY ] ZEBRA Long  | Stock: $145.09 | Est. Debit: $72.55
+  2025-01-03 [SELL] TIME_EXIT    | Days: 30 | P&L: $ -59.38 (-0.8%)
+  2025-01-21 [BUY ] ZEBRA Long  | Stock: $140.79 | Est. Debit: $70.40
+  2025-02-20 [SELL] TIME_EXIT    | Days: 30 | P&L: $ -64.78 (-0.9%)
+  2025-05-02 [BUY ] ZEBRA Long  | Stock: $114.48 | Est. Debit: $57.24
+  2025-06-02 [SELL] TIME_EXIT    | Days: 31 | P&L: $2058.83 (36.0%)
+  2025-08-19 [BUY ] ZEBRA Long  | Stock: $175.62 | Est. Debit: $87.81
+  2025-09-18 [SELL] TIME_EXIT    | Days: 30 | P&L: $  54.89 ( 0.6%)
+  2025-09-19 [BUY ] ZEBRA Long  | Stock: $176.66 | Est. Debit: $88.33
+  2025-10-20 [SELL] TIME_EXIT    | Days: 31 | P&L: $ 537.27 ( 6.1%)
+  2025-10-21 [BUY ] ZEBRA Long  | Stock: $181.15 | Est. Debit: $90.57
+  2025-11-20 [SELL] TIME_EXIT    | Days: 30 | P&L: $ -46.80 (-0.5%)
+  2025-12-29 [BUY ] ZEBRA Long  | Stock: $188.22 | Est. Debit: $94.11
+  2026-01-28 [SELL] TIME_EXIT    | Days: 30 | P&L: $ 297.00 ( 3.2%)
+  2026-02-02 [BUY ] ZEBRA Long  | Stock: $185.61 | Est. Debit: $92.81
+
+Scanning IWM for opportunities...
+  2024-03-15 [BUY ] ZEBRA Long  | Stock: $197.83 | Est. Debit: $98.92
+  2024-04-15 [SELL] TIME_EXIT    | Days: 31 | P&L: $-539.47 (-5.5%)
+  2024-05-23 [BUY ] ZEBRA Long  | Stock: $199.10 | Est. Debit: $99.55
+  2024-06-24 [SELL] TIME_EXIT    | Days: 32 | P&L: $-124.20 (-1.2%)
+  2024-06-27 [BUY ] ZEBRA Long  | Stock: $198.54 | Est. Debit: $99.27
+  2024-07-29 [SELL] TIME_EXIT    | Days: 32 | P&L: $1739.49 (17.5%)
+  2024-08-01 [BUY ] ZEBRA Long  | Stock: $212.81 | Est. Debit: $106.41
+  2024-09-03 [SELL] TIME_EXIT    | Days: 33 | P&L: $-285.64 (-2.7%)
+  2024-09-13 [BUY ] ZEBRA Long  | Stock: $213.06 | Est. Debit: $106.53
+  2024-10-14 [SELL] TIME_EXIT    | Days: 31 | P&L: $ 603.17 ( 5.7%)
+  2024-10-24 [BUY ] ZEBRA Long  | Stock: $216.63 | Est. Debit: $108.32
+  2024-11-25 [SELL] TIME_EXIT    | Days: 32 | P&L: $2012.53 (18.6%)
+  2024-11-26 [BUY ] ZEBRA Long  | Stock: $237.24 | Est. Debit: $118.62
+  2024-12-26 [SELL] TIME_EXIT    | Days: 30 | P&L: $-1266.26 (-10.7%)
+  2025-02-18 [BUY ] ZEBRA Long  | Stock: $224.68 | Est. Debit: $112.34
+  2025-03-20 [SELL] TIME_EXIT    | Days: 30 | P&L: $-1930.38 (-17.2%)
+  2025-05-22 [BUY ] ZEBRA Long  | Stock: $201.39 | Est. Debit: $100.70
+  2025-06-23 [SELL] TIME_EXIT    | Days: 32 | P&L: $ 816.67 ( 8.1%)
+  2025-07-24 [BUY ] ZEBRA Long  | Stock: $222.17 | Est. Debit: $111.09
+  2025-08-25 [SELL] TIME_EXIT    | Days: 32 | P&L: $ 788.01 ( 7.1%)
+  2025-09-03 [BUY ] ZEBRA Long  | Stock: $232.23 | Est. Debit: $116.12
+  2025-10-03 [SELL] TIME_EXIT    | Days: 30 | P&L: $1150.03 ( 9.9%)
+  2025-10-08 [BUY ] ZEBRA Long  | Stock: $245.90 | Est. Debit: $122.95
+  2025-11-07 [SELL] TIME_EXIT    | Days: 30 | P&L: $-458.36 (-3.7%)
+  2025-11-10 [BUY ] ZEBRA Long  | Stock: $243.21 | Est. Debit: $121.61
+  2025-12-10 [SELL] TIME_EXIT    | Days: 30 | P&L: $ 966.96 ( 8.0%)
+  2025-12-17 [BUY ] ZEBRA Long  | Stock: $247.24 | Est. Debit: $123.62
+  2026-01-16 [SELL] TIME_EXIT    | Days: 30 | P&L: $1666.80 (13.5%)
+  2026-01-30 [BUY ] ZEBRA Long  | Stock: $259.65 | Est. Debit: $129.82
+
+Scanning TSLA for opportunities...
+  2024-05-01 [BUY ] ZEBRA Long  | Stock: $179.99 | Est. Debit: $90.00
+  2024-05-31 [SELL] TIME_EXIT    | Days: 30 | P&L: $-171.90 (-1.9%)
+  2024-06-03 [BUY ] ZEBRA Long  | Stock: $176.29 | Est. Debit: $88.14
+  2024-07-02 [SELL] TAKE_PROFIT  | Days: 29 | P&L: $4947.30 (56.1%)
+  2024-07-31 [BUY ] ZEBRA Long  | Stock: $232.07 | Est. Debit: $116.04
+  2024-08-30 [SELL] TIME_EXIT    | Days: 30 | P&L: $-1616.40 (-13.9%)
+  2024-09-10 [BUY ] ZEBRA Long  | Stock: $226.17 | Est. Debit: $113.08
+  2024-10-10 [SELL] TIME_EXIT    | Days: 30 | P&L: $1134.00 (10.0%)
+  2024-12-02 [BUY ] ZEBRA Long  | Stock: $357.09 | Est. Debit: $178.54
+  2024-12-16 [SELL] TAKE_PROFIT  | Days: 14 | P&L: $9533.70 (53.4%)
+  2024-12-31 [BUY ] ZEBRA Long  | Stock: $403.84 | Est. Debit: $201.92
+  2025-01-30 [SELL] TIME_EXIT    | Days: 30 | P&L: $-320.40 (-1.6%)
+  2025-01-31 [BUY ] ZEBRA Long  | Stock: $404.60 | Est. Debit: $202.30
+  2025-02-25 [SELL] STOP_LOSS    | Days: 25 | P&L: $-9162.00 (-45.3%)
+  2025-04-30 [BUY ] ZEBRA Long  | Stock: $282.16 | Est. Debit: $141.08
+  2025-05-27 [SELL] TAKE_PROFIT  | Days: 27 | P&L: $7265.70 (51.5%)
+  2025-06-04 [BUY ] ZEBRA Long  | Stock: $332.05 | Est. Debit: $166.02
+  2025-07-07 [SELL] TIME_EXIT    | Days: 33 | P&L: $-3429.90 (-20.7%)
+  2025-07-18 [BUY ] ZEBRA Long  | Stock: $329.65 | Est. Debit: $164.82
+  2025-08-18 [SELL] TIME_EXIT    | Days: 31 | P&L: $ 495.90 ( 3.0%)
+  2025-08-29 [BUY ] ZEBRA Long  | Stock: $333.87 | Est. Debit: $166.93
+  2025-09-22 [SELL] TAKE_PROFIT  | Days: 24 | P&L: $9030.60 (54.1%)
+  2025-10-07 [BUY ] ZEBRA Long  | Stock: $433.09 | Est. Debit: $216.54
+  2025-11-06 [SELL] TIME_EXIT    | Days: 30 | P&L: $1153.80 ( 5.3%)
+  2025-11-07 [BUY ] ZEBRA Long  | Stock: $429.52 | Est. Debit: $214.76
+  2025-12-08 [SELL] TIME_EXIT    | Days: 31 | P&L: $ 905.40 ( 4.2%)
+  2025-12-30 [BUY ] ZEBRA Long  | Stock: $454.43 | Est. Debit: $227.21
+  2026-01-29 [SELL] TIME_EXIT    | Days: 30 | P&L: $-3408.30 (-15.0%)
+
+Scanning AMD for opportunities...
+  2024-03-19 [BUY ] ZEBRA Long  | Stock: $181.42 | Est. Debit: $90.71
+  2024-04-18 [SELL] TIME_EXIT    | Days: 30 | P&L: $-2370.60 (-26.1%)
+  2024-06-06 [BUY ] ZEBRA Long  | Stock: $166.78 | Est. Debit: $83.39
+  2024-07-08 [SELL] TIME_EXIT    | Days: 32 | P&L: $1071.90 (12.9%)
+  2024-09-12 [BUY ] ZEBRA Long  | Stock: $150.77 | Est. Debit: $75.39
+  2024-10-14 [SELL] TIME_EXIT    | Days: 32 | P&L: $1305.00 (17.3%)
+  2024-10-15 [BUY ] ZEBRA Long  | Stock: $156.64 | Est. Debit: $78.32
+  2024-11-14 [SELL] TIME_EXIT    | Days: 30 | P&L: $-1602.00 (-20.5%)
+  2025-06-04 [BUY ] ZEBRA Long  | Stock: $118.58 | Est. Debit: $59.29
+  2025-07-07 [SELL] TIME_EXIT    | Days: 33 | P&L: $1459.80 (24.6%)
+  2025-08-06 [BUY ] ZEBRA Long  | Stock: $163.12 | Est. Debit: $81.56
+  2025-09-05 [SELL] TIME_EXIT    | Days: 30 | P&L: $-1078.20 (-13.2%)
+  2025-11-06 [BUY ] ZEBRA Long  | Stock: $237.70 | Est. Debit: $118.85
+  2025-12-08 [SELL] TIME_EXIT    | Days: 32 | P&L: $-1493.10 (-12.6%)
+
+=== ZEBRA BACKTEST SUMMARY ===
+Period:       2024-01-01 to Present
+Total Trades: 60
+Win Rate:     63.3%
+Total P&L:    $39764.17
+Avg P&L:      $662.74
+
+============================================================
+Test Complete
+============================================================

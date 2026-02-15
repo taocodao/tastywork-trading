@@ -1,0 +1,17 @@
+Traceback (most recent call last):
+  File "D:\Projects\tastywork-trading-1\src\zebra\ml_optimizer.py", line 163, in <module>
+  File "D:\Projects\tastywork-trading-1\src\zebra\ml_optimizer.py", line 156, in run_optimization
+    if __name__ == "__main__":
+  File "C:\Python310\lib\json\__init__.py", line 179, in dump
+    for chunk in iterable:
+  File "C:\Python310\lib\json\encoder.py", line 431, in _iterencode
+    yield from _iterencode_dict(o, _current_indent_level)
+  File "C:\Python310\lib\json\encoder.py", line 405, in _iterencode_dict
+    yield from chunks
+  File "C:\Python310\lib\json\encoder.py", line 438, in _iterencode
+    o = _default(o)
+  File "C:\Users\erich\AppData\Roaming\Python\Python310\site-packages\frozendict\__init__.py", line 32, in default
+    return BaseJsonEncoder.default(
+  File "C:\Python310\lib\json\encoder.py", line 179, in default
+    raise TypeError(f'Object of type {o.__class__.__name__} '
+TypeError: Object of type int64 is not JSON serializable

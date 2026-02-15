@@ -1,0 +1,9 @@
+{
+    "profit_target_pct": 0.6880986427731282,
+    "stop_loss_pct": -0.5174543445602262,
+    "time_exit_days": 50,
+    "trailing_activation_pct": 0.27905504738394615,
+    "trailing_pct": 0.1168749129280387,
+    "atr_multiplier": 1.7499372895450072,
+    "min_score": 40,
+    "score": 

@@ -222,8 +222,63 @@ ORDER_MAX_PRICE_ADJUSTMENTS: int = 3    # Max number of price adjustments
 # =============================================================================
 # COMMISSION ESTIMATES (for P&L calculation)
 # =============================================================================
-COMMISSION_PER_CONTRACT: float = 1.00   # $1 per contract per leg
-SLIPPAGE_PER_CONTRACT: float = 0.03     # $0.03 per share slippage
+
+# =============================================================================
+# ZEBRA STRATEGY SETTINGS
+# =============================================================================
+ZEBRA_ENABLED: bool = True
+ZEBRA_UNIVERSE: List[str] = [
+    # S&P 500 liquid names + high-volume mid-caps
+    "AAPL", "MSFT", "GOOGL", "AMZN", "META", "NVDA", "TSLA",
+    "JPM", "V", "MA", "UNH", "HD", "PG", "JNJ",
+    "SPY", "QQQ", "IWM", "DIA", "AMD", "NFLX", "BA", "DIS",
+    "XOM", "CVX", "KO", "PEP", "COST", "WMT", "TGT"
+]
+
+# Universe filters
+ZEBRA_MIN_ADV: int = 1_000_000        # Min avg daily volume
+ZEBRA_MAX_ATM_SPREAD: float = 0.50    # Max ATM option spread
+ZEBRA_MIN_OI: int = 500               # Min open interest on target strikes
+
+# Construction parameters
+ZEBRA_LONG_DELTA_MIN: float = 0.65
+ZEBRA_LONG_DELTA_MAX: float = 0.80
+ZEBRA_SHORT_DELTA_MIN: float = 0.45
+ZEBRA_SHORT_DELTA_MAX: float = 0.55
+ZEBRA_MAX_NET_EXTRINSIC: float = 0.15   # Max acceptable net extrinsic ($)
+ZEBRA_MAX_DEBIT_PCT: float = 0.50       # Max debit as % of 100-share cost
+ZEBRA_MAX_SLIPPAGE_PCT: float = 3.0     # Max slippage above mid
+ZEBRA_SLIPPAGE_WARNING_PCT: float = 2.0 # Flag if aggregate spread > 2% of debit
+
+# Lifecycle thresholds
+ZEBRA_PROFIT_TARGET_PCT: float = 50.0   # Close at 50% of max theoretical profit
+ZEBRA_TIME_EXIT_PCT: float = 50.0       # Close when 50% of time elapsed
+ZEBRA_STOP_LOSS_PCT: float = -40.0      # Stop loss at -40% of debit
+ZEBRA_RECENTER_DOWN_PCT: float = -8.0   # Re-center when stock drops 8%
+ZEBRA_RECENTER_UP_PCT: float = 15.0     # Re-center when stock rallies 15%
+ZEBRA_ASSIGNMENT_DTE: int = 5           # Close if short ITM with < 5 DTE
+ZEBRA_DIVIDEND_DAYS: int = 3            # Close if ex-div within 3 days
+ZEBRA_MAX_RECENTERS: int = 2            # Max re-centers per position
+
+# Execution preferences
+ZEBRA_ENTRY_WINDOW_START: time = time(10, 0)   # 10:00 AM ET
+ZEBRA_ENTRY_WINDOW_END: time = time(11, 30)    # 11:30 AM ET
+ZEBRA_PRICE_ADJUST_TIMEOUT: int = 900          # 15 min before adjusting
+ZEBRA_PRICE_ADJUST_STEP: float = 0.05          # $0.05 per adjustment
+
+# Scanning frequency
+ZEBRA_SCAN_INTERVAL_MIN: int = 30       # Scan for new entries every 30 min
+ZEBRA_POSITION_CHECK_MIN: int = 15      # Check positions every 15 min
+
+# Selection
+ZEBRA_MIN_DIRECTIONAL_CONFIDENCE: int = 65
+ZEBRA_SELECT_TOP_N: int = 5             # Top 5 candidates daily
+
+# Portfolio Risk
+ZEBRA_MAX_PORTFOLIO_Alloc_PCT: float = 0.10 # Max 10% of portfolio per trade
+
+# =============================================================================
+
 
 
 @dataclass

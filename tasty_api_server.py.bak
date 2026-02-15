@@ -16,12 +16,7 @@ from tastytrade.instruments import Option, get_option_chain
 from tastytrade.order import NewOrder, OrderAction, OrderTimeInForce, OrderType, PriceEffect
 from tastytrade_client import TastytradeClient
 from tastytrade_utils import create_user_session, get_user_account
-from typing import List, Dict, Any, Optional
-
-# ZEBRA Strategy Imports
-from src.zebra.client import ZebraClient
-from src.zebra.construction_engine import ZebraConstructionEngine
-
+from typing import List, Dict, Any
 
 # CRITICAL: Use absolute path for systemd service compatibility
 # load_dotenv() without path fails in systemd because it searches relative to Python file location
@@ -181,13 +176,6 @@ class TastyHandler(BaseHTTPRequestHandler):
                 self._handle_diagonal_universe()
             elif self.path == '/diagonal/signals':
                 self._handle_diagonal_signals()
-            elif self.path == '/diagonal/signals':
-                self._handle_diagonal_signals()
-            # ============================================
-            # ZEBRA STRATEGY ROUTES
-            # ============================================
-            elif self.path == '/api/zebra/candidates':
-                self._handle_zebra_candidates()
             else:
                 self._send_json({'error': 'Not found'}, 404)
         except Exception as e:
@@ -210,13 +198,6 @@ class TastyHandler(BaseHTTPRequestHandler):
                 self.handle_close_position(position_id, data)
             elif self.path == '/api/trade':
                 self.handle_execute_trade(data)
-            # ============================================
-            # ZEBRA STRATEGY ROUTES
-            # ============================================
-            elif self.path == '/api/zebra/construct':
-                self._handle_zebra_construct(data)
-            elif self.path == '/api/zebra/order':
-                self._handle_zebra_order(data)
             else:
                 self._send_json({'error': 'Not found'}, 404)
         except Exception as e:
@@ -1214,193 +1195,6 @@ class TastyHandler(BaseHTTPRequestHandler):
             self._send_json({'error': str(e)}, 500)
 
 
-    def _handle_zebra_candidates(self):
-        """Return pending ZEBRA strategy signals from database."""
-        try:
-            from src.earnings_intelligence.database import SignalRepository
-            repo = SignalRepository()
-            
-            # Fetch all signals
-            all_signals = repo.get_all_signals()
-            
-            # Filter for ZEBRA strategy and pending status
-            zebra_signals = [
-                s.to_dict() for s in all_signals 
-                if s.strategy.lower() == 'zebra' and s.status == 'pending'
-            ]
-            
-            self._send_json({
-                'candidates': zebra_signals,
-                'total': len(zebra_signals),
-                'source': 'database'
-            })
-            
-        except Exception as e:
-            print(f"ZEBRA candidates error: {e}")
-            import traceback
-            traceback.print_exc()
-            self._send_json({'error': str(e)}, 500)
-
-    def _handle_zebra_construct(self, data: dict):
-        """Construct ZEBRA trade structures for a given symbol."""
-        try:
-            symbol = data.get('symbol')
-            if not symbol:
-                self._send_json({'error': 'Symbol required'}, 400)
-                return
-
-            direction = data.get('direction', 'LONG').upper()
-            horizon = int(data.get('horizon', 30))
-            
-            # Use global session for construction (market data only)
-            session = get_session()
-            if not session:
-                self._send_json({'error': 'Market data session unavailable'}, 503)
-                return
-                
-            # Initialize Client & Engine
-            client = ZebraClient()
-            client._session = session
-            
-            # Create engine
-            engine = ZebraConstructionEngine(client)
-            
-            # Fetch price
-            price = client.get_stock_price(symbol)
-            if price <= 0:
-                self._send_json({'error': f'Could not fetch price for {symbol}'}, 404)
-                return
-
-            print(f"Constructing ZEBRA for {symbol} @ ${price:.2f} ({direction})")
-            
-            # Construct
-            structures = engine.construct(
-                symbol=symbol,
-                stock_price=price,
-                thesis_horizon_days=horizon,
-                direction=direction
-            )
-            
-            # Serialize structures
-            serialized = []
-            for s in structures:
-                s_dict = {
-                    'symbol': s.symbol,
-                    'direction': s.direction,
-                    'expiry': s.expiry.isoformat(),
-                    'dte': s.dte,
-                    'net_debit': float(s.net_debit),
-                    'max_loss': float(s.max_loss),
-                    'breakeven': float(s.breakeven),
-                    'net_delta': float(s.net_delta),
-                    'net_theta': float(s.net_theta),
-                    'net_eval': float(s.net_extrinsic),
-                    'construction_score': float(s.construction_score),
-                    'legs': [
-                        {
-                            'side': 'md_long',
-                            'strike': float(s.long_leg.strike),
-                            'option_type': s.long_leg.option_type,
-                            'quantity': 2,
-                            'delta': float(s.long_leg.delta or 0)
-                        },
-                        {
-                            'side': 'md_short',
-                            'strike': float(s.short_leg.strike),
-                            'option_type': s.short_leg.option_type,
-                            'quantity': 1,
-                            'delta': float(s.short_leg.delta or 0)
-                        }
-                    ]
-                }
-                serialized.append(s_dict)
-                
-            self._send_json({
-                'symbol': symbol,
-                'price': price,
-                'count': len(serialized),
-                'structures': serialized
-            })
-            
-        except Exception as e:
-            print(f"ZEBRA verify error: {e}")
-            import traceback
-            traceback.print_exc()
-            self._send_json({'error': str(e)}, 500)
-
-    def _handle_zebra_order(self, data: dict):
-        """Execute a ZEBRA trade for a user."""
-        try:
-            # Extract credentials
-            user_refresh_token = data.get('refreshToken')
-            account_number = data.get('accountNumber')
-            
-            if not user_refresh_token:
-                self._send_json({'error': 'Missing user credentials'}, 401)
-                return
-            
-            # Extract trade parameters
-            symbol = data.get('symbol')
-            long_strike = float(data.get('longStrike', 0))
-            short_strike = float(data.get('shortStrike', 0))
-            expiry_str = data.get('expiry')
-            direction = data.get('direction', 'LONG')
-            quantity = int(data.get('quantity', 1))
-            limit_price = float(data.get('limitPrice', 0)) if data.get('limitPrice') else None
-            
-            if not (symbol and long_strike and short_strike and expiry_str):
-                self._send_json({'error': 'Missing trade parameters'}, 400)
-                return
-                
-            expiry = datetime.strptime(expiry_str, "%Y-%m-%d").date()
-            
-            # Authenticate User
-            try:
-                user_session = create_user_session(user_refresh_token)
-                account = get_user_account(user_session, account_number)
-            except Exception as e:
-                self._send_json({'error': str(e)}, 401)
-                return
-                
-            # Initialize Client with User Session
-            client = ZebraClient()
-            client._session = user_session
-            client._account = account
-            
-            # Execute
-            print(f"Executing ZEBRA {symbol} {direction} for account {account.account_number}")
-            order_response = client.execute_zebra_entry(
-                symbol=symbol,
-                long_strike=long_strike,
-                short_strike=short_strike,
-                expiry=expiry,
-                direction=direction,
-                quantity=quantity,
-                limit_price=limit_price,
-                dry_run=False
-            )
-            
-            # Extract order ID if possible
-            order_id = None
-            if hasattr(order_response, 'id'):
-                order_id = str(order_response.id)
-            elif isinstance(order_response, dict) and 'id' in order_response:
-                order_id = str(order_response['id'])
-                
-            self._send_json({
-                'status': 'submitted',
-                'symbol': symbol,
-                'order_id': order_id,
-                'message': 'ZEBRA order submitted successfully'
-            })
-            
-        except Exception as e:
-            print(f"ZEBRA execution error: {e}")
-            import traceback
-            traceback.print_exc()
-            self._send_json({'error': str(e)}, 500)
-
-
 def run_server(port=8002):
     print(f"🚀 Starting TradeMind API server on port {port}")
     print(f"   Account: http://localhost:{port}/api/account")
@@ -1426,5 +1220,4 @@ def run_server(port=8002):
 
 if __name__ == '__main__':
     run_server()
-
 

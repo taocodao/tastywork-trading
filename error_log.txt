@@ -1,0 +1,4 @@
+Traceback (most recent call last):
+  File "D:\Projects\tastywork-trading-1\src\zebra\ml_optimizer.py", line 29, in <module>
+    from src.zebra.backtest_engine import ZebraBacktestEngine
+ModuleNotFoundError: No module named 'src'

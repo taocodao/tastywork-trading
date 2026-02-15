@@ -17,6 +17,14 @@ from .theta import (
     publish_theta_exit_signal
 )
 
+# Zebra signals
+from .zebra import (
+    ZebraEntrySignal,
+    ZebraExitSignal,
+    publish_zebra_entry_signal,
+    publish_zebra_exit_signal
+)
+
 # Calendar signals
 from .calendar import (
     publish_calendar_signal,
@@ -32,6 +40,12 @@ __all__ = [
     'ThetaExitSignal',
     'publish_theta_entry_signal',
     'publish_theta_exit_signal',
+
+    # Zebra
+    'ZebraEntrySignal',
+    'ZebraExitSignal',
+    'publish_zebra_entry_signal',
+    'publish_zebra_exit_signal',
     
     # Calendar
     'publish_calendar_signal',

@@ -1,0 +1,24 @@
+Initializing Optimizer with 5 symbols...
+Starting optimization (Skopt=True)...
+Eval: Sharpe=-999.00, P&L=0.00, Trades=0
+Eval: Sharpe=-999.00, P&L=0.00, Trades=0
+Eval: Sharpe=-999.00, P&L=0.00, Trades=0
+Eval: Sharpe=-999.00, P&L=0.00, Trades=0
+Eval: Sharpe=-999.00, P&L=0.00, Trades=0
+Eval: Sharpe=-999.00, P&L=0.00, Trades=0
+Eval: Sharpe=-999.00, P&L=0.00, Trades=0
+Eval: Sharpe=-999.00, P&L=0.00, Trades=0
+Eval: Sharpe=-999.00, P&L=0.00, Trades=0
+Eval: Sharpe=-999.00, P&L=0.00, Trades=0
+Eval: Sharpe=-999.00, P&L=0.00, Trades=0
+Eval: Sharpe=-999.00, P&L=0.00, Trades=0
+Eval: Sharpe=-999.00, P&L=0.00, Trades=0
+Eval: Sharpe=-999.00, P&L=0.00, Trades=0
+Eval: Sharpe=-999.00, P&L=0.00, Trades=0
+Eval: Sharpe=-999.00, P&L=0.00, Trades=0
+Eval: Sharpe=-999.00, P&L=0.00, Trades=0
+Eval: Sharpe=-999.00, P&L=0.00, Trades=0
+Eval: Sharpe=-999.00, P&L=0.00, Trades=0
+Eval: Sharpe=-999.00, P&L=0.00, Trades=0
+Bayesian Optimization Success.
+Main Error: Object of type int64 is not JSON serializable

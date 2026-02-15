@@ -1,0 +1,5 @@
+=== FINAL RESULTS ===
+P&L: $6314.85
+Win Rate: 47.1%
+Trades: 68
+Sharpe: 0.72
