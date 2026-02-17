@@ -211,6 +211,75 @@ def run_earnings_scanner(symbols: list = None) -> int:
         
     return 0
 
+def run_zebra_scanner() -> int:
+    """
+    Run the ZEBRA selection pipeline.
+    
+    1. Select candidates (Dip + Tech + Fund + Timing)
+    2. Enrich with Perplexity (News + SEC + Analyst)
+    3. Construct trades
+    4. Publish signals
+    """
+    if not config.ZEBRA_ENABLED:
+        return 0
+        
+    logger.info("🦓 Running ZEBRA Strategy Scan...")
+    
+    try:
+        from src.zebra.zebra_selector import ZebraSelector
+        from src.zebra.perplexity_enrichment import get_enricher
+        # from src.zebra.construction_engine import construction_engine # TODO: Integrate construction
+        from signal_publisher import publish_zebra_entry_signal # Assuming this exists or will adjust
+        
+        # Initialize
+        # Note: We rely on IBDataProvider being available via the hub or new instance
+        selector = ZebraSelector()
+        
+        # 1. Select Candidates
+        candidates = selector.select_daily_candidates()
+        
+        if not candidates:
+            logger.info("  No ZEBRA candidates found.")
+            return 0
+            
+        logger.info(f"  Found {len(candidates)} raw candidates. Processing top {config.ZEBRA_PERPLEXITY_TOP_N}...")
+        
+        # 2. Enrich Top N
+        top_candidates = candidates[:config.ZEBRA_PERPLEXITY_TOP_N]
+        enricher = get_enricher()
+        
+        valid_signals = []
+        
+        for cand in top_candidates:
+            logger.info(f"  Enriching {cand.symbol} with Perplexity...")
+            enrichment = enricher.compute_perplexity_composite(cand.symbol)
+            
+            if enrichment['action'] == 'VETO':
+                logger.info(f"  ❌ {cand.symbol} VETOED by Perplexity: {enrichment['reason']}")
+                continue
+                
+            # Add enrichment data to candidate (hacky attribute add for now, better to update model)
+            cand.rationale += f" | PPLX Score: {enrichment['composite_score']}"
+            
+            # 3. Construct Trade (Placeholder for Phase 4 full construction integration)
+            # For Phase 1-3, we just publish the signal candidate
+            
+            # 4. Check Risk (Placeholder)
+            
+            if enrichment['composite_score'] > 0.4: # Filter weak enrichment
+                valid_signals.append(cand)
+                # publish_zebra_entry_signal(cand) # TODO: Implement publisher adapter
+                logger.info(f"  ✅ {cand.symbol} APPROVED for ZEBRA (Score: {cand.composite_score:.0f}, PPLX: {enrichment['composite_score']})")
+
+
+        return len(valid_signals)
+
+    except Exception as e:
+        logger.error(f"ZEBRA scan failed: {e}")
+        import traceback
+        traceback.print_exc()
+        return 0
+
 
 def run_loop(interval_seconds: int = 300, use_mock: bool = False, force: bool = False):
     """
@@ -223,14 +292,27 @@ def run_loop(interval_seconds: int = 300, use_mock: bool = False, force: bool = 
     """
     logger.info(f"🔄 Starting scanner loop (interval: {interval_seconds}s)")
     
+    # Track scanner timings
+    next_zebra_scan = datetime.now()
+    
     while True:
         try:
-            if is_market_hours() or use_mock or force:
+            now = datetime.now()
+            is_market = is_market_hours()
+            
+            if is_market or use_mock or force:
                 logger.info("--- Starting Calendar Scan ---")
                 run_scanner(use_mock=use_mock)
                 
-                logger.info("--- Starting Earnings Scan ---")
-                run_earnings_scanner() # Always run earnings check in loop
+                # logger.info("--- Starting Earnings Scan ---")
+                # run_earnings_scanner() # Disable for now to focus on ZEBRA
+                
+                # Run ZEBRA every 30 mins
+                if now >= next_zebra_scan:
+                     run_zebra_scanner()
+                     next_zebra_scan = now + timedelta(minutes=getattr(config, 'ZEBRA_SCAN_INTERVAL_MIN', 30))
+                     logger.info(f"Next ZEBRA scan at {next_zebra_scan.strftime('%H:%M:%S')}")
+
             else:
                 logger.info("⏸️ Outside market hours, skipping scan")
             
@@ -265,7 +347,8 @@ def main():
             logger.info("⏸️ Outside market hours. Use --force to run anyway.")
             return
         run_scanner(use_mock=args.mock)
-        run_earnings_scanner()
+        # run_earnings_scanner()
+        run_zebra_scanner()
 
 
 if __name__ == '__main__':

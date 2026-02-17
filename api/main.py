@@ -14,7 +14,7 @@ from contextlib import asynccontextmanager
 import os
 import logging
 
-from .routes import account, signals, trade, user
+from .routes import account, signals, trade, user, zebra, dvo
 from .config import settings
 
 # Configure logging
@@ -51,6 +51,8 @@ app.include_router(account.router, prefix="/api/account", tags=["Account"])
 app.include_router(signals.router, prefix="/api/signals", tags=["Signals"])
 app.include_router(trade.router, prefix="/api/trade", tags=["Trade"])
 app.include_router(user.router, prefix="/api/user", tags=["User"])
+app.include_router(zebra.router, prefix="/api/zebra", tags=["ZEBRA Strategy"])
+app.include_router(dvo.router, prefix="/api/dvo", tags=["DVO Strategy"])
 
 
 @app.get("/")

@@ -1,0 +1,23 @@
+{
+    "LOW_VOL": {
+        "trailing_stop_pct": 0.12,
+        "time_exit_days": 10,
+        "hard_stop_pct": -0.2,
+        "allocation": 0.12,
+        "max_positions": 8
+    },
+    "NORMAL": {
+        "trailing_stop_pct": 0.15,
+        "time_exit_days": 10,
+        "hard_stop_pct": -0.2,
+        "allocation": 0.1,
+        "max_positions": 6
+    },
+    "HIGH_VOL": {
+        "trailing_stop_pct": 0.12,
+        "time_exit_days": 10,
+        "hard_stop_pct": -0.2,
+        "allocation": 0.08,
+        "max_positions": 4
+    }
+}

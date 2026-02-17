@@ -6,7 +6,7 @@ All configuration parameters for the Calendar Spreads trading system.
 """
 
 from dataclasses import dataclass
-from typing import List
+from typing import List, Dict, Any, Optional, Tuple, Union
 from datetime import time
 
 # =============================================================================
@@ -227,55 +227,88 @@ ORDER_MAX_PRICE_ADJUSTMENTS: int = 3    # Max number of price adjustments
 # ZEBRA STRATEGY SETTINGS
 # =============================================================================
 ZEBRA_ENABLED: bool = True
-ZEBRA_UNIVERSE: List[str] = [
-    # S&P 500 liquid names + high-volume mid-caps
-    "AAPL", "MSFT", "GOOGL", "AMZN", "META", "NVDA", "TSLA",
-    "JPM", "V", "MA", "UNH", "HD", "PG", "JNJ",
-    "SPY", "QQQ", "IWM", "DIA", "AMD", "NFLX", "BA", "DIS",
-    "XOM", "CVX", "KO", "PEP", "COST", "WMT", "TGT"
+
+# === ZEBRA WATCHLIST (3-Tier) ===
+ZEBRA_WATCHLIST: List[str] = [
+    # Tier 1: Core List (Liquid Blue Chips)
+    "AAPL", "MSFT", "GOOGL", "AMZN", "META", "NVDA", "TSLA",  # Mag 7
+    "JPM", "V", "MA",                                         # Finance
+    "JNJ", "LLY", "UNH",                                      # Healthcare
+    "XOM", "CVX",                                             # Energy
+    "PG", "KO", "PEP",                                        # Staples
+    "HD", "MCD", "SBUX",                                      # Discretionary
+    "CAT", "DE",                                              # Industrial
+    "GLD", "SLV", "TLT", "SPY", "QQQ", "IWM", "DIA"           # ETFs
 ]
+ZEBRA_MOVER_SCAN_SYMBOLS = "SP500_NDX"  # Trigger for Tier 2 scanner
+ZEBRA_MOVER_DROP_PCT: float = 5.0       # Min drop % to qualify as a "mover"
+ZEBRA_MOVER_EXPIRY_DAYS: int = 14       # Auto-expiry for mover candidates
 
-# Universe filters
-ZEBRA_MIN_ADV: int = 1_000_000        # Min avg daily volume
-ZEBRA_MAX_ATM_SPREAD: float = 0.50    # Max ATM option spread
-ZEBRA_MIN_OI: int = 500               # Min open interest on target strikes
+# === DIP DETECTION ===
+ZEBRA_DIP_LOOKBACK_DAYS: int = 20
+ZEBRA_DIP_MIN_SCORE: int = 60
 
-# Construction parameters
+# === SCORING WEIGHTS (11 Factors) ===
+ZEBRA_SCORING_WEIGHTS = {
+    'dip': 0.20, 
+    'trend': 0.10, 
+    'momentum': 0.10, 
+    'volatility': 0.05,
+    'volume': 0.05, 
+    'mean_reversion': 0.05,
+    'iv_rank': 0.15, 
+    'iv_spread': 0.10, 
+    'fundamentals': 0.10,
+    'momentum_stage': 0.05, 
+    'anti_crowding': 0.05
+}
+
+# === ENTRY TIMING ===
+ZEBRA_MAX_IV_RANK_ENTRY: int = 50
+ZEBRA_RSI_BULL_RANGE: Tuple[int, int] = (40, 65)
+ZEBRA_RSI_BEAR_RANGE: Tuple[int, int] = (35, 60)
+ZEBRA_VIX_CRISIS: float = 35.0
+ZEBRA_FOMC_BLOCK_DAYS: int = 2
+
+# === ANTI-CROWDING ===
+ZEBRA_MAX_CALL_PUT_RATIO: float = 3.0
+ZEBRA_MAX_VOL_OI_RATIO: float = 3.0
+ZEBRA_MAX_IV_RV_DIVERGENCE: float = 0.30
+
+# === RISK VALIDATION ===
+ZEBRA_MAX_SECTOR_CONCENTRATION: float = 0.30
+ZEBRA_MAX_LOSS_PCT: float = 0.30        # Max loss < 30% of capital
+
+# === CONSTRUCTION ===
+ZEBRA_DTE_RANGE: Tuple[int, int] = (45, 120)
+ZEBRA_BREAKEVEN_MAX_PCT: float = 3.0    # Breakeven within +/- 3%
 ZEBRA_LONG_DELTA_MIN: float = 0.65
 ZEBRA_LONG_DELTA_MAX: float = 0.80
 ZEBRA_SHORT_DELTA_MIN: float = 0.45
 ZEBRA_SHORT_DELTA_MAX: float = 0.55
-ZEBRA_MAX_NET_EXTRINSIC: float = 0.15   # Max acceptable net extrinsic ($)
-ZEBRA_MAX_DEBIT_PCT: float = 0.50       # Max debit as % of 100-share cost
-ZEBRA_MAX_SLIPPAGE_PCT: float = 3.0     # Max slippage above mid
-ZEBRA_SLIPPAGE_WARNING_PCT: float = 2.0 # Flag if aggregate spread > 2% of debit
+ZEBRA_MAX_NET_EXTRINSIC: float = 0.15
 
-# Lifecycle thresholds
-ZEBRA_PROFIT_TARGET_PCT: float = 50.0   # Close at 50% of max theoretical profit
-ZEBRA_TIME_EXIT_PCT: float = 50.0       # Close when 50% of time elapsed
-ZEBRA_STOP_LOSS_PCT: float = -40.0      # Stop loss at -40% of debit
-ZEBRA_RECENTER_DOWN_PCT: float = -8.0   # Re-center when stock drops 8%
-ZEBRA_RECENTER_UP_PCT: float = 15.0     # Re-center when stock rallies 15%
-ZEBRA_ASSIGNMENT_DTE: int = 5           # Close if short ITM with < 5 DTE
-ZEBRA_DIVIDEND_DAYS: int = 3            # Close if ex-div within 3 days
-ZEBRA_MAX_RECENTERS: int = 2            # Max re-centers per position
+# === PERPLEXITY ENRICHMENT ===
+ZEBRA_PERPLEXITY_TOP_N: int = 5
+ZEBRA_PERPLEXITY_CACHE_HOURS: int = 6
 
-# Execution preferences
-ZEBRA_ENTRY_WINDOW_START: time = time(10, 0)   # 10:00 AM ET
-ZEBRA_ENTRY_WINDOW_END: time = time(11, 30)    # 11:30 AM ET
-ZEBRA_PRICE_ADJUST_TIMEOUT: int = 900          # 15 min before adjusting
-ZEBRA_PRICE_ADJUST_STEP: float = 0.05          # $0.05 per adjustment
+# Lifecycle & Execution
+ZEBRA_PROFIT_TARGET_PCT: float = 0.50  # 50% (Hard target, optional if trailing)
+ZEBRA_TRAILING_STOP_PCT: float = 0.15  # 15% (Optimized from 2y backtest)
+ZEBRA_TIME_EXIT_PCT: float = 50.0       
+ZEBRA_STOP_LOSS_PCT: float = 0.40      # -40% (Hard safety net)
+ZEBRA_RECENTER_DOWN_PCT: float = -8.0   
+ZEBRA_RECENTER_UP_PCT: float = 15.0     
+ZEBRA_ASSIGNMENT_DTE: int = 5           
+ZEBRA_DIVIDEND_DAYS: int = 3            
+ZEBRA_MAX_RECENTERS: int = 2            
 
-# Scanning frequency
-ZEBRA_SCAN_INTERVAL_MIN: int = 30       # Scan for new entries every 30 min
-ZEBRA_POSITION_CHECK_MIN: int = 15      # Check positions every 15 min
-
-# Selection
-ZEBRA_MIN_DIRECTIONAL_CONFIDENCE: int = 65
-ZEBRA_SELECT_TOP_N: int = 5             # Top 5 candidates daily
-
-# Portfolio Risk
-ZEBRA_MAX_PORTFOLIO_Alloc_PCT: float = 0.10 # Max 10% of portfolio per trade
+ZEBRA_ENTRY_WINDOW_START: time = time(10, 0)   
+ZEBRA_ENTRY_WINDOW_END: time = time(11, 30)    
+ZEBRA_SCAN_INTERVAL_MIN: int = 30       
+ZEBRA_POSITION_CHECK_MIN: int = 15      
+ZEBRA_AUTO_TRADE: bool = False
+ZEBRA_MAX_PORTFOLIO_Alloc_PCT: float = 0.10
 
 # =============================================================================
 

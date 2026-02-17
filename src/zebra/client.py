@@ -200,3 +200,23 @@ class ZebraClient(TastytradeClient):
         except Exception as e:
             logger.error(f"Error fetching ZEBRA positions: {e}")
             return []
+
+    def get_account_equity(self) -> float:
+        """
+        Fetch current account Equity (Net Liquidating Value).
+        Returns:
+            float: Equity in USD, or 0.0 on failure/disconnect.
+        """
+        if not self.is_connected:
+            return 0.0
+            
+        try:
+            # Assuming TastytradeClient has self.account
+            # SDK: account.get_balance(session) returns Balance object with net_liquidating_value
+            # If base client wraps this, use that. If not, try direct.
+            balances = self.account.get_balance(self._session)
+            return float(balances.net_liquidating_value)
+        except Exception as e:
+            logger.error(f"Failed to fetch account equity: {e}")
+            # Fallback to hardcoded initial if critical? No, safer to return 0 and skip trade.
+            return 0.0

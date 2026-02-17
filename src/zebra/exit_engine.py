@@ -12,7 +12,12 @@ class TrailingStopExit:
         self.activation_pct = activation_pct
         self.trailing_pct = trailing_pct
 
-    def evaluate(self, entry_price, current_price, high_watermark_price, entry_debit, leverage_delta=0.90):
+    def evaluate(self, entry_price, current_price, high_watermark_price, entry_debit, leverage_delta=0.90, 
+                 activation_pct=None, trailing_pct=None):
+        
+        act_pct = activation_pct if activation_pct is not None else self.activation_pct
+        trail_pct = trailing_pct if trailing_pct is not None else self.trailing_pct
+        
         # Calculate P&L based on ZEBRA mechanics (delta approx)
         move_from_entry = current_price - entry_price
         pnl_dollar = move_from_entry * leverage_delta * 100
@@ -23,7 +28,7 @@ class TrailingStopExit:
         hw_pnl_pct = (hw_move * leverage_delta * 100) / (entry_debit * 100)
 
         # Check activation
-        if hw_pnl_pct >= self.activation_pct:
+        if hw_pnl_pct >= act_pct:
             # Trailing stop logic:
             # If current P&L drops by trailing_pct from High Watermark P&L
             # Note: This is simplified. Better: Price-based trail.
@@ -48,8 +53,8 @@ class TrailingStopExit:
         # Calculate theoretical stop price based on high watermark
         # If we are long delta 90, we behave like stock.
         # Stop Price = High Watermark * (1 - trailing_pct)
-        if hw_pnl_pct >= self.activation_pct:
-            stop_price = high_watermark_price * (1.0 - self.trailing_pct)
+        if hw_pnl_pct >= act_pct:
+            stop_price = high_watermark_price * (1.0 - trail_pct)
             if current_price <= stop_price:
                 return {
                     'exit': True,
@@ -165,16 +170,30 @@ class ZebraExitEngine:
             min_profit_pct=params.get('stagnation_min_profit', 0.03)
         )
         
-    def evaluate(self, position):
+    def evaluate(self, position, override_params=None):
         """
         Evaluate position for exit signals.
         position: dict containing entry_price, current_price, days_held, etc.
+        override_params: dict of dynamic overrides (e.g. from RegimeDetector)
         """
         current_price = position['current_price']
         entry_price = position['entry_price']
         entry_debit = position['entry_debit']
         days_held = position['days_held']
         high_watermark = position.get('high_watermark', current_price)
+        
+        # Apply Overrides
+        stop_val = self.stop_loss_pct
+        time_exit_val = self.time_exit_days
+        trail_act = None
+        trail_val = None
+        
+        if override_params:
+            stop_val = override_params.get('hard_stop_pct', stop_val)
+            time_exit_val = override_params.get('time_exit_days', time_exit_val)
+            # In RegimeDetector 'trailing_stop_pct' is strictly the trailing amount
+            trail_val = override_params.get('trailing_stop_pct') 
+
         
         # 1. Calculate P&L (Approx)
         leverage = 0.90
@@ -183,7 +202,7 @@ class ZebraExitEngine:
         
         # 2. Hard Stop (Fixed or ATR?)
         # Use Fixed % as absolute disaster stop
-        if pnl_pct <= self.stop_loss_pct:
+        if pnl_pct <= stop_val:
             return {'exit': True, 'reason': 'STOP_LOSS', 'pnl_pct': pnl_pct}
             
         # 3. ATR Stop (if available data)
@@ -193,7 +212,10 @@ class ZebraExitEngine:
                 return {'exit': True, 'reason': 'ATR_STOP', 'pnl_pct': pnl_pct}
         
         # 4. Trailing Stop
-        trail_res = self.trailing.evaluate(entry_price, current_price, high_watermark, entry_debit)
+        trail_res = self.trailing.evaluate(
+            entry_price, current_price, high_watermark, entry_debit, 
+            activation_pct=trail_act, trailing_pct=trail_val
+        )
         if trail_res['exit']:
             return {'exit': True, 'reason': 'TRAILING_STOP', 'pnl_pct': pnl_pct, 'details': trail_res['details']}
             
@@ -219,7 +241,7 @@ class ZebraExitEngine:
             return {'exit': True, 'reason': 'STAGNATION_EXIT', 'pnl_pct': pnl_pct, 'details': stag_res['details']}
 
         # 9. Time Exit (Absolute max duration)
-        if days_held >= self.time_exit_days:
+        if days_held >= time_exit_val:
             return {'exit': True, 'reason': 'TIME_EXIT', 'pnl_pct': pnl_pct}
             
         return {'exit': False}

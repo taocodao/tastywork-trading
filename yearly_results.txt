@@ -1,0 +1,375 @@
+﻿python : C:\Users\erich\AppData\Roaming\Python\P
+ython310\site-packages\google\api_core\_python_v
+ersion_support.py:275: FutureWarning: You are us
+ing a Python version (3.10.7) which Google will 
+stop supporting in new releases of google.api_co
+re once it reaches its end of life (2026-10-04).
+ Please upgrade to the latest Python version, or
+ at least Python 3.11, to continue receiving upd
+ates for google.api_core past that date.
+At line:1 char:1
++ python src/zebra/yearly_verification.py 2>&1 |
+ Out-File -FilePath yea ...
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (C: 
+   \Users\erich\...past that date.:String) [],  
+   RemoteException
+    + FullyQualifiedErrorId : NativeCommandErro 
+   r
+ 
+  warnings.warn(message, FutureWarning)
+C:\Users\erich\AppData\Roaming\Python\Python310\
+site-packages\google\api_core\_python_version_su
+pport.py:275: FutureWarning: You are using a Pyt
+hon version (3.10.7) which Google will stop supp
+orting in new releases of google.cloud.secretman
+ager_v1 once it reaches its end of life (2026-10
+-04). Please upgrade to the latest Python versio
+n, or at least Python 3.11, to continue receivin
+g updates for google.cloud.secretmanager_v1 past
+ that date.
+  warnings.warn(message, FutureWarning)
+Cannot fetch secret 'tastytrade_client_id': GOOG
+LE_CLOUD_PROJECT environment variable not set.
+Cannot fetch secret 'tastytrade_client_secret': 
+GOOGLE_CLOUD_PROJECT environment variable not se
+t.
+Cannot fetch secret 'tastytrade_refresh_token': 
+GOOGLE_CLOUD_PROJECT environment variable not se
+t.
+Cannot fetch secret 'tastytrade_username': GOOGL
+E_CLOUD_PROJECT environment variable not set.
+Cannot fetch secret 'tastytrade_password': GOOGL
+E_CLOUD_PROJECT environment variable not set.
+2026-02-16 10:35:03,664 - Fetching data from 202
+0-01-02 to 2022-12-31 for 30 symbols...
+2026-02-16 10:35:03,664 - Fetching SPY data for 
+regime detection...
+2026-02-16 10:35:10,355 - ML Model CV Precision:
+ 0.52
+2026-02-16 10:35:10,406 - ML Model trained on 39
+3 trades.
+2026-02-16 10:35:10,406 - Fetching data from 202
+2-01-01 to 2023-12-31 for 30 symbols...
+2026-02-16 10:35:10,407 - Fetching SPY data for 
+regime detection...
+2026-02-16 10:35:17,012 - Fetching data from 202
+3-01-01 to 2024-12-31 for 30 symbols...
+2026-02-16 10:35:17,013 - Fetching SPY data for 
+regime detection...
+2026-02-16 10:35:23,702 - Fetching data from 202
+4-01-02 to 2026-02-16 for 30 symbols...
+2026-02-16 10:35:23,702 - Fetching SPY data for 
+regime detection...
+
+================================================================================
+ZEBRA STRATEGY - YEARLY VERIFICATION (PRODUCTION CODE)
+================================================================================
+
+[Phase 0] Training ML Model on Historical Data (2021-2022)...
+Model Training Complete.
+
+
+running Simulation for: 2023 (2023-01-01 to 2023-12-31)
+------------------------------------------------------------
+
+Closed Trades (65):
+Entry Date   | Symbol | Type  | Cost      | PnL        | ROI%   | Reason    
+--------------------------------------------------------------------------------
+2023-01-09   | HD     | LONG  | -         | $-883.46   | -9.7   | Trailing Stop (15%)
+2023-01-10   | NVDA   | LONG  | -         | $2385.11   | 20.6   | Trailing Stop (15%)
+2023-02-03   | CAT    | LONG  | -         | $-1251.88  | -13.2  | Trailing Stop (15%)
+2023-02-15   | GOOGL  | LONG  | -         | $-2080.48  | -21.9  | Trailing Stop (15%)
+2023-02-16   | GOOGL  | LONG  | -         | $-1493.49  | -16.1  | Trailing Stop (15%)
+2023-02-10   | CAT    | LONG  | -         | $-1612.38  | -17.0  | Trailing Stop (15%)
+2023-02-13   | CAT    | LONG  | -         | $-1656.31  | -17.4  | Trailing Stop (15%)
+2023-02-15   | CAT    | LONG  | -         | $-1722.12  | -18.1  | Trailing Stop (15%)
+2023-02-21   | AMZN   | LONG  | -         | $-931.92   | -11.0  | Trailing Stop (15%)
+2023-02-22   | AMZN   | LONG  | -         | $-1654.78  | -15.8  | Trailing Stop (15%)
+2023-02-23   | AMZN   | LONG  | -         | $-1667.15  | -15.8  | Trailing Stop (15%)
+2023-02-24   | AMZN   | LONG  | -         | $-1052.71  | -13.3  | Trailing Stop (15%)
+2023-03-01   | V      | LONG  | -         | $-477.12   | -5.0   | Trailing Stop (15%)
+2023-02-22   | MSFT   | LONG  | -         | $2540.52   | 30.4   | Time Exit (25d)
+2023-02-23   | META   | LONG  | -         | $4835.37   | 57.4   | Time Exit (25d)
+2023-03-01   | QQQ    | LONG  | -         | $2130.44   | 22.2   | Time Exit (25d)
+2023-03-01   | AAPL   | LONG  | -         | $3179.96   | 33.1   | Time Exit (25d)
+2023-03-10   | TSLA   | LONG  | -         | $4539.49   | 46.8   | Trailing Stop (15%)
+2023-03-23   | TSLA   | LONG  | -         | $418.52    | 4.2    | Trailing Stop (15%)
+2023-03-10   | QQQ    | LONG  | -         | $3142.64   | 40.5   | Time Exit (25d)
+2023-05-02   | XOM    | LONG  | -         | $-1689.10  | -16.6  | Trailing Stop (15%)
+2023-04-28   | UNH    | LONG  | -         | $-1315.57  | -12.9  | Trailing Stop (15%)
+2023-05-01   | UNH    | LONG  | -         | $-1584.33  | -15.4  | Trailing Stop (15%)
+2023-04-26   | UNH    | LONG  | -         | $-458.38   | -4.5   | Time Exit (25d)
+2023-05-03   | SBUX   | LONG  | -         | $-1390.88  | -14.0  | Trailing Stop (15%)
+2023-05-11   | SLV    | LONG  | -         | $-1973.08  | -20.0  | Trailing Stop (15%)
+2023-05-02   | UNH    | LONG  | -         | $-1915.23  | -15.0  | Trailing Stop (15%)
+2023-05-22   | SBUX   | LONG  | -         | $-2017.48  | -17.6  | Trailing Stop (15%)
+2023-05-23   | LLY    | LONG  | -         | $2154.36   | 24.4   | Time Exit (25d)
+2023-05-25   | PEP    | LONG  | -         | $303.99    | 3.5    | Time Exit (25d)
+2023-05-26   | PEP    | LONG  | -         | $353.98    | 4.1    | Time Exit (25d)
+2023-05-31   | MA     | LONG  | -         | $3161.87   | 36.7   | Time Exit (45d)
+2023-06-01   | PEP    | LONG  | -         | $324.90    | 3.0    | Time Exit (45d)
+2023-06-09   | PEP    | LONG  | -         | $1265.19   | 14.3   | Time Exit (45d)
+2023-07-24   | TSLA   | LONG  | -         | $-2028.53  | -20.1  | Trailing Stop (20%)
+2023-08-02   | TSLA   | LONG  | -         | $-2646.47  | -19.5  | Trailing Stop (20%)
+2023-06-27   | GOOGL  | LONG  | -         | $3886.22   | 33.5   | Time Exit (45d)
+2023-07-27   | MSFT   | LONG  | -         | $-1475.39  | -13.2  | Trailing Stop (20%)
+2023-06-30   | GOOGL  | LONG  | -         | $3236.89   | 34.4   | Time Exit (25d)
+2023-07-10   | GOOGL  | LONG  | -         | $5373.97   | 47.6   | Time Exit (25d)
+2023-07-11   | GOOGL  | LONG  | -         | $4127.15   | 45.1   | Time Exit (25d)
+2023-08-03   | SLV    | LONG  | -         | $-1972.45  | -17.9  | Trailing Stop (15%)
+2023-08-15   | META   | LONG  | -         | $-1590.40  | -22.5  | Trailing Stop (15%)
+2023-08-16   | META   | LONG  | -         | $-1975.19  | -15.2  | Trailing Stop (15%)
+2023-08-14   | NVDA   | LONG  | -         | $2153.40   | 20.4   | Trailing Stop (15%)
+2023-08-15   | NVDA   | LONG  | -         | $1977.68   | 18.7   | Trailing Stop (15%)
+2023-08-17   | NVDA   | LONG  | -         | $2480.80   | 24.7   | Trailing Stop (15%)
+2023-08-18   | NVDA   | LONG  | -         | $2515.59   | 25.2   | Trailing Stop (15%)
+2023-08-17   | AMZN   | LONG  | -         | $1657.74   | 24.7   | Time Exit (25d)
+2023-08-18   | AMZN   | LONG  | -         | $2150.11   | 21.6   | Time Exit (25d)
+2023-09-20   | SLV    | LONG  | -         | $-1408.26  | -12.0  | Trailing Stop (15%)
+2023-09-21   | SLV    | LONG  | -         | $-1611.97  | -13.8  | Trailing Stop (15%)
+2023-10-03   | TSLA   | LONG  | -         | $726.54    | 6.4    | Trailing Stop (15%)
+2023-10-05   | TSLA   | LONG  | -         | $-1760.30  | -14.5  | Trailing Stop (15%)
+2023-10-06   | TSLA   | LONG  | -         | $-1948.67  | -15.1  | Trailing Stop (15%)
+2023-09-28   | LLY    | LONG  | -         | $3936.54   | 27.3   | Trailing Stop (15%)
+2023-09-26   | GOOGL  | LONG  | -         | $3144.37   | 22.0   | Time Exit (25d)
+2023-10-03   | LLY    | LONG  | -         | $5239.06   | 37.2   | Trailing Stop (15%)
+2023-10-20   | META   | LONG  | -         | $-1027.69  | -12.3  | Trailing Stop (15%)
+2023-10-20   | XOM    | LONG  | -         | $-2579.44  | -20.6  | Trailing Stop (15%)
+2023-11-02   | LLY    | LONG  | -         | $839.40    | 6.9    | Trailing Stop (15%)
+2023-10-30   | LLY    | LONG  | -         | $1839.74   | 15.3   | Trailing Stop (15%)
+2023-11-03   | LLY    | LONG  | -         | $2108.45   | 14.2   | Trailing Stop (15%)
+2023-11-29   | SBUX   | LONG  | -         | $-2856.78  | -22.7  | Trailing Stop (20%)
+2023-12-01   | SBUX   | LONG  | -         | $-2509.70  | -20.0  | Trailing Stop (20%)
+
+Open Trades (6) [Unrealized]:
+Entry Date   | Symbol | Cost      | Cur Val   | Unreal PnL
+--------------------------------------------------------------------------------
+2023-11-30   | NVDA   | $12555    | $15151    | $2595.62  
+2023-12-01   | NVDA   | $12545    | $15157    | $2611.84  
+2023-12-05   | SBUX   | $15034    | $14969    | $-64.98   
+2023-12-05   | NVDA   | $12027    | $14793    | $2765.33  
+2023-12-07   | NVDA   | $12197    | $14993    | $2795.41  
+2023-12-07   | SLV    | $8132     | $7938     | $-193.82  
+
+Summary:
+Total Trades:     65 Closed + 6 Open
+Win Rate (Closed):47.7%
+Realized P&L:     $21,910.93
+Unrealized P&L:   $10,509.40
+Total P&L:        $32,420.33
+Period ROI:       32.4%
+================================================================================
+
+running Simulation for: 2024 (2024-01-01 to 2024-12-31)
+------------------------------------------------------------
+
+Closed Trades (74):
+Entry Date   | Symbol | Type  | Cost      | PnL        | ROI%   | Reason    
+--------------------------------------------------------------------------------
+2024-01-04   | TSLA   | LONG  | -         | $-2809.45  | -18.7  | Trailing Stop (20%)
+2024-01-09   | TSLA   | LONG  | -         | $-6270.03  | -27.7  | Trailing Stop (20%)
+2024-01-10   | AAPL   | LONG  | -         | $-1118.44  | -5.9   | Trailing Stop (20%)
+2024-01-25   | TLT    | LONG  | -         | $-1603.18  | -7.5   | Trailing Stop (20%)
+2024-02-02   | GOOGL  | LONG  | -         | $-1406.18  | -6.6   | Trailing Stop (20%)
+2024-02-05   | GOOGL  | LONG  | -         | $-1372.90  | -9.9   | Trailing Stop (20%)
+2024-02-15   | GOOGL  | LONG  | -         | $-4225.63  | -19.2  | Trailing Stop (20%)
+2024-01-16   | IWM    | LONG  | -         | $6425.39   | 27.0   | Time Exit (45d)
+2024-01-16   | CVX    | LONG  | -         | $6065.46   | 25.5   | Time Exit (45d)
+2024-01-17   | IWM    | LONG  | -         | $5530.13   | 29.5   | Time Exit (45d)
+2024-03-27   | NVDA   | LONG  | -         | $-4235.51  | -20.1  | Trailing Stop (20%)
+2024-04-09   | HD     | LONG  | -         | $-4292.77  | -20.8  | Trailing Stop (20%)
+2024-04-15   | NVDA   | LONG  | -         | $-11549.97 | -46.0  | Trailing Stop (15%)
+2024-04-19   | CAT    | LONG  | -         | $-3627.30  | -19.4  | Trailing Stop (15%)
+2024-04-24   | META   | LONG  | -         | $-8049.77  | -42.3  | Trailing Stop (15%)
+2024-05-01   | TSLA   | LONG  | -         | $-2209.17  | -12.4  | Trailing Stop (15%)
+2024-04-19   | AMZN   | LONG  | -         | $4862.86   | 26.0   | Time Exit (25d)
+2024-05-01   | DE     | LONG  | -         | $-495.62   | -2.8   | Trailing Stop (20%)
+2024-05-15   | TSLA   | LONG  | -         | $-279.37   | -1.4   | Trailing Stop (20%)
+2024-05-17   | TSLA   | LONG  | -         | $-1862.16  | -9.0   | Trailing Stop (20%)
+2024-04-24   | AMZN   | LONG  | -         | $-767.95   | -4.0   | Trailing Stop (20%)
+2024-04-30   | AMZN   | LONG  | -         | $32.94     | 0.2    | Trailing Stop (20%)
+2024-05-01   | SLV    | LONG  | -         | $9327.44   | 41.9   | Trailing Stop (20%)
+2024-05-29   | PEP    | LONG  | -         | $-3071.21  | -15.5  | Trailing Stop (20%)
+2024-06-03   | PEP    | LONG  | -         | $-2869.33  | -15.2  | Trailing Stop (20%)
+2024-06-13   | SLV    | LONG  | -         | $-319.89   | -1.7   | Trailing Stop (20%)
+2024-05-28   | TSLA   | LONG  | -         | $31314.86  | 157.3  | Time Exit (45d)
+2024-05-29   | UNH    | LONG  | -         | $4441.09   | 22.4   | Time Exit (45d)
+2024-07-03   | NVDA   | LONG  | -         | $-1421.58  | -7.3   | Trailing Stop (20%)
+2024-07-12   | META   | LONG  | -         | $-6067.78  | -30.1  | Trailing Stop (20%)
+2024-06-07   | UNH    | LONG  | -         | $12227.69  | 52.7   | Time Exit (45d)
+2024-06-10   | TSLA   | LONG  | -         | $16629.73  | 92.7   | Trailing Stop (20%)
+2024-06-11   | TSLA   | LONG  | -         | $17897.53  | 101.9  | Trailing Stop (20%)
+2024-07-22   | NVDA   | LONG  | -         | $-9570.67  | -30.3  | Trailing Stop (20%)
+2024-06-12   | JPM    | LONG  | -         | $6200.45   | 33.9   | Time Exit (25d)
+2024-07-18   | LLY    | LONG  | -         | $-5307.91  | -13.8  | Trailing Stop (15%)
+2024-07-18   | GOOGL  | LONG  | -         | $-7449.47  | -24.1  | Trailing Stop (15%)
+2024-07-24   | LLY    | LONG  | -         | $-4696.77  | -18.1  | Trailing Stop (15%)
+2024-07-29   | TSLA   | LONG  | -         | $-4956.86  | -16.4  | Trailing Stop (15%)
+2024-07-24   | QQQ    | LONG  | -         | $-3511.05  | -13.5  | Trailing Stop (15%)
+2024-07-31   | AMZN   | LONG  | -         | $-10055.93 | -41.0  | Trailing Stop (15%)
+2024-07-25   | AAPL   | LONG  | -         | $-3884.36  | -16.2  | Trailing Stop (15%)
+2024-07-26   | AAPL   | LONG  | -         | $-4083.79  | -16.9  | Trailing Stop (15%)
+2024-07-29   | AAPL   | LONG  | -         | $-4135.04  | -17.1  | Trailing Stop (15%)
+2024-07-30   | AAPL   | LONG  | -         | $-5279.51  | -18.0  | Trailing Stop (15%)
+2024-08-02   | AAPL   | LONG  | -         | $-5425.74  | -19.6  | Trailing Stop (15%)
+2024-08-02   | JPM    | LONG  | -         | $3649.43   | 13.2   | Time Exit (10d)
+2024-08-13   | TSLA   | LONG  | -         | $-3171.12  | -12.5  | Trailing Stop (10%)
+2024-08-05   | MA     | LONG  | -         | $2910.12   | 23.2   | Time Exit (10d)
+2024-08-19   | TSLA   | LONG  | -         | $-4676.50  | -22.0  | Trailing Stop (15%)
+2024-08-06   | IWM    | LONG  | -         | $2837.42   | 14.7   | Time Exit (25d)
+2024-08-07   | JPM    | LONG  | -         | $7104.70   | 37.0   | Time Exit (25d)
+2024-08-15   | IWM    | LONG  | -         | $-475.42   | -2.3   | Trailing Stop (15%)
+2024-08-16   | IWM    | LONG  | -         | $-677.64   | -3.3   | Trailing Stop (15%)
+2024-08-14   | IWM    | LONG  | -         | $12.20     | 0.1    | Trailing Stop (15%)
+2024-09-09   | LLY    | LONG  | -         | $-3049.72  | -15.2  | Trailing Stop (15%)
+2024-09-17   | LLY    | LONG  | -         | $-2885.23  | -13.5  | Trailing Stop (15%)
+2024-09-17   | NVDA   | LONG  | -         | $741.86    | 3.5    | Trailing Stop (15%)
+2024-09-09   | META   | LONG  | -         | $11479.75  | 45.8   | Time Exit (45d)
+2024-09-10   | META   | LONG  | -         | $10012.95  | 50.2   | Time Exit (45d)
+2024-09-17   | JPM    | LONG  | -         | $5177.23   | 24.3   | Time Exit (45d)
+2024-10-09   | SLV    | LONG  | -         | $5146.55   | 21.8   | Trailing Stop (20%)
+2024-09-27   | JPM    | LONG  | -         | $10973.47  | 48.9   | Time Exit (25d)
+2024-10-01   | JPM    | LONG  | -         | $8357.70   | 56.8   | Time Exit (25d)
+2024-10-25   | MCD    | LONG  | -         | $-1257.40  | -5.1   | Time Exit (25d)
+2024-10-31   | MCD    | LONG  | -         | $-1718.69  | -7.1   | Trailing Stop (15%)
+2024-11-01   | MCD    | LONG  | -         | $-2708.55  | -11.1  | Trailing Stop (15%)
+2024-10-29   | XOM    | LONG  | -         | $2482.38   | 9.8    | Time Exit (25d)
+2024-11-26   | NVDA   | LONG  | -         | $-2308.51  | -6.8   | Trailing Stop (20%)
+2024-12-06   | NVDA   | LONG  | -         | $-4295.98  | -21.1  | Trailing Stop (20%)
+2024-11-06   | HD     | LONG  | -         | $951.10    | 3.5    | Trailing Stop (20%)
+2024-11-08   | SLV    | LONG  | -         | $-9104.29  | -26.9  | Trailing Stop (20%)
+2024-11-21   | AMZN   | LONG  | -         | $12249.46  | 47.6   | Time Exit (25d)
+2024-11-22   | AMZN   | LONG  | -         | $13248.07  | 50.5   | Time Exit (25d)
+
+Open Trades (5) [Unrealized]:
+Entry Date   | Symbol | Cost      | Cur Val   | Unreal PnL
+--------------------------------------------------------------------------------
+2024-12-20   | PG     | $26643    | $25762    | $-881.56  
+2024-12-20   | META   | $26643    | $27468    | $824.33   
+2024-12-23   | DE     | $26946    | $24828    | $-2118.07 
+2024-12-24   | DE     | $27683    | $25419    | $-2263.89 
+2024-12-26   | IWM    | $27450    | $24907    | $-2542.42 
+
+Summary:
+Total Trades:     74 Closed + 5 Open
+Win Rate (Closed):37.8%
+Realized P&L:     $43,678.61
+Unrealized P&L:   $-6,981.62
+Total P&L:        $36,696.99
+Period ROI:       36.7%
+================================================================================
+
+running Simulation for: 2025-2026 (2025-01-01 to 2026-02-16)
+------------------------------------------------------------
+
+Closed Trades (92):
+Entry Date   | Symbol | Type  | Cost      | PnL        | ROI%   | Reason    
+--------------------------------------------------------------------------------
+2025-01-03   | TSLA   | LONG  | -         | $-2952.51  | -16.1  | Trailing Stop (15%)
+2025-01-06   | TSLA   | LONG  | -         | $-2394.80  | -16.3  | Trailing Stop (15%)
+2025-01-07   | AAPL   | LONG  | -         | $-2104.44  | -15.4  | Trailing Stop (15%)
+2025-01-08   | AAPL   | LONG  | -         | $-2178.29  | -16.1  | Trailing Stop (15%)
+2025-01-10   | AAPL   | LONG  | -         | $-2453.65  | -15.1  | Trailing Stop (15%)
+2025-01-15   | TSLA   | LONG  | -         | $-2045.49  | -15.6  | Trailing Stop (15%)
+2025-01-14   | TSLA   | LONG  | -         | $1148.50   | 9.3    | Trailing Stop (15%)
+2025-01-16   | TSLA   | LONG  | -         | $-1202.81  | -7.8   | Trailing Stop (15%)
+2025-01-17   | TSLA   | LONG  | -         | $-2520.35  | -19.4  | Trailing Stop (15%)
+2025-01-22   | TSLA   | LONG  | -         | $-2228.84  | -17.8  | Trailing Stop (15%)
+2025-01-08   | MSFT   | LONG  | -         | $-1515.16  | -11.2  | Trailing Stop (15%)
+2025-02-24   | META   | LONG  | -         | $-2492.63  | -17.6  | Trailing Stop (15%)
+2025-02-24   | JPM    | LONG  | -         | $-2009.13  | -17.8  | Trailing Stop (15%)
+2025-02-26   | META   | LONG  | -         | $-2911.34  | -20.6  | Trailing Stop (15%)
+2025-03-03   | JPM    | LONG  | -         | $-1751.90  | -16.0  | Trailing Stop (15%)
+2025-03-03   | META   | LONG  | -         | $-1844.30  | -16.9  | Trailing Stop (15%)
+2025-03-06   | SBUX   | LONG  | -         | $-2137.44  | -16.9  | Trailing Stop (15%)
+2025-03-07   | SBUX   | LONG  | -         | $-2645.00  | -20.4  | Trailing Stop (15%)
+2025-03-05   | DE     | LONG  | -         | $637.78    | 6.2    | Trailing Stop (15%)
+2025-03-10   | MA     | LONG  | -         | $-1585.37  | -13.2  | Trailing Stop (10%)
+2025-03-10   | V      | LONG  | -         | $-1486.78  | -15.4  | Trailing Stop (10%)
+2025-03-12   | LLY    | LONG  | -         | $1822.51   | 19.7   | Time Exit (10d)
+2025-03-12   | V      | LONG  | -         | $1112.61   | 12.1   | Time Exit (10d)
+2025-03-12   | MCD    | LONG  | -         | $662.34    | 7.2    | Time Exit (10d)
+2025-03-14   | MCD    | LONG  | -         | $615.09    | 6.8    | Time Exit (10d)
+2025-03-24   | PG     | LONG  | -         | $-547.30   | -5.7   | Trailing Stop (15%)
+2025-03-26   | PG     | LONG  | -         | $-757.95   | -7.7   | Trailing Stop (15%)
+2025-03-28   | PG     | LONG  | -         | $-1085.59  | -10.9  | Trailing Stop (15%)
+2025-03-24   | PEP    | LONG  | -         | $-1239.33  | -10.3  | Trailing Stop (10%)
+2025-03-25   | PEP    | LONG  | -         | $-921.88   | -7.8   | Trailing Stop (10%)
+2025-03-28   | PEP    | LONG  | -         | $-1724.06  | -17.3  | Trailing Stop (10%)
+2025-04-04   | PEP    | LONG  | -         | $-1631.16  | -17.6  | Trailing Stop (10%)
+2025-04-04   | MCD    | LONG  | -         | $1143.44   | 12.3   | Time Exit (5d)
+2025-04-07   | KO     | LONG  | -         | $2028.63   | 23.2   | Time Exit (5d)
+2025-05-12   | KO     | LONG  | -         | $721.62    | 8.0    | Time Exit (25d)
+2025-05-14   | GLD    | LONG  | -         | $1423.40   | 15.8   | Time Exit (25d)
+2025-06-10   | TSLA   | LONG  | -         | $-1217.58  | -12.6  | Trailing Stop (15%)
+2025-06-09   | TSLA   | LONG  | -         | $2061.14   | 17.7   | Trailing Stop (20%)
+2025-06-24   | TSLA   | LONG  | -         | $-1968.82  | -20.1  | Trailing Stop (20%)
+2025-06-27   | PG     | LONG  | -         | $-1969.01  | -19.8  | Trailing Stop (20%)
+2025-07-18   | TSLA   | LONG  | -         | $-2011.47  | -30.1  | Trailing Stop (20%)
+2025-06-11   | AAPL   | LONG  | -         | $2507.84   | 26.0   | Time Exit (45d)
+2025-06-13   | HD     | LONG  | -         | $1998.63   | 21.0   | Time Exit (45d)
+2025-06-25   | V      | LONG  | -         | $-1267.01  | -10.5  | Trailing Stop (20%)
+2025-06-27   | V      | LONG  | -         | $-1407.10  | -14.1  | Trailing Stop (20%)
+2025-06-20   | GOOGL  | LONG  | -         | $5962.06   | 63.7   | Time Exit (45d)
+2025-07-18   | XOM    | LONG  | -         | $-658.22   | -6.6   | Trailing Stop (20%)
+2025-07-29   | LLY    | LONG  | -         | $-6986.32  | -64.9  | Trailing Stop (20%)
+2025-06-24   | GOOGL  | LONG  | -         | $5137.18   | 78.6   | Time Exit (45d)
+2025-08-11   | SBUX   | LONG  | -         | $-1168.91  | -12.3  | Trailing Stop (20%)
+2025-08-15   | SBUX   | LONG  | -         | $-2182.39  | -22.1  | Trailing Stop (20%)
+2025-07-30   | SLV    | LONG  | -         | $6212.51   | 58.0   | Time Exit (45d)
+2025-08-01   | AMZN   | LONG  | -         | $3300.12   | 26.6   | Time Exit (45d)
+2025-08-04   | XOM    | LONG  | -         | $3017.02   | 23.9   | Time Exit (45d)
+2025-08-15   | CAT    | LONG  | -         | $7156.36   | 58.1   | Time Exit (45d)
+2025-08-18   | MSFT   | LONG  | -         | $-330.70   | -4.9   | Time Exit (45d)
+2025-08-21   | MSFT   | LONG  | -         | $1409.21   | 14.7   | Time Exit (45d)
+2025-10-01   | HD     | LONG  | -         | $-2957.92  | -20.3  | Trailing Stop (20%)
+2025-10-07   | AMZN   | LONG  | -         | $-1328.72  | -12.0  | Trailing Stop (20%)
+2025-09-15   | PEP    | LONG  | -         | $4183.30   | 31.1   | Time Exit (25d)
+2025-09-16   | PEP    | LONG  | -         | $3583.83   | 33.1   | Time Exit (25d)
+2025-09-17   | PEP    | LONG  | -         | $4097.54   | 29.5   | Time Exit (25d)
+2025-09-19   | PEP    | LONG  | -         | $4015.24   | 28.1   | Time Exit (25d)
+2025-10-13   | TSLA   | LONG  | -         | $176.18    | 2.2    | Trailing Stop (15%)
+2025-10-20   | NVDA   | LONG  | -         | $3375.67   | 25.9   | Trailing Stop (15%)
+2025-10-23   | NVDA   | LONG  | -         | $3607.00   | 27.4   | Trailing Stop (15%)
+2025-10-16   | XOM    | LONG  | -         | $3174.42   | 24.9   | Time Exit (25d)
+2025-11-11   | TSLA   | LONG  | -         | $-3664.43  | -34.4  | Trailing Stop (15%)
+2025-11-04   | SLV    | LONG  | -         | $4260.76   | 24.2   | Trailing Stop (15%)
+2025-11-17   | AMZN   | LONG  | -         | $-2604.85  | -17.8  | Trailing Stop (15%)
+2025-10-29   | GLD    | LONG  | -         | $2453.94   | 16.4   | Time Exit (25d)
+2025-11-04   | GLD    | LONG  | -         | $4846.34   | 27.6   | Time Exit (25d)
+2025-11-05   | GLD    | LONG  | -         | $3218.85   | 22.8   | Time Exit (25d)
+2025-11-06   | GLD    | LONG  | -         | $3302.77   | 23.4   | Time Exit (25d)
+2025-12-02   | AMZN   | LONG  | -         | $-2329.69  | -15.0  | Trailing Stop (15%)
+2025-12-01   | AMZN   | LONG  | -         | $-3217.22  | -20.8  | Trailing Stop (15%)
+2025-12-03   | AMZN   | LONG  | -         | $-2784.80  | -18.1  | Trailing Stop (15%)
+2025-12-09   | JPM    | LONG  | -         | $1211.17   | 12.2   | Trailing Stop (20%)
+2026-01-22   | TSLA   | LONG  | -         | $-5878.53  | -29.9  | Trailing Stop (20%)
+2025-12-19   | CAT    | LONG  | -         | $7483.79   | 76.2   | Time Exit (45d)
+2025-12-22   | CAT    | LONG  | -         | $7119.07   | 71.9   | Time Exit (25d)
+2025-12-23   | CAT    | LONG  | -         | $10722.21  | 71.9   | Time Exit (25d)
+2025-12-24   | CAT    | LONG  | -         | $10634.08  | 71.0   | Time Exit (25d)
+2025-12-26   | CAT    | LONG  | -         | $10709.95  | 71.8   | Time Exit (25d)
+2025-12-29   | CAT    | LONG  | -         | $11046.27  | 75.7   | Time Exit (25d)
+2025-12-30   | CAT    | LONG  | -         | $11135.26  | 76.8   | Time Exit (25d)
+2026-02-02   | SLV    | LONG  | -         | $-7092.95  | -32.1  | Trailing Stop (15%)
+2026-02-04   | SLV    | LONG  | -         | $-14634.26 | -63.2  | Trailing Stop (15%)
+2026-02-05   | JPM    | LONG  | -         | $-1356.37  | -10.4  | Trailing Stop (15%)
+2026-02-10   | SLV    | LONG  | -         | $-7656.48  | -31.1  | Trailing Stop (15%)
+2026-02-11   | SLV    | LONG  | -         | $-11578.03 | -46.2  | Trailing Stop (15%)
+2026-02-06   | V      | LONG  | -         | $-2777.59  | -21.0  | Trailing Stop (15%)
+
+Open Trades (2) [Unrealized]:
+Entry Date   | Symbol | Cost      | Cur Val   | Unreal PnL
+--------------------------------------------------------------------------------
+2026-02-12   | SBUX   | $16957    | $15282    | $-1674.93 
+2026-02-13   | GLD    | $16561    | $16561    | $0.00     
+
+Summary:
+Total Trades:     92 Closed + 2 Open
+Win Rate (Closed):44.6%
+Realized P&L:     $25,038.68
+Unrealized P&L:   $-1,674.93
+Total P&L:        $23,363.75
+Period ROI:       23.4%
+================================================================================

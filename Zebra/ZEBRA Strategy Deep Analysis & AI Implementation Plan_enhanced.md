@@ -1,4 +1,4 @@
-<img src="https://r2cdn.perplexity.ai/pplx-full-logo-primary-dark%402x.png" style="height:64px;margin-right:32px"/>
+img src="https://r2cdn.perplexity.ai/pplx-full-logo-primary-dark%402x.png" style="height:64px;margin-right:32px"/>
 
 # Review the attached file, see if any enhancement or improvement needed. Base on that and your deep research, Re-Generate a very comprehensive implementation plan with every detail in the features process and workflow that leverage AI to improve total return and automate the trade using tastytrade platform,  so I can hand it over to antigravity to code.
 

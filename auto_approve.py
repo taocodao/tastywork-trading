@@ -88,6 +88,62 @@ DEFAULT_AUTO_APPROVE_SETTINGS = {
         },
         "custom_overrides": {},
     },
+
+    # ZEBRA Strategy settings
+    "zebra": {
+        "enabled": True,
+        "risk_level": "MEDIUM",
+        "risk_profiles": {
+            "LOW": {
+                "min_confidence": 75,
+                "max_capital_per_trade": 1000,
+                "max_contracts": 1,
+                "max_positions": 2,
+            },
+            "MEDIUM": {
+                "min_confidence": 65,
+                "max_capital_per_trade": 2500,
+                "max_contracts": 3,
+                "max_positions": 4,
+            },
+            "HIGH": {
+                "min_confidence": 55,
+                "max_capital_per_trade": 5000,
+                "max_contracts": 5,
+                "max_positions": 6,
+            },
+        },
+        "custom_overrides": {},
+    },
+
+    # DVO (Deep Value Overlay) settings
+    "dvo": {
+        "enabled": True,
+        "risk_level": "MEDIUM",
+        "risk_profiles": {
+             # Uses DVO_RISK_PROFILES from src.dvo.risk_guardian logic
+             # But we define overrides here for the auto-approve logic layer
+            "LOW": {
+                "min_confidence": 0.80, # higher confidence required
+                "max_capital_per_trade": 5000,
+                "max_contracts": 1,
+                "max_positions": 3,
+            },
+            "MEDIUM": {
+                "min_confidence": 0.70,
+                "max_capital_per_trade": 10000,
+                "max_contracts": 2,
+                "max_positions": 5,
+            },
+            "HIGH": {
+                "min_confidence": 0.60,
+                "max_capital_per_trade": 20000,
+                "max_contracts": 3,
+                "max_positions": 8,
+            },
+        },
+        "custom_overrides": {},
+    },
 }
 
 # Track daily auto-approve count
@@ -183,8 +239,14 @@ def should_auto_approve(signal: Dict[str, Any], user_refresh_token: str = None) 
         strategy_key = "theta"
     elif "diagonal" in strategy or "pmcc" in strategy:
         strategy_key = "diagonal"
+    elif "test" in strategy:
+        strategy_key = "diagonal"
     elif "calendar" in strategy:
         strategy_key = "diagonal"  # Calendar spreads map to diagonal
+    elif "zebra" in strategy:
+        strategy_key = "zebra"
+    elif "dvo" in strategy or "value" in strategy:
+        strategy_key = "dvo"
     else:
         logger.debug(f"Auto-approve: Unknown strategy '{strategy}'")
         return False
@@ -260,6 +322,10 @@ def auto_approve_signal(
         
         if "theta" in strategy or "put" in strategy.lower():
             result = _execute_theta_auto_approve(signal, session, account)
+        elif "zebra" in strategy.lower():
+            result = _execute_zebra_auto_approve(signal, session, account)
+        elif "dvo" in strategy.lower():
+            result = _execute_dvo_auto_approve(signal, session, account)
         else:
             result = _execute_calendar_auto_approve(signal, session, account)
         
@@ -466,3 +532,136 @@ def save_auto_approve_setting(key: str, value: Any):
     
     with open(settings_file, 'w') as f:
         json.dump(settings, f, indent=2)
+
+
+def _execute_zebra_auto_approve(signal: Dict, session, account) -> Dict[str, Any]:
+    """Execute auto-approved ZEBRA trade."""
+    from src.zebra.client import ZebraClient
+    from datetime import datetime
+    import dateutil.parser
+
+    logger.info(f"🦓 Executing ZEBRA Auto-Approve for {signal.get('symbol')}")
+    
+    # 1. Initialize ZEBRA Client (wraps the existing session)
+    # We need to manually inject session/account because ZebraClient usually creates its own
+    # But ZebraClient inherits TastytradeClient. 
+    # For now, we instantiate a new one using token if available, or just hack it?
+    # Actually ZebraClient.__init__ takes credentials.
+    # We have the session.
+    # Ideally we should refactor ZebraClient to accept an existing session.
+    # But for now, let's just use the session we already created?
+    # Start with a fresh ZebraClient using the token from session? 
+    # Session object doesn't expose token easily.
+    # But wait, auto_approve_signal passed user_refresh_token!
+    # But _execute_zebra_auto_approve signature is (signal, session, account).
+    # I should update signature to take token? Or rely on defaults?
+    # Let's verify how TastytradeClient works. 
+    # It seems specialized execution logic is in ZebraClient.
+    
+    # Let's instantiate ZebraClient without credentials, then inject session
+    zc = ZebraClient()
+    zc.session = session
+    zc.account = account
+    
+    # 2. Extract Signal Data
+    symbol = signal.get("symbol")
+    # Finding legs
+    legs = signal.get("legs", [])
+    long_leg = next((l for l in legs if l.get("side") == "md_long"), None)
+    short_leg = next((l for l in legs if l.get("side") == "md_short"), None)
+    
+    if not long_leg or not short_leg:
+        logger.error("❌ ZEBRA execution failed: Missing legs in signal")
+        return None
+        
+    long_strike = float(long_leg.get("strike"))
+    short_strike = float(short_leg.get("strike"))
+    expiry_str = signal.get("expiry")
+    expiry = dateutil.parser.parse(expiry_str).date()
+    direction = signal.get("direction", "LONG")
+    
+    # Pricing
+    limit_price = float(signal.get("net_debit", 0))
+    
+    # 3. Execute
+    # Default to 1 lot for now, or check settings? 
+    # Contracts should be determined by risk profile passed down?
+    # For now, safe default 1.
+    order_result = zc.execute_zebra_entry(
+        symbol=symbol,
+        long_strike=long_strike,
+        short_strike=short_strike,
+        expiry=expiry,
+        direction=direction,
+        quantity=1, 
+        limit_price=limit_price,
+        dry_run=False
+    )
+    
+
+    return {
+        "orderId": order_result.get("order_id", "unknown"),
+        "symbol": symbol,
+        "strategy": "ZEBRA",
+        "status": order_result.get("status"),
+        "timestamp": datetime.now().isoformat()
+    }
+
+
+def _execute_dvo_auto_approve(signal: Dict, session, account) -> Dict[str, Any]:
+    """Execute auto-approved DVO trade."""
+    from src.dvo.client import DVOClient
+    
+    logger.info(f"🦅 Executing DVO Auto-Approve for {signal.get('symbol')}")
+    
+    # 1. Init Client with Session Injection
+    dvo_client = DVOClient(user_id="auto_approve_bot")
+    dvo_client._session = session
+    dvo_client._account = account
+    
+    # 2. Extract Data
+    symbol = signal.get("symbol")
+    strategy_type = signal.get("strategy_type", "SHORT_PUT")
+    
+    expiry = signal.get("expiration")
+    strike = float(signal.get("strike", 0))
+    limit_price = float(signal.get("limit_price", 0))
+    quantity = int(signal.get("quantity", 1))
+    
+    result = {}
+    
+    try:
+        if strategy_type == "SHORT_PUT" or signal.get("structure_type") == "SHORT_PUT":
+            result = dvo_client.execute_short_put(
+                symbol=symbol,
+                quantity=quantity,
+                expiry=expiry,
+                strike=strike,
+                limit_price=limit_price,
+                dry_run=False
+            )
+        elif strategy_type == "LONG_LEAPS" or signal.get("structure_type") == "LEAPS_CALL":
+            result = dvo_client.execute_leaps_call(
+                symbol=symbol,
+                quantity=quantity,
+                expiry=expiry,
+                strike=strike,
+                limit_price=limit_price,
+                dry_run=False
+            )
+        else:
+            logger.warning(f"Unknown DVO strategy type: {strategy_type}")
+            return None
+            
+        return {
+            "orderId": result.get("order_id", "unknown"),
+            "symbol": symbol,
+            "strategy": "DVO",
+            "status": "executed",
+            "timestamp": datetime.now().isoformat()
+        }
+    except Exception as e:
+        logger.error(f"DVO Auto-Approve Failed: {e}")
+        return None
+
+

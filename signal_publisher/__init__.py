@@ -25,6 +25,14 @@ from .zebra import (
     publish_zebra_exit_signal
 )
 
+# DVO signals
+from .dvo import (
+    DVOEntrySignal,
+    DVOExitSignal,
+    publish_dvo_entry_signal,
+    publish_dvo_exit_signal
+)
+
 # Calendar signals
 from .calendar import (
     publish_calendar_signal,
@@ -46,6 +54,12 @@ __all__ = [
     'ZebraExitSignal',
     'publish_zebra_entry_signal',
     'publish_zebra_exit_signal',
+    
+    # DVO
+    'DVOEntrySignal',
+    'DVOExitSignal',
+    'publish_dvo_entry_signal',
+    'publish_dvo_exit_signal',
     
     # Calendar
     'publish_calendar_signal',

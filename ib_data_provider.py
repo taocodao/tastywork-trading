@@ -606,3 +606,45 @@ class IBDataProvider:
             import traceback
             traceback.print_exc()
             return []
+
+    def get_next_expiry(self, symbol: str, days_out: int = 45) -> Optional[date]:
+        """
+        Get the next expiration date approximately N days from now.
+        
+        Args:
+            symbol: Stock symbol
+            days_out: Number of days ahead (default: 45)
+            
+        Returns:
+            Expiration date or None if not found
+        """
+        if not self._connected and not self.connect():
+            return None
+            
+        try:
+            underlying = Stock(symbol, 'SMART', 'USD')
+            self.ib.qualifyContracts(underlying)
+            
+            chains = self.ib.reqSecDefOptParams(underlying.symbol, '', underlying.secType, underlying.conId)
+            smart_chains = [c for c in chains if c.exchange == 'SMART']
+            
+            if not smart_chains:
+                return None
+                
+            all_expirations = set()
+            for c in smart_chains:
+                all_expirations.update(c.expirations)
+                
+            if not all_expirations:
+                return None
+            
+            target_date = date.today() + timedelta(days=days_out)
+            available_dates = [datetime.strptime(d, '%Y%m%d').date() for d in all_expirations]
+            
+            # Find nearest
+            nearest_date = min(available_dates, key=lambda d: abs((d - target_date).days))
+            return nearest_date
+            
+        except Exception as e:
+            logger.error(f"Error getting next expiry for {symbol}: {e}")
+            return None

@@ -8,7 +8,7 @@ echo "========================================="
 echo ""
 
 # Navigate to project directory
-cd /home/ubuntu/tastywork-trading-1 || exit 1
+cd /home/ubuntu/tastywork-trading || exit 1
 
 echo "[1/6] Stopping running services..."
 # Stop any running processes

@@ -28,6 +28,9 @@ from src.zebra.lifecycle_engine import ZebraLifecycleEngine, ZebraPositionState,
 from src.zebra.security_scorer import ZebraSecurityScorer
 from src.zebra.entry_timing import ZebraEntryTiming
 from src.zebra.exit_engine import ZebraExitEngine
+from src.zebra.regime_detector import RegimeDetector
+from src.zebra.ml_signal_filter import ZebraMLFilter, FeatureExtractor
+from src.zebra.position_monitor import ZebraPositionMonitor
 from signal_publisher.zebra import ZebraEntrySignal, ZebraExitSignal, publish_zebra_entry_signal, publish_zebra_exit_signal
 
 # Setup logging
@@ -50,11 +53,56 @@ class ZebraMonitor:
         self.scorer = ZebraSecurityScorer()
         self.entry_timing = ZebraEntryTiming()
         self.exit_engine = ZebraExitEngine()
+        
+        # Enhanced Components (Phase 6)
+        self.regime_detector = RegimeDetector()
+        self.ml_filter = ZebraMLFilter()
+        
+        # Per-User Monitor (Phase 9)
+        self.position_monitor = ZebraPositionMonitor()
+        # Load optimized model if available
+        try:
+            import json
+            if os.path.exists("zebra_regime_params_prod.json"):
+                with open("zebra_regime_params_prod.json", "r") as f:
+                    params = json.load(f)
+                    self.regime_detector.set_optimized_params(params)
+                    logger.info("Loaded Optimized Regime Parameters.")
+        except Exception as e:
+            logger.error(f"Failed to load optimized params: {e}")
+
+        # Load optimized model if available
+        # Prefer production model
+        model_path = "zebra_ml_model_prod.joblib"
+        if not os.path.exists(model_path):
+             model_path = "zebra_ml_model_optimized.joblib" # Fallback to sim model
+             
+        self.ml_filter.load_model(model_path)
+        
         self.running = True
         
         # State
         self.last_scan_time = datetime.min
         self.last_check_time = datetime.min
+        self.last_retrain_time = datetime.now() # Don't retrain immediately on restart
+
+    def check_retrain_schedule(self):
+        """
+        Check if we need to retrain the ML model (Weekly on Sunday).
+        """
+        now = datetime.now()
+        # Retrain if Sunday and haven't retrained today
+        if now.weekday() == 6 and (now - self.last_retrain_time).days >= 1:
+             logger.info("Weekly ML Retraining Triggered...")
+             try:
+                 # Run training script as subprocess to avoid blocking main loop too long?
+                 # Or import and run? Import is better for state sharing but might block.
+                 # Subprocess is safer for memory.
+                 import subprocess
+                 subprocess.Popen([sys.executable, "src/zebra/train_production.py"])
+                 self.last_retrain_time = now
+             except Exception as e:
+                 logger.error(f"Retraining trigger failed: {e}")
 
     def connect(self):
         if not self.client.connect():
@@ -81,6 +129,9 @@ class ZebraMonitor:
                     if self._should_run_position_check(now):
                         self.run_position_check()
                         self.last_check_time = now.replace(tzinfo=None)
+                        
+                    # 3. Retraining Check
+                    self.check_retrain_schedule()
                         
                 else:
                     logger.debug("Market closed. Sleeping...")
@@ -119,17 +170,36 @@ class ZebraMonitor:
         logger.info("Starting Enhanced Entry Scan...")
         symbols = self.universe.get_eligible_symbols()
         
-        # Determine Market Regime once per scan
-        # Use SPY as regime proxy
-        spy_df = self.client.get_historical_data("SPY") # Assuming this exists or works
-        regime = "NORMAL"
-        if spy_df is not None and not spy_df.empty:
-             # Basic regime check for logging
-             temp_timing = ZebraEntryTiming()
-             # We need more data for real regime, but for logs we'll just proceed symbol-by-symbol
-             pass
+        # 0. Detect Market Regime
+        # Ensure data availability
+        try:
+            now = datetime.now()
+            self.regime_detector.fetch_spy_data(now - timedelta(days=60), now)
+            regime_label, regime_params = self.regime_detector.get_regime(now)
+            logger.info(f"Market Regime: {regime_label}")
+            
+            if regime_label == 'CRISIS':
+                logger.warning("CRISIS Regime detected. Skipping entry scan.")
+                return
+        except Exception as e:
+            logger.error(f"Regime detection failed: {e}")
+            regime_label = "NORMAL" # Fallback
+            regime_params = {}
+
+        # Fetch open positions for limit check
+        open_pos_symbols = []
+        try:
+            positions = self.client.get_zebra_positions()
+            open_pos_symbols = [p['symbol'] for p in positions]
+        except Exception:
+            pass # Use empty list if fetch fails
 
         for symbol in symbols:
+            # Per-Symbol Limit Check (Phase 8)
+            if open_pos_symbols.count(symbol) >= 2:
+                logger.debug(f"Skipping {symbol}: Already have {open_pos_symbols.count(symbol)} positions.")
+                continue
+
             try:
                 # 1. Fetch data for scoring
                 df = self.client.get_historical_data(symbol)
@@ -143,7 +213,27 @@ class ZebraMonitor:
                 if score_res['composite_score'] < ZEBRA_MIN_DIRECTIONAL_CONFIDENCE:
                     continue
                 
-                # 3. Entry Timing & Regime Adjustment
+                # 3. ML Signal Filter (Guardrail)
+                # Feature Extraction
+                # Create candidate dict for extractor
+                cand_dict = {
+                    'symbol': symbol,
+                    'price': df.iloc[-1]['Close'],
+                    'Drop_Pct': (df['High'].iloc[-20:].max() - df.iloc[-1]['Close']) / df['High'].iloc[-20:].max() * 100,
+                    'RSI': score_res.get('rsi', 50), # Assuming scorer returns RSI
+                    'SMA50': df['Close'].rolling(50).mean().iloc[-1],
+                    'Close': df.iloc[-1]['Close'],
+                    'atr': 0 # placeholder if not calculated
+                }
+                
+                features = FeatureExtractor.extract(cand_dict, df, datetime.now())
+                should_trade, ml_conf = self.ml_filter.should_trade(features)
+                
+                if not should_trade:
+                    logger.info(f"ML Filter rejected {symbol} (Conf: {ml_conf:.2f})")
+                    continue
+
+                # 4. Entry Timing & Regime Adjustment
                 # Pass recent rows to timing engine
                 now_row = df.iloc[-1]
                 prev_rows = df.iloc[:-1]
@@ -153,7 +243,7 @@ class ZebraMonitor:
                     logger.info(f"Skipping {symbol} due to timing: {timing_res['reason']}")
                     continue
                 
-                logger.info(f"Entry Signal for {symbol}: Score {score_res['composite_score']:.1f} ({timing_res['regime']} regime)")
+                logger.info(f"Entry Signal for {symbol}: Score {score_res['composite_score']:.1f} (ML: {ml_conf:.2f})")
 
                 # 4. Construct Trade
                 price = now_row['Close']
@@ -162,10 +252,34 @@ class ZebraMonitor:
                 
                 structures = self.constructor.construct(symbol, price, direction=direction)
                 
-                if structures:
-                    best = structures[0]
-                    # Pass adjusted parameters (from timing) into the signal for lifecycle engine awareness
-                    self._publish_entry(best, score_res['composite_score'], price, timing_res.get('adjusted_params'))
+                    # Dynamic Position Sizing
+                    try:
+                        equity = self.client.get_account_equity()
+                        if equity <= 0: equity = 10000.0 # Safety fallback
+                        
+                        # Allocation Logic (Same as Simulation)
+                        # High Conviction: Score >= 80, ML >= 0.70 -> 15%
+                        # Standard: Score >= 65, ML >= 0.60 -> 12%
+                        # Marginal: -> 8%
+                        alloc_pct = 0.08
+                        if score_res['composite_score'] >= 80 and ml_conf >= 0.70:
+                            alloc_pct = 0.15
+                        elif score_res['composite_score'] >= 65 and ml_conf >= 0.60:
+                            alloc_pct = 0.12
+                            
+                        target_capital = equity * alloc_pct
+                        cost_per_unit = best.net_debit * 100
+                        
+                        num_contracts = int(target_capital / cost_per_unit)
+                        num_contracts = max(1, num_contracts) # Ensure at least 1 if valid
+                        
+                        # Cap at max contracts? Maybe 10?
+                        num_contracts = min(num_contracts, 10)
+                    except Exception as sz_err:
+                        logger.error(f"Sizing error: {sz_err}")
+                        num_contracts = 1
+
+                    self._publish_entry(best, score_res['composite_score'], price, signal_params, contracts=num_contracts)
                     
             except Exception as e:
                 logger.error(f"Error scanning {symbol}: {e}")
@@ -173,10 +287,26 @@ class ZebraMonitor:
     def run_position_check(self):
         logger.info("Checking Open Positions with Advanced Exit Engine...")
         
+        # 0. Run Per-User Position Monitor (Phase 9)
+        self.position_monitor.check_all_users()
+        
         # 1. Fetch positions from Tastytrade
         # Note: This requires logic to reconstruct ZEBRA complexes from flat legs
         # For now, we simulate the loop over what would be grouped positions
         positions = self.client.get_zebra_positions() # Assuming this handles grouping
+        
+        # Get Regime Params for Dynamic Exit
+        try:
+            now = datetime.now()
+            # Ensure data (cached or fetch)
+            # self.regime_detector.fetch_spy_data... (Done in entry scan? Optimize to share cache)
+            # Just call get_regime, it handles if data missing? No, need fetch.
+            # Assuming entry scan runs frequently or we fetch lightly here.
+            self.regime_detector.fetch_spy_data(now - timedelta(days=60), now) 
+            _, regime_params = self.regime_detector.get_regime(now)
+        except:
+             regime_params = {}
+        
         
         for pos in positions:
             try:
@@ -200,7 +330,7 @@ class ZebraMonitor:
                     'atr_at_entry': pos.get('atr_at_entry', 0)
                 }
                 
-                exit_signal = self.exit_engine.evaluate(eval_data)
+                exit_signal = self.exit_engine.evaluate(eval_data, override_params=regime_params)
                 
                 if exit_signal['exit']:
                     logger.info(f"EXIT SIGNAL for {symbol}: {exit_signal['reason']} ({exit_signal['priority']})")
@@ -213,7 +343,7 @@ class ZebraMonitor:
             except Exception as e:
                 logger.error(f"Error checking position {pos.get('symbol')}: {e}")
 
-    def _publish_entry(self, structure, confidence, price, params=None):
+    def _publish_entry(self, structure, confidence, price, params=None, contracts=1):
         # Determine current UTC time
         current_time_utc = datetime.utcnow()
         timestamp = int(current_time_utc.timestamp())
@@ -268,7 +398,7 @@ class ZebraMonitor:
             thesis_horizon_days=30,
             
             # Metadata
-            contracts=1,
+            contracts=contracts,
             rationale=rationale,
             strategy="zebra",
             created_at=current_time_utc

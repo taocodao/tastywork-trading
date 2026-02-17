@@ -188,11 +188,15 @@ class TastyHandler(BaseHTTPRequestHandler):
                 self._handle_diagonal_signals()
             elif self.path == '/diagonal/signals':
                 self._handle_diagonal_signals()
-            # ============================================
+            # =============================================================================
             # ZEBRA STRATEGY ROUTES
-            # ============================================
-            elif self.path == '/api/zebra/candidates':
-                self._handle_zebra_candidates()
+            # =============================================================================
+            elif self.path == '/api/zebra/scan':
+                self._handle_zebra_scan_trigger()
+            elif self.path == '/api/zebra/watchlist':
+                self._handle_zebra_watchlist_get()
+            elif self.path == '/api/zebra/revalidate':
+                self._handle_zebra_revalidate()
             else:
                 self._send_json({'error': 'Not found'}, 404)
         except Exception as e:
