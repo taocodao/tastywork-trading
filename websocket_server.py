@@ -36,7 +36,12 @@ async def register(websocket: WebSocketServerProtocol):
         # Theta strategy channels
         "theta_puts",
         "theta_entry",
-        "theta_exit"
+        "theta_exit",
+        "zebra",
+        "zebra_entry",
+        "dvo_entry",
+        "dvo_exit",
+        "diagonal_spread",
     }
     logger.info(f"Client connected. Total: {len(clients)}")
     
@@ -183,17 +188,25 @@ async def send_signal_history(websocket: WebSocketServerProtocol, channels: Set[
     active_signals = [s for s in signals if s.get('status') == 'pending']
     
     for signal in active_signals:
-        # Determine channel if not explicit
-        channel = 'calendar_spread' # Default
-        if 'iron_condor' in signal.get('strategy', '').lower():
-            channel = 'iron_condor'
-        elif 'vertical' in signal.get('strategy', '').lower():
-            channel = 'vertical_spread'
-            
-        if channel in channels or 'vertical' in channel and 'vertical_spread' in channels:
+        # Route to correct channel based on strategy
+        strategy = signal.get('strategy', '').lower()
+        if 'theta' in strategy:
+            signal_channel = 'theta_entry'
+        elif 'zebra' in strategy:
+            signal_channel = 'zebra_entry'
+        elif 'dvo' in strategy or 'value' in strategy:
+            signal_channel = 'dvo_entry'
+        elif 'iron_condor' in strategy:
+            signal_channel = 'iron_condor'
+        elif 'vertical' in strategy:
+            signal_channel = 'vertical_spread'
+        else:
+            signal_channel = 'calendar_spread'
+
+        if signal_channel in channels:
              message = json.dumps({
                 "type": "signal",
-                "channel": channel,
+                "channel": signal_channel,
                 "data": signal,
                 "timestamp": datetime.now().isoformat()
             })
