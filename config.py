@@ -363,6 +363,15 @@ ZEBRA_MIN_DIRECTIONAL_CONFIDENCE: float = 0.55   # ML minimum confidence to ente
 ZEBRA_MIN_COMPOSITE_SCORE: float = 60.0          # Minimum composite score (0-100)
 ZEBRA_MIN_CONSTRUCTION_SCORE: float = 70.0       # Minimum construction quality score
 
+# Delta & Construction Parameters
+ZEBRA_LONG_DELTA_MIN: int = 65           # Min delta for long legs
+ZEBRA_LONG_DELTA_MAX: int = 80           # Max delta for long legs
+ZEBRA_SHORT_DELTA_MIN: int = 45          # Min delta for short leg
+ZEBRA_SHORT_DELTA_MAX: int = 55          # Max delta for short leg
+ZEBRA_MAX_NET_EXTRINSIC: float = 0.50    # Max net extrinsic value in debit
+ZEBRA_MAX_DEBIT_PCT: float = 0.75        # Max debit as % of width (approx)
+ZEBRA_SLIPPAGE_WARNING_PCT: float = 0.05 # Warn if slippage > 5%
+
 # Position sizing
 ZEBRA_MAX_ALLOCATION_PCT: float = 0.15   # Max 15% of equity per position
 ZEBRA_DEFAULT_CONTRACTS: int = 1         # Default contract count
