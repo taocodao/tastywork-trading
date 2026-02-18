@@ -343,6 +343,36 @@ def get_max_daily_loss() -> float:
     return ACCOUNT_SIZE * (MAX_DAILY_LOSS_PCT / 100)
 
 
+# =============================================================================
+# ZEBRA STRATEGY CONFIGURATION
+# =============================================================================
+
+# Service control
+ZEBRA_ENABLED: bool = True
+
+# Scan intervals (minutes)
+ZEBRA_SCAN_INTERVAL_MIN: int = 15        # How often to scan for new entries
+ZEBRA_POSITION_CHECK_MIN: int = 5        # How often to check open positions
+
+# Trading window (ET)
+ZEBRA_ENTRY_WINDOW_START: str = "09:45"  # Don't enter before this time
+ZEBRA_ENTRY_WINDOW_END: str = "15:30"    # Don't enter after this time
+
+# Signal quality thresholds
+ZEBRA_MIN_DIRECTIONAL_CONFIDENCE: float = 0.55   # ML minimum confidence to enter
+ZEBRA_MIN_COMPOSITE_SCORE: float = 60.0          # Minimum composite score (0-100)
+ZEBRA_MIN_CONSTRUCTION_SCORE: float = 70.0       # Minimum construction quality score
+
+# Position sizing
+ZEBRA_MAX_ALLOCATION_PCT: float = 0.15   # Max 15% of equity per position
+ZEBRA_DEFAULT_CONTRACTS: int = 1         # Default contract count
+
+# Exit parameters
+ZEBRA_PROFIT_TARGET_PCT: float = 0.50    # Close at 50% of max profit
+ZEBRA_STOP_LOSS_PCT: float = 1.50        # Close at 150% of debit paid (loss)
+ZEBRA_MAX_DTE_THRESHOLD: int = 7         # Exit if DTE falls below this
+
+
 if __name__ == "__main__":
     print("Calendar Spreads Configuration")
     print("=" * 50)
