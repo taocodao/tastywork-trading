@@ -19,6 +19,12 @@ else
     exit 1
 fi
 
+# 2.5 Run Disk Cleanup
+if [ -f "cleanup.sh" ]; then
+    chmod +x cleanup.sh
+    ./cleanup.sh
+fi
+
 # 3. Install Dependencies
 echo "📦 Installing Python dependencies..."
 pip3 install yfinance sqlalchemy xgboost scikit-learn pandas numpy pytz --break-system-packages --quiet || echo "  (Some packages may already be installed)"
