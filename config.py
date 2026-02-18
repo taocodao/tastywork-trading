@@ -372,6 +372,21 @@ ZEBRA_PROFIT_TARGET_PCT: float = 0.50    # Close at 50% of max profit
 ZEBRA_STOP_LOSS_PCT: float = 1.50        # Close at 150% of debit paid (loss)
 ZEBRA_MAX_DTE_THRESHOLD: int = 7         # Exit if DTE falls below this
 
+# Universe & liquidity filters
+ZEBRA_UNIVERSE: List[str] = ["AAPL", "MSFT", "NVDA", "AMZN", "GOOGL", "META", "TSLA", "SPY", "QQQ", "IWM"]
+ZEBRA_MIN_ADV: int = 1_000_000           # Min average daily volume
+ZEBRA_MAX_ATM_SPREAD: float = 0.10       # Max ATM bid-ask spread ($)
+ZEBRA_MIN_OI: int = 500                  # Min open interest
+
+# Lifecycle / recenter parameters
+ZEBRA_TIME_EXIT_PCT: float = 0.75        # Exit if past 75% of max DTE elapsed
+ZEBRA_RECENTER_DOWN_PCT: float = -0.08   # Recenter if position down 8%
+ZEBRA_RECENTER_UP_PCT: float = 0.12      # Recenter if position up 12%
+ZEBRA_ASSIGNMENT_DTE: int = 5            # Exit if DTE <= 5 (assignment risk)
+ZEBRA_DIVIDEND_DAYS: int = 3             # Exit N days before ex-dividend date
+ZEBRA_MAX_RECENTERS: int = 2             # Max recenters allowed per position
+
+
 
 if __name__ == "__main__":
     print("Calendar Spreads Configuration")

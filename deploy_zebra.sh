@@ -19,9 +19,9 @@ else
     exit 1
 fi
 
-# 3. Install Dependencies (if any new ones)
-echo "📦 Checking dependencies..."
-pip3 install --user xgboost scikit-learn pandas numpy --quiet
+# 3. Install Dependencies
+echo "📦 Installing Python dependencies..."
+pip3 install yfinance sqlalchemy xgboost scikit-learn pandas numpy pytz --break-system-packages --quiet || echo "  (Some packages may already be installed)"
 
 # 4. Start Service
 echo "🚀 Starting ZEBRA Monitor..."

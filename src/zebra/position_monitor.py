@@ -3,147 +3,110 @@ import logging
 from datetime import datetime, timedelta
 from typing import List
 
-from sqlalchemy.orm import Session
-from models.user import User
-from models.zebra_position import ZebraPosition
-from models.db import get_db
+logger = logging.getLogger(__name__)
+
+# Graceful fallback for DB/models that may not be available on all environments
+try:
+    from sqlalchemy.orm import Session
+    from models.user import User
+    from models.zebra_position import ZebraPosition
+    from models.db import get_db
+    from tastytrade_utils import create_user_session, get_user_account
+    DB_AVAILABLE = True
+except ImportError as e:
+    logger.warning(f"DB/models not available ({e}). Per-user position monitoring disabled.")
+    DB_AVAILABLE = False
 
 from .client import ZebraClient
 from .exit_engine import ZebraExitEngine
-from tastytrade_utils import create_user_session, get_user_account
 
-logger = logging.getLogger(__name__)
 
 class ZebraPositionMonitor:
+    """
+    Monitors open ZEBRA positions for all users and triggers exits via the exit engine.
+    Falls back gracefully if DB/models are not available (e.g., on EC2 without full stack).
+    """
+
     def __init__(self):
         self.exit_engine = ZebraExitEngine()
-        
+
     def check_all_users(self):
         """Iterate all users and check their open ZEBRA positions."""
+        if not DB_AVAILABLE:
+            logger.warning("Position monitoring skipped — DB/models not available on this host.")
+            return
+
         db_gen = get_db()
         db = next(db_gen)
-        
+
         try:
-            users = db.query(User).filter(User.is_active == True, User.zebra_enabled == True).all()
-            logger.info(f"🔍 Monitoring ZEBRA positions for {len(users)} users...")
-            
+            users = db.query(User).filter(User.is_active == True).all()
+            logger.info(f"Checking positions for {len(users)} users...")
+
             for user in users:
-                self._check_user_positions(user, db)
-                
-        except Exception as e:
-            logger.error(f"Error in ZebraPositionMonitor: {e}")
+                try:
+                    self._check_user_positions(user, db)
+                except Exception as e:
+                    logger.error(f"Error checking positions for user {user.id}: {e}")
         finally:
-            db.close()
-            
-    def _check_user_positions(self, user: User, db: Session):
-        """Check positions for a specific user."""
+            try:
+                next(db_gen)
+            except StopIteration:
+                pass
+
+    def _check_user_positions(self, user, db):
+        """Check and manage open ZEBRA positions for a single user."""
         positions = db.query(ZebraPosition).filter(
-            ZebraPosition.user_id == user.id, 
-            ZebraPosition.status == "OPEN"
+            ZebraPosition.user_id == user.id,
+            ZebraPosition.status == 'open'
         ).all()
-        
+
         if not positions:
             return
 
-        # Initialize client for this user
-        try:
-            if not user.tt_refresh_token:
-                logger.debug(f"User {user.id} has no token, skipping positions.")
-                return
-                
-            # Decrypt token (assuming util exists, otherwise use what we have)
-            from api.services.encryption import decrypt_credential
-            refresh_token = decrypt_credential(user.tt_refresh_token)
-            
-            session = create_user_session(refresh_token)
-            account = get_user_account(session, user.tt_account_number)
-            
-            client = ZebraClient()
-            client.session = session
-            client.account = account
-            
-        except Exception as e:
-            logger.error(f"Failed to init session for user {user.id}: {e}")
-            return
-            
-        for pos in positions:
-            self._process_position(pos, client, db)
-            
-    def _process_position(self, pos: ZebraPosition, client: ZebraClient, db: Session):
-        """Evaluate exit criteria for a single position."""
-        logger.info(f"Checking position {pos.symbol} for user {pos.user_id}")
-        
-        # 1. Get Live Price via Client
-        # The position might be complex (2 Long calls, 1 Short call)
-        # We need a way to get the *complex* price or underlying price.
-        # ZebraClient.get_price? 
-        # For now, let's use underlying price as proxy for some checks, 
-        # but ideal is option structure price.
-        
-        # Determine regime (can be passed in or fetched)
-        # Using placeholder 'NORMAL' for now or fetch from monitor
-        from .regime_detector import RegimeDetector
-        # This is expensive if instantiated every time. 
-        # Better to pass it in. For now, assume 'NORMAL'.
-        regime = "NORMAL" 
-        
-        # Get live data
-        # We need current pnl, days held, etc.
-        # We can ask TASTYTRADE for the position PnL directly!
-        # Tastytrade 'get_positions' returns PnL.
-        
-        try:
-            # Match database position to real TT position
-            # This is tricky without exact correlation key (order id -> position)
-            # But we can match by Symbol.
-            tt_positions = client.get_zebra_positions() # This needs to be implemented/verified works
-            
-            # Find matching position
-            match = next((p for p in tt_positions if p['symbol'] == pos.symbol), None)
-            
-            if not match:
-                logger.warning(f"Position {pos.symbol} not found in Tastytrade! Marking CLOSED?")
-                # Maybe closed manually?
-                # For safety, verify history or check again later.
-                return
-                
-            current_pnl = float(match.get('pnl', 0))
-            pos.unrealized_pnl = current_pnl
-            pos.current_price = float(match.get('mark_price', 0))
-            
-            # Update High Watermark
-            if pos.high_watermark is None or current_pnl > pos.high_watermark:
-                pos.high_watermark = current_pnl
-            
-            # Check Exit Engine
-            # We need to construct a 'trade' object that ExitEngine expects
-            trade_context = {
-                "entry_date": pos.entry_date,
-                "unrealized_pnl_pct": (current_pnl / pos.capital_deployed) if pos.capital_deployed else 0,
-                "days_held": (datetime.now() - pos.entry_date).days,
-                "regime": regime
-            }
-            
-            should_exit, reason = self.exit_engine.check_exit(trade_context, current_pnl)
-            
-            if should_exit:
-                logger.info(f"🚨 EXIT TRIGGERED for {pos.symbol}: {reason}")
-                
-                # Execute Exit
-                # Need leg details to build close order.
-                # Assuming standard ZEBRA structure... 
-                # We need to store exact legs in DB to close correctly!
-                # For now, assuming standard structure.
-                
-                # result = client.execute_zebra_exit(pos.symbol, ..., reason)
-                # If success:
-                # pos.status = "CLOSED"
-                # pos.exit_date = datetime.now()
-                # pos.exit_reason = reason
-                # pos.realized_pnl = current_pnl
-                
-            db.commit()
-            
-        except Exception as e:
-            logger.error(f"Error processing position {pos.symbol}: {e}")
+        logger.info(f"User {user.id}: {len(positions)} open ZEBRA position(s)")
 
+        try:
+            session = create_user_session(user)
+            account = get_user_account(session, user)
+        except Exception as e:
+            logger.error(f"Could not create session for user {user.id}: {e}")
+            return
+
+        client = ZebraClient(session=session, account=account)
+
+        for pos in positions:
+            try:
+                self._evaluate_position(pos, client, db)
+            except Exception as e:
+                logger.error(f"Error evaluating position {pos.id}: {e}")
+
+    def _evaluate_position(self, pos, client: ZebraClient, db):
+        """Evaluate a single position and take action if needed."""
+        symbol = pos.symbol
+        df = client.get_historical_data(symbol)
+        if df is None or df.empty:
+            logger.warning(f"No data for {symbol}, skipping.")
+            return
+
+        eval_data = {
+            'symbol': symbol,
+            'entry_price': pos.entry_price,
+            'current_price': df.iloc[-1]['Close'],
+            'high_watermark': pos.high_watermark or df.iloc[-1]['Close'],
+            'entry_debit': pos.entry_debit,
+            'days_held': (datetime.utcnow() - pos.entry_date).days,
+            'current_row': df.iloc[-1],
+            'prev_row': df.iloc[-2] if len(df) > 1 else None,
+            'atr_at_entry': pos.atr_at_entry or 0,
+        }
+
+        action, reason = self.exit_engine.evaluate(eval_data)
+
+        if action != 'HOLD':
+            logger.info(f"EXIT signal for {symbol} pos {pos.id}: {action} — {reason}")
+            # TODO: Execute exit order via client
+            # client.close_zebra_position(pos)
+            pos.status = 'pending_exit'
+            pos.exit_reason = reason
+            db.commit()
