@@ -252,34 +252,34 @@ class ZebraMonitor:
                 
                 structures = self.constructor.construct(symbol, price, direction=direction)
                 
-                    # Dynamic Position Sizing
-                    try:
-                        equity = self.client.get_account_equity()
-                        if equity <= 0: equity = 10000.0 # Safety fallback
+                # Dynamic Position Sizing
+                try:
+                    equity = self.client.get_account_equity()
+                    if equity <= 0: equity = 10000.0 # Safety fallback
+                    
+                    # Allocation Logic (Same as Simulation)
+                    # High Conviction: Score >= 80, ML >= 0.70 -> 15%
+                    # Standard: Score >= 65, ML >= 0.60 -> 12%
+                    # Marginal: -> 8%
+                    alloc_pct = 0.08
+                    if score_res['composite_score'] >= 80 and ml_conf >= 0.70:
+                        alloc_pct = 0.15
+                    elif score_res['composite_score'] >= 65 and ml_conf >= 0.60:
+                        alloc_pct = 0.12
                         
-                        # Allocation Logic (Same as Simulation)
-                        # High Conviction: Score >= 80, ML >= 0.70 -> 15%
-                        # Standard: Score >= 65, ML >= 0.60 -> 12%
-                        # Marginal: -> 8%
-                        alloc_pct = 0.08
-                        if score_res['composite_score'] >= 80 and ml_conf >= 0.70:
-                            alloc_pct = 0.15
-                        elif score_res['composite_score'] >= 65 and ml_conf >= 0.60:
-                            alloc_pct = 0.12
-                            
-                        target_capital = equity * alloc_pct
-                        cost_per_unit = best.net_debit * 100
-                        
-                        num_contracts = int(target_capital / cost_per_unit)
-                        num_contracts = max(1, num_contracts) # Ensure at least 1 if valid
-                        
-                        # Cap at max contracts? Maybe 10?
-                        num_contracts = min(num_contracts, 10)
-                    except Exception as sz_err:
-                        logger.error(f"Sizing error: {sz_err}")
-                        num_contracts = 1
+                    target_capital = equity * alloc_pct
+                    cost_per_unit = best.net_debit * 100
+                    
+                    num_contracts = int(target_capital / cost_per_unit)
+                    num_contracts = max(1, num_contracts) # Ensure at least 1 if valid
+                    
+                    # Cap at max contracts? Maybe 10?
+                    num_contracts = min(num_contracts, 10)
+                except Exception as sz_err:
+                    logger.error(f"Sizing error: {sz_err}")
+                    num_contracts = 1
 
-                    self._publish_entry(best, score_res['composite_score'], price, signal_params, contracts=num_contracts)
+                self._publish_entry(best, score_res['composite_score'], price, signal_params, contracts=num_contracts)
                     
             except Exception as e:
                 logger.error(f"Error scanning {symbol}: {e}")
