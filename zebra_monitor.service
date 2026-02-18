@@ -5,8 +5,8 @@ After=network.target
 [Service]
 Type=simple
 User=ubuntu
-WorkingDirectory=/home/ubuntu/tastywork-trading-1
-Environment="PYTHONPATH=/home/ubuntu/tastywork-trading-1"
+WorkingDirectory=/home/ubuntu/tastywork-trading
+Environment="PYTHONPATH=/home/ubuntu/tastywork-trading"
 ExecStart=/usr/bin/python3 src/zebra/monitor.py
 Restart=always
 RestartSec=10
