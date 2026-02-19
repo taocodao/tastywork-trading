@@ -520,13 +520,17 @@ class SignalRepository:
 
     def get_all_signals(self, status: str = None, include_expired: bool = False) -> List[Signal]:
         """Get all signals, optionally filtered by status and expiration."""
+        from datetime import timedelta
         query = self.session.query(Signal)
         if status:
             query = query.filter(Signal.status == status)
         if not include_expired:
-            # Exclude expired signals
+            # Exclude expired signals AND signals older than 24h with no expiry set
+            now = datetime.utcnow()
+            max_age = now - timedelta(hours=24)
             query = query.filter(
-                (Signal.expires_at == None) | (Signal.expires_at > datetime.utcnow())
+                (Signal.expires_at > now) |  # Has expiry and not yet expired
+                ((Signal.expires_at == None) & (Signal.created_at > max_age))  # No expiry but recent
             )
         return query.order_by(Signal.created_at.desc()).all()
 
