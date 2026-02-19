@@ -61,13 +61,15 @@ class EarningsOpportunity:
 
 def is_market_hours() -> bool:
     """Check if we're in market hours (9:30 AM - 4:00 PM ET, weekdays)."""
-    now = datetime.now()
+    import pytz
+    et = pytz.timezone('US/Eastern')
+    now = datetime.now(et)
     
     # Skip weekends
     if now.weekday() >= 5:
         return False
     
-    # Market hours (simplified - doesn't account for holidays)
+    # Market hours in ET (EC2 runs UTC, so we must use timezone-aware comparison)
     market_open = now.replace(hour=9, minute=30, second=0, microsecond=0)
     market_close = now.replace(hour=16, minute=0, second=0, microsecond=0)
     
