@@ -225,6 +225,7 @@ def run_zebra_scanner() -> int:
     3. Construct trades
     4. Publish signals
     """
+    import config
     if not config.ZEBRA_ENABLED:
         return 0
         
