@@ -103,6 +103,10 @@ class TastytradeClient:
         try:
             from tastytrade import Session
             from tastytrade.session import Session as TastySession
+            import httpx
+            
+            # Set longer timeout for initial connection (default is 5s)
+            os.environ.setdefault('HTTPX_TIMEOUT', '15')
             
             logger.info(f"Connecting to Tastytrade {'(sandbox)' if self.use_sandbox else '(live)'}...")
             
