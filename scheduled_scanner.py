@@ -87,7 +87,7 @@ def run_scanner(use_mock: bool = False) -> int:
         Number of signals published
     """
     from scanner import CalendarSpreadScanner
-    from signal_publisher import publish_signals
+    from signal_publisher import publish_calendar_signal
     
     data_provider = None
     
@@ -148,7 +148,10 @@ def run_scanner(use_mock: bool = False) -> int:
         logger.info(f"  #{i+1}: {setup}")
     
     # Publish top 5 signals
-    published = publish_signals(setups, max_signals=5)
+    published = 0
+    for setup in setups[:5]:
+        if publish_calendar_signal(setup):
+            published += 1
     
     logger.info(f"✅ Published {published} signals to WebSocket")
     
