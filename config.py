@@ -355,8 +355,8 @@ ZEBRA_SCAN_INTERVAL_MIN: int = 15        # How often to scan for new entries
 ZEBRA_POSITION_CHECK_MIN: int = 5        # How often to check open positions
 
 # Trading window (ET)
-ZEBRA_ENTRY_WINDOW_START: str = "09:45"  # Don't enter before this time
-ZEBRA_ENTRY_WINDOW_END: str = "15:30"    # Don't enter after this time
+ZEBRA_ENTRY_WINDOW_START: time = time(9, 45)   # Don't enter before this time
+ZEBRA_ENTRY_WINDOW_END: time = time(15, 30)    # Don't enter after this time
 
 # Signal quality thresholds
 ZEBRA_MIN_DIRECTIONAL_CONFIDENCE: float = 0.55   # ML minimum confidence to enter
