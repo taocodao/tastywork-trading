@@ -42,41 +42,69 @@ def spread_setup_to_signal(setup) -> Dict[str, Any]:
     
     # Determine risk level based on IV and cost
     if setup.iv < 0.20 and cost < 300:
-        risk_level = "Low"
+        risk_level = "low"
     elif setup.iv > 0.35 or cost > 500:
-        risk_level = "High"
+        risk_level = "high"
     else:
-        risk_level = "Medium"
+        risk_level = "medium"
     
     now = datetime.now()
     
-    # Calculate expiration: earlier of (front_expiry - 1 day) or (now + 24 hours)
-    front_expiry_dt = datetime.combine(setup.short_expiry, datetime.min.time())
-    expiry_based = front_expiry_dt - timedelta(days=1)
-    staleness_based = now + timedelta(hours=24)
-    expires_at = min(expiry_based, staleness_based)
+    # Calculate expiration: Market close today (16:00 ET)
+    try:
+        import pytz
+        ny_tz = pytz.timezone('US/Eastern')
+        now_ny = datetime.now(ny_tz)
+        
+        # Market close is 16:00 ET
+        market_close = now_ny.replace(hour=16, minute=0, second=0, microsecond=0)
+        
+        # Convert to UTC naive for DB consistency with datetime.utcnow()
+        expires_at = market_close.astimezone(pytz.UTC).replace(tzinfo=None)
+    except Exception:
+        # Fallback if pytz not available or error
+        expires_at = datetime.utcnow().replace(hour=20, minute=0, second=0, microsecond=0)
     
+    # Frontend expects snake_case keys fitting DiagonalSignal interface
     signal = {
         "id": str(uuid.uuid4()),
         "symbol": setup.symbol,
-        "strategy": "Calendar Spread",
+        "strategy": "calendar",  # Lowercase for interface matching
         "direction": "neutral",
+        "status": "pending",
+        "created_at": now.isoformat(),
+        "expires_at": expires_at.isoformat(),
+        
+        # Core Params
+        "short_strike": setup.strike,
+        "short_expiry": setup.short_expiry.isoformat(),
+        "long_strike": setup.strike,
+        "long_expiry": setup.long_expiry.isoformat(),
+        
+        # Pricing & Metrics
+        "capital_required": round(cost, 2),
+        "expected_return": potential_return,
+        "return_percent": round((potential_return / cost) * 100, 1) if cost > 0 else 0,
+        "confidence": win_rate,
+        "risk_level": risk_level,
+        "score": round(setup.score, 2),
+        "iv": round(setup.iv * 100, 1),
+        "theta_edge": round(setup.theta_edge, 2) if hasattr(setup, 'theta_edge') else 0,
+        
+        # Aliases / Legacy (for components using old keys)
         "strike": setup.strike,
-        "stockPrice": setup.stock_price,
         "frontExpiry": setup.short_expiry.isoformat(),
         "backExpiry": setup.long_expiry.isoformat(),
         "cost": round(cost, 2),
         "potentialReturn": potential_return,
         "returnPercent": round((potential_return / cost) * 100, 1) if cost > 0 else 0,
+        "riskLevel": risk_level.capitalize(),
         "winRate": win_rate,
-        "riskLevel": risk_level,
-        "status": "pending",
         "createdAt": now.isoformat(),
         "expiresAt": expires_at.isoformat(),
-        "score": round(setup.score, 2),
-        "iv": round(setup.iv * 100, 1),  # Convert to percentage
-        "thetaEdge": round(setup.theta_edge, 2) if hasattr(setup, 'theta_edge') else 0,
         "rationale": f"Theta edge ${setup.theta_edge:.2f}/day, IV {setup.iv*100:.0f}%, Score {setup.score:.1f}",
+        
+        "contracts": 1, # Default
     }
     
     return signal
