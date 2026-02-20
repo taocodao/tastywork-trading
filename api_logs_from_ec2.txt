@@ -1,0 +1,50 @@
+Feb 20 20:02:38 ip-172-31-34-178 python3[2491761]:     response = self.client.post("/sessions", json=body)
+Feb 20 20:02:38 ip-172-31-34-178 python3[2491761]:                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Feb 20 20:02:38 ip-172-31-34-178 python3[2491761]:   File "/usr/local/lib/python3.12/dist-packages/httpx/_client.py", line 1144, in post
+Feb 20 20:02:38 ip-172-31-34-178 python3[2491761]:     return self.request(
+Feb 20 20:02:38 ip-172-31-34-178 python3[2491761]:            ^^^^^^^^^^^^^
+Feb 20 20:02:38 ip-172-31-34-178 python3[2491761]:   File "/usr/local/lib/python3.12/dist-packages/httpx/_client.py", line 825, in request
+Feb 20 20:02:38 ip-172-31-34-178 python3[2491761]:     return self.send(request, auth=auth, follow_redirects=follow_redirects)
+Feb 20 20:02:38 ip-172-31-34-178 python3[2491761]:            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Feb 20 20:02:38 ip-172-31-34-178 python3[2491761]:   File "/usr/local/lib/python3.12/dist-packages/httpx/_client.py", line 914, in send
+Feb 20 20:02:38 ip-172-31-34-178 python3[2491761]:     response = self._send_handling_auth(
+Feb 20 20:02:38 ip-172-31-34-178 python3[2491761]:                ^^^^^^^^^^^^^^^^^^^^^^^^^
+Feb 20 20:02:38 ip-172-31-34-178 python3[2491761]:   File "/usr/local/lib/python3.12/dist-packages/httpx/_client.py", line 942, in _send_handling_auth
+Feb 20 20:02:38 ip-172-31-34-178 python3[2491761]:     response = self._send_handling_redirects(
+Feb 20 20:02:38 ip-172-31-34-178 python3[2491761]:                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Feb 20 20:02:38 ip-172-31-34-178 python3[2491761]:   File "/usr/local/lib/python3.12/dist-packages/httpx/_client.py", line 979, in _send_handling_redirects
+Feb 20 20:02:38 ip-172-31-34-178 python3[2491761]:     response = self._send_single_request(request)
+Feb 20 20:02:38 ip-172-31-34-178 python3[2491761]:                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Feb 20 20:02:38 ip-172-31-34-178 python3[2491761]:   File "/usr/local/lib/python3.12/dist-packages/httpx/_client.py", line 1014, in _send_single_request
+Feb 20 20:02:38 ip-172-31-34-178 python3[2491761]:     response = transport.handle_request(request)
+Feb 20 20:02:38 ip-172-31-34-178 python3[2491761]:                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Feb 20 20:02:38 ip-172-31-34-178 python3[2491761]:   File "/usr/local/lib/python3.12/dist-packages/httpx/_transports/default.py", line 249, in handle_request
+Feb 20 20:02:38 ip-172-31-34-178 python3[2491761]:     with map_httpcore_exceptions():
+Feb 20 20:02:38 ip-172-31-34-178 python3[2491761]:   File "/usr/lib/python3.12/contextlib.py", line 158, in __exit__
+Feb 20 20:02:38 ip-172-31-34-178 python3[2491761]:     self.gen.throw(value)
+Feb 20 20:02:38 ip-172-31-34-178 python3[2491761]:   File "/usr/local/lib/python3.12/dist-packages/httpx/_transports/default.py", line 118, in map_httpcore_exceptions
+Feb 20 20:02:38 ip-172-31-34-178 python3[2491761]:     raise mapped_exc(message) from exc
+Feb 20 20:02:38 ip-172-31-34-178 python3[2491761]: httpx.ConnectTimeout: timed out
+Feb 20 20:02:38 ip-172-31-34-178 python3[2491761]: During handling of the above exception, another exception occurred:
+Feb 20 20:02:38 ip-172-31-34-178 python3[2491761]: Traceback (most recent call last):
+Feb 20 20:02:38 ip-172-31-34-178 python3[2491761]:   File "/usr/lib/python3.12/socketserver.py", line 318, in _handle_request_noblock
+Feb 20 20:02:38 ip-172-31-34-178 python3[2491761]:     self.process_request(request, client_address)
+Feb 20 20:02:38 ip-172-31-34-178 python3[2491761]:   File "/usr/lib/python3.12/socketserver.py", line 349, in process_request
+Feb 20 20:02:38 ip-172-31-34-178 python3[2491761]:     self.finish_request(request, client_address)
+Feb 20 20:02:38 ip-172-31-34-178 python3[2491761]:   File "/usr/lib/python3.12/socketserver.py", line 362, in finish_request
+Feb 20 20:02:38 ip-172-31-34-178 python3[2491761]:     self.RequestHandlerClass(request, client_address, self)
+Feb 20 20:02:38 ip-172-31-34-178 python3[2491761]:   File "/usr/lib/python3.12/socketserver.py", line 761, in __init__
+Feb 20 20:02:38 ip-172-31-34-178 python3[2491761]:     self.handle()
+Feb 20 20:02:38 ip-172-31-34-178 python3[2491761]:   File "/usr/lib/python3.12/http/server.py", line 436, in handle
+Feb 20 20:02:38 ip-172-31-34-178 python3[2491761]:     self.handle_one_request()
+Feb 20 20:02:38 ip-172-31-34-178 python3[2491761]:   File "/usr/lib/python3.12/http/server.py", line 424, in handle_one_request
+Feb 20 20:02:38 ip-172-31-34-178 python3[2491761]:     method()
+Feb 20 20:02:38 ip-172-31-34-178 python3[2491761]:   File "/home/ubuntu/tastywork-trading/tasty_api_server.py", line 206, in do_GET
+Feb 20 20:02:38 ip-172-31-34-178 python3[2491761]:     self._send_json({'error': str(e)}, 500)
+Feb 20 20:02:38 ip-172-31-34-178 python3[2491761]:   File "/home/ubuntu/tastywork-trading/tasty_api_server.py", line 157, in _send_json
+Feb 20 20:02:38 ip-172-31-34-178 python3[2491761]:     self.wfile.write(json.dumps(data).encode())
+Feb 20 20:02:38 ip-172-31-34-178 python3[2491761]:   File "/usr/lib/python3.12/socketserver.py", line 840, in write
+Feb 20 20:02:38 ip-172-31-34-178 python3[2491761]:     self._sock.sendall(b)
+Feb 20 20:02:38 ip-172-31-34-178 python3[2491761]: BrokenPipeError: [Errno 32] Broken pipe
+Feb 20 20:02:38 ip-172-31-34-178 python3[2491761]: ----------------------------------------
+Feb 20 20:02:38 ip-172-31-34-178 python3[2491761]: 44.211.234.224 - - [20/Feb/2026 20:02:38] "GET /api/signals HTTP/1.1" 200 -

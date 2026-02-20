@@ -1,0 +1,15 @@
+[Unit]
+Description=TradeMind WebSocket Server
+After=network.target trademind-api.service
+
+[Service]
+User=ubuntu
+WorkingDirectory=/home/ubuntu/tastywork-trading
+Environment="PATH=/home/ubuntu/.local/bin:/usr/local/bin:/usr/bin:/bin"
+ExecStart=/usr/bin/python3 /home/ubuntu/tastywork-trading/websocket_server.py
+ExecStopPost=/bin/bash -c 'fuser -k 8003/tcp 2>/dev/null || true'
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

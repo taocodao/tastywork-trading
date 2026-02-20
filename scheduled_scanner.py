@@ -274,9 +274,26 @@ def run_zebra_scanner() -> int:
             
             if enrichment['composite_score'] > 0.4: # Filter weak enrichment
                 valid_signals.append(cand)
-                # publish_zebra_entry_signal(cand) # TODO: Implement publisher adapter
+                
+                # Adapter: Convert candidate to dict and publish directly to channel
+                import uuid
+                signal_data = {
+                    'id': str(uuid.uuid4()),
+                    'symbol': cand.symbol,
+                    'strategy': 'zebra',
+                    'composite_score': cand.composite_score,
+                    'rationale': cand.rationale,
+                    'status': 'pending',
+                    'created_at': datetime.utcnow().isoformat(),
+                    'current_price': cand.price,
+                }
+                
+                # We can use the existing ZEBRA publisher entry function which handles DB + WS
+                from signal_publisher.zebra import ZebraEntrySignal, publish_zebra_entry_signal
+                z_signal = ZebraEntrySignal(**signal_data)
+                publish_zebra_entry_signal(z_signal)
+                
                 logger.info(f"  ✅ {cand.symbol} APPROVED for ZEBRA (Score: {cand.composite_score:.0f}, PPLX: {enrichment['composite_score']})")
-
 
         return len(valid_signals)
 

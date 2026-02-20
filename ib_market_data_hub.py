@@ -122,8 +122,8 @@ class IBMarketDataHub:
                         clientId=self.DATA_CLIENT_ID,
                         timeout=timeout
                     )
-                    # Use delayed data to avoid subscription costs
-                    self._data_ib.reqMarketDataType(3)
+                    # Request live market data (user has active subscription)
+                    self._data_ib.reqMarketDataType(1)
                     self._data_connected = True
                     logger.info("Hub: Data connection established")
                     return True

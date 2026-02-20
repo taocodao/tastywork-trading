@@ -1,48 +1,32 @@
-
-import sys
-import os
-from datetime import datetime, timedelta
-
-# Add project root to path
-sys.path.append(os.getcwd())
-
-from src.earnings_intelligence.database import SignalRepository, init_db
+from src.earnings_intelligence.database import SignalRepository
+from datetime import datetime, timezone
 
 def check_signals():
-    print("🔍 Checking for signals generated today...")
-    
-    # Ensure DB is initialized
-    init_db()
-    
     repo = SignalRepository()
     
-    # Get all signals
-    all_signals = repo.get_all_signals(include_expired=True)
+    # get_all_signals returns Signal ORM objects; include_expired=True to see everything
+    signals = repo.get_all_signals(include_expired=True)
+    print(f"Total signals in DB (all): {len(signals)}")
     
-    # Filter for today (UTC)
-    today = datetime.utcnow().date()
-    todays_signals = [s for s in all_signals if s.created_at.date() == today]
+    pending = repo.get_all_signals(status="pending")
+    print(f"Pending (active, non-expired): {len(pending)}")
     
-    if not todays_signals:
-        print("❌ No signals found for today (UTC).")
-        return
-
-    print(f"\n✅ Found {len(todays_signals)} signals generated today:\n")
-    print(f"{'TIME (UTC)':<20} | {'SYMBOL':<8} | {'STRATEGY':<15} | {'STATUS':<10} | {'CONFIDENCE':<10}")
-    print("-" * 80)
+    today_str = datetime.utcnow().strftime("%Y-%m-%d")
     
-    for s in todays_signals:
-        conf = s.data.get('confidence', s.data.get('winRate', 0))
-        print(f"{s.created_at.strftime('%H:%M:%S'):<20} | {s.symbol:<8} | {s.strategy:<15} | {s.status:<10} | {conf:<10}")
-
-    # Check for executions
-    executed = [s for s in todays_signals if s.status == 'executed']
-    if executed:
-        print(f"\n🚀 {len(executed)} EXECUTED SIGNALS:")
-        for s in executed:
-            print(f"- {s.symbol} {s.strategy}")
-    else:
-        print("\nℹ️ No signals executed today.")
+    print(f"\n--- SIGNALS FOR TODAY ({today_str} UTC) ---")
+    today_signals = [s for s in signals if s.created_at and s.created_at.strftime("%Y-%m-%d") == today_str]
+    print(f"Count: {len(today_signals)}")
+    
+    for s in today_signals:
+        print(f"  [{s.created_at.strftime('%H:%M:%S')}] {s.symbol} | {s.strategy} | Status: {s.status}")
+    
+    if not today_signals:
+        print("  (none)")
+    
+    print(f"\n--- MOST RECENT SIGNALS (any date) ---")
+    for s in signals[:10]:
+        d = s.to_dict()
+        print(f"  [{s.created_at}] {s.symbol} | {s.strategy} | Status: {s.status} | Action: {d.get('action', '?')}")
 
 if __name__ == "__main__":
     check_signals()

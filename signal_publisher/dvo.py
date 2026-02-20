@@ -15,7 +15,6 @@ from typing import Optional, Dict, Any
 import logging
 
 from .websocket_client import broadcast_to_channel
-from src.earnings_intelligence.database import SignalRepository
 
 logger = logging.getLogger(__name__)
 

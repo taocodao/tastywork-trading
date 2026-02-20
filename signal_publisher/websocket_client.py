@@ -12,10 +12,10 @@ from typing import Dict, Any
 logger = logging.getLogger(__name__)
 
 # WebSocket HTTP broadcast endpoint
-# Use environment variable or fall back to EC2 production URL
+# Use environment variable or fall back to localhost when running on the server
 WEBSOCKET_BROADCAST_URL = os.getenv(
     'WEBSOCKET_BROADCAST_URL',
-    'http://ec2-34-235-119-67.compute-1.amazonaws.com:8004/'
+    'http://localhost:8004/'
 )
 
 

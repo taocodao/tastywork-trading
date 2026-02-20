@@ -7,7 +7,13 @@ Includes: Account data, Signals, Trade execution
 
 
 print("DEBUG: Script starting", flush=True)
-from http.server import HTTPServer, BaseHTTPRequestHandler
+from http.server import BaseHTTPRequestHandler, HTTPServer
+from socketserver import ThreadingMixIn
+
+class ThreadingHTTPServer(ThreadingMixIn, HTTPServer):
+    """Handle each request in a separate thread."""
+    daemon_threads = True
+
 print("DEBUG: HTTP Server imported", flush=True)
 import json
 import os
@@ -148,13 +154,18 @@ def generate_sample_signals():
 
 class TastyHandler(BaseHTTPRequestHandler):
     def _send_json(self, data, status=200):
-        self.send_response(status)
-        self.send_header('Content-Type', 'application/json')
-        self.send_header('Access-Control-Allow-Origin', '*')
-        self.send_header('Access-Control-Allow-Methods', 'GET, POST, PUT, OPTIONS')
-        self.send_header('Access-Control-Allow-Headers', 'Content-Type')
-        self.end_headers()
-        self.wfile.write(json.dumps(data).encode())
+        try:
+            self.send_response(status)
+            self.send_header('Content-Type', 'application/json')
+            self.send_header('Access-Control-Allow-Origin', '*')
+            self.send_header('Access-Control-Allow-Methods', 'GET, POST, PUT, OPTIONS')
+            self.send_header('Access-Control-Allow-Headers', 'Content-Type')
+            self.end_headers()
+            self.wfile.write(json.dumps(data).encode())
+        except BrokenPipeError:
+            print("⚠️ Client disconnected before response could be sent (BrokenPipeError)")
+        except Exception as e:
+            print(f"⚠️ Error sending JSON response: {e}")
 
     def do_OPTIONS(self):
         self._send_json({})
@@ -255,9 +266,18 @@ class TastyHandler(BaseHTTPRequestHandler):
 
     def handle_account(self, retry=True):
         try:
-            session = get_session()
-            account = get_account()
+            # Import requests for Timeout exception
+            import requests
+            import httpx
             
+            try:
+                session = get_session()
+                account = get_account()
+            except (requests.exceptions.Timeout, httpx.TimeoutException, httpx.ConnectTimeout):
+                print("⚠️ Tastytrade auth timed out.")
+                self._send_json({'error': 'Tastytrade Authentication timeout. Try again later.'}, 504)
+                return
+
             if not account:
                 self._send_json({'error': 'No account found'}, 404)
                 return
@@ -349,7 +369,24 @@ class TastyHandler(BaseHTTPRequestHandler):
             # pending = [s for s in _signals if s['status'] == 'pending']
             # self._send_json({'signals': pending, 'total': len(_signals), ...})
             
-            pending = [s for s in signal_dicts if s['status'] == 'pending']
+            now = datetime.utcnow()
+            pending = []
+            for s in signal_dicts:
+                if s['status'] != 'pending':
+                    continue
+                expires_at_str = s.get('expires_at') or s.get('expiresAt')
+                if expires_at_str:
+                    try:
+                        # Parse ISO format and remove tzinfo if any for naive comparison
+                        exp_dt = datetime.fromisoformat(expires_at_str.replace('Z', '+00:00'))
+                        if exp_dt.tzinfo:
+                            exp_dt = exp_dt.astimezone(pytz.UTC).replace(tzinfo=None)
+                        if exp_dt <= now:
+                            continue # Expired
+                    except Exception:
+                        pass
+                pending.append(s)
+                
             self._send_json({
                 'signals': pending, 
                 'total': len(signal_dicts), 
@@ -1429,7 +1466,7 @@ def run_server(port=8002):
     except Exception as e:
         print(f"⚠️ Failed to init session: {e}")
     
-    server = HTTPServer(('0.0.0.0', port), TastyHandler)
+    server = ThreadingHTTPServer(('0.0.0.0', port), TastyHandler)
     server.serve_forever()
 
 

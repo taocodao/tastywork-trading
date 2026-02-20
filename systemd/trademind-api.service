@@ -6,7 +6,8 @@ After=network.target ib-gateway.service
 User=ubuntu
 WorkingDirectory=/home/ubuntu/tastywork-trading
 Environment="PATH=/home/ubuntu/.local/bin:/usr/local/bin:/usr/bin:/bin"
-ExecStart=/bin/bash -c 'python3 tasty_api_server.py & python3 websocket_server.py'
+ExecStart=/usr/bin/python3 /home/ubuntu/tastywork-trading/tasty_api_server.py
+ExecStopPost=/bin/bash -c 'fuser -k 8002/tcp 2>/dev/null || true'
 Restart=always
 RestartSec=5
 

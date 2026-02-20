@@ -1,0 +1,136 @@
+﻿python : C:\Users\erich\AppData\Roaming\Python\Python310\s
+ite-packages\google\api_core\_python_version_support.py:27
+5: FutureWarning: You are using a Python version (3.10.7) 
+which Google will stop supporting in new releases of googl
+e.api_core once it reaches its end of life (2026-10-04). P
+lease upgrade to the latest Python version, or at least Py
+thon 3.11, to continue receiving updates for google.api_co
+re past that date.
+At line:1 char:1
++ python pre_market_check.py 2>&1 | Out-File -Encoding utf
+8 d:\Projects ...
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (C:\Users\eri 
+   ch\...past that date.:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+  warnings.warn(message, FutureWarning)
+C:\Users\erich\AppData\Roaming\Python\Python310\site-packa
+ges\google\api_core\_python_version_support.py:275: Future
+Warning: You are using a Python version (3.10.7) which Goo
+gle will stop supporting in new releases of google.cloud.s
+ecretmanager_v1 once it reaches its end of life (2026-10-0
+4). Please upgrade to the latest Python version, or at lea
+st Python 3.11, to continue receiving updates for google.c
+loud.secretmanager_v1 past that date.
+  warnings.warn(message, FutureWarning)
+ERROR:google_secrets:Google Cloud credentials not found. R
+un 'gcloud auth application-default login' to authenticate
+.
+ERROR:google_secrets:Google Cloud credentials not found. R
+un 'gcloud auth application-default login' to authenticate
+.
+ERROR:google_secrets:Google Cloud credentials not found. R
+un 'gcloud auth application-default login' to authenticate
+.
+ERROR:google_secrets:Google Cloud credentials not found. R
+un 'gcloud auth application-default login' to authenticate
+.
+ERROR:google_secrets:Google Cloud credentials not found. R
+un 'gcloud auth application-default login' to authenticate
+.
+INFO:ib_insync.client:Connecting to 127.0.0.1:7497 with cl
+ientId 999...
+INFO:ib_insync.client:Disconnecting
+ERROR:ib_insync.client:API connection failed: ConnectionRe
+fusedError(22, 'The remote computer refused the network co
+nnection', None, 1225, None)
+ERROR:ib_insync.client:Make sure API port on TWS/IBG is op
+en
+INFO:ib_insync.client:Connecting to 127.0.0.1:4002 with cl
+ientId 999...
+INFO:ib_insync.client:Disconnecting
+ERROR:ib_insync.client:API connection failed: ConnectionRe
+fusedError(22, 'The remote computer refused the network co
+nnection', None, 1225, None)
+ERROR:ib_insync.client:Make sure API port on TWS/IBG is op
+en
+============================================================
+PRE-MARKET READINESS CHECK
+Time: 2026-02-20 09:53:50.633882
+============================================================
+
+--- SYSTEM ---
+[PASS] Python Version: 3.10.7
+
+--- IMPORTS ---
+[PASS] Import ib_insync: 0.9.86
+[PASS] Import requests: 2.32.5
+[PASS] Import websockets: 16.0
+[PASS] Import psycopg2: 2.9.11 (dt dec pq3 ext lo64)
+[PASS] Import sqlalchemy: 2.0.45
+
+--- SIGNAL PUBLISHER ---
+[PASS] Signal Publisher (Theta): imported
+[PASS] Signal Publisher (ZEBRA): imported
+[PASS] Signal Publisher (DVO): imported
+[PASS] Signal Publisher (Calendar): imported
+
+--- CONFIG ---
+[PASS] Config loaded: 
+[PASS] Theta Universe: 52 symbols
+[PASS] ZEBRA Enabled: True
+[PASS] ZEBRA Watchlist: 30 symbols
+[PASS] ZEBRA Auto-Trade: OFF (manual approval)
+[PASS] Tastytrade Client ID: 340d790d...
+[PASS] Tastytrade Client Secret: 30550bb7...
+[PASS] Tastytrade Refresh Token: eyJhbGciOiJFZERTQSIs...
+[PASS] Perplexity API Key: configured
+
+--- DATABASE ---
+[PASS] DATABASE_URL: configured
+[PASS] SignalRepository: connected
+[FAIL] Active Signals query: 'SignalRepository' object has no attribute 'get_active_signals'
+
+--- EC2 API SERVER ---
+[FAIL] API Server (Account): Status 404
+[FAIL] Positions Endpoint: Status 404
+
+--- WEBSOCKET SERVER ---
+[FAIL] WS Broadcast (EC2 :8004): Connection refused
+[FAIL] WS Broadcast (config URL): Connection refused
+
+--- IB GATEWAY ---
+[FAIL] IB Gateway (local :7497): Cannot connect: [WinError 1225] The remote computer refused the network connection
+[FAIL] IB Gateway (local :4002): Cannot connect
+
+--- MARKET STATUS ---
+[PASS] Current Time (ET): 2026-02-20 09:55:16 EST
+[PASS] Is Weekday: Friday
+[PASS] Market Hours: Market is OPEN
+
+--- AUTO-APPROVE ---
+[PASS] Auto-Approve Master: ENABLED
+[PASS]   THETA: ON (Risk: MEDIUM)
+[PASS]   ZEBRA: ON (Risk: MEDIUM)
+[PASS]   DVO: ON (Risk: MEDIUM)
+[PASS]   DIAGONAL: OFF (Risk: MEDIUM)
+
+--- SCANNER ---
+[PASS] Scheduled Scanner: imported
+
+============================================================
+SUMMARY: 30/37 checks passed, 7 failed
+
+FAILED CHECKS:
+  [FAIL] Active Signals query: 'SignalRepository' object has no attribute 'get_active_signals'
+  [FAIL] API Server (Account): Status 404
+  [FAIL] Positions Endpoint: Status 404
+  [FAIL] WS Broadcast (EC2 :8004): Connection refused
+  [FAIL] WS Broadcast (config URL): Connection refused
+  [FAIL] IB Gateway (local :7497): Cannot connect: [WinError 1225] The remote computer refused the network connection
+  [FAIL] IB Gateway (local :4002): Cannot connect
+
+============================================================
+WARNING: 7 issue(s) need attention before market open
+============================================================

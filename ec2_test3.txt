@@ -1,0 +1,5 @@
+/api/account: ERROR - HTTPConnectionPool(host='34.235.119.67', port=8002): Read timed out. (read timeout=5)
+/api/signals: ERROR - HTTPConnectionPool(host='34.235.119.67', port=8002): Read timed out. (read timeout=5)
+/health: ERROR - HTTPConnectionPool(host='34.235.119.67', port=8002): Read timed out. (read timeout=5)
+Port 8003: OPEN
+Port 8004: CLOSED - timed out

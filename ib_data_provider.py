@@ -70,8 +70,8 @@ class IBDataProvider:
                 self.ib.RequestTimeout = timeout
                 self.ib.connect(self.host, self.port, clientId=self.client_id, timeout=timeout)
                 self._connected = True
-                self.ib.reqMarketDataType(3)
-                logger.info("Connected to IB Data Feed (Using Delayed Data)")
+                self.ib.reqMarketDataType(1)  # 1 = Live data
+                logger.info("Connected to IB Data Feed (Live Data)")
             return True
         except Exception as e:
             logger.error(f"Failed to connect to IB: {e}")

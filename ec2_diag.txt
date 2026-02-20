@@ -1,0 +1,93 @@
+=== Service Status ===
+STDOUT: active
+active
+STDERR: 
+RC: 0
+
+=== Port Listeners ===
+STDOUT: LISTEN 0      100          0.0.0.0:8003      0.0.0.0:*    users:(("python3",pid=2491762,fd=8))                                                    
+LISTEN 0      5            0.0.0.0:8002      0.0.0.0:*    users:(("python3",pid=2494251,fd=3))                                                    
+LISTEN 0      5            0.0.0.0:8004      0.0.0.0:*    users:(("python3",pid=2491762,fd=6))
+STDERR: 
+RC: 0
+
+=== API Logs ===
+STDOUT: Feb 20 20:08:34 ip-172-31-34-178 python3[2491761]: 74.72.105.213 - - [20/Feb/2026 20:08:34] "GET /api/signals HTTP/1.1" 200 -
+Feb 20 20:08:34 ip-172-31-34-178 python3[2491761]: 74.72.105.213 - - [20/Feb/2026 20:08:34] "GET /health HTTP/1.1" 200 -
+Feb 20 20:13:09 ip-172-31-34-178 systemd[1]: Stopping trademind-api.service - TradeMind API & WebSocket Server...
+Feb 20 20:13:09 ip-172-31-34-178 systemd[1]: trademind-api.service: Deactivated successfully.
+Feb 20 20:13:09 ip-172-31-34-178 systemd[1]: Stopped trademind-api.service - TradeMind API & WebSocket Server.
+Feb 20 20:13:09 ip-172-31-34-178 systemd[1]: trademind-api.service: Consumed 2.908s CPU time.
+Feb 20 20:13:09 ip-172-31-34-178 systemd[1]: Started trademind-api.service - TradeMind API & WebSocket Server.
+Feb 20 20:13:09 ip-172-31-34-178 python3[2493774]: DEBUG: Script starting
+Feb 20 20:13:09 ip-172-31-34-178 python3[2493774]: DEBUG: HTTP Server imported
+Feb 20 20:13:09 ip-172-31-34-178 python3[2493774]: DEBUG: Standard libs imported
+Feb 20 20:13:09 ip-172-31-34-178 python3[2493774]: /usr/local/lib/python3.12/dist-packages/pandas/core/computation/expressions.py:22: UserWarning: Pandas requires version '2.10.2' or newer of 'numexpr' (version '2.9.0' currently installed).
+Feb 20 20:13:09 ip-172-31-34-178 python3[2493774]:   from pandas.core.computation.check import NUMEXPR_INSTALLED
+Feb 20 20:13:09 ip-172-31-34-178 python3[2493774]: /usr/local/lib/python3.12/dist-packages/pandas/core/arrays/masked.py:56: UserWarning: Pandas requires version '1.4.2' or newer of 'bottleneck' (version '1.3.5' currently installed).
+Feb 20 20:13:09 ip-172-31-34-178 python3[2493774]:   from pandas.core import (
+Feb 20 20:13:10 ip-172-31-34-178 python3[2493774]: DEBUG: tastytrade SDK imported
+Feb 20 20:15:38 ip-172-31-34-178 systemd[1]: Stopping trademind-api.service - TradeMind API & WebSocket Server...
+Feb 20 20:15:38 ip-172-31-34-178 systemd[1]: trademind-api.service: Deactivated successfully.
+Feb 20 20:15:38 ip-172-31-34-178 systemd[1]: Stopped trademind-api.service - TradeMind API & WebSocket Server.
+Feb 20 20:15:38 ip-172-31-34-178 systemd[1]: trademind-api.service: Consumed 1.464s CPU time.
+Feb 20 20:15:38 ip-172-31-34-178 systemd[1]: Started trademind-api.service - TradeMind API & WebSocket Server.
+Feb 20 20:15:38 ip-172-31-34-178 python3[2494251]: DEBUG: Script starting
+Feb 20 20:15:38 ip-172-31-34-178 python3[2494251]: DEBUG: HTTP Server imported
+Feb 20 20:15:38 ip-172-31-34-178 python3[2494251]: DEBUG: Standard libs imported
+Feb 20 20:15:38 ip-172-31-34-178 python3[2494251]: /usr/local/lib/python3.12/dist-packages/pandas/core/computation/expressions.py:22: UserWarning: Pandas requires version '2.10.2' or newer of 'numexpr' (version '2.9.0' currently installed).
+Feb 20 20:15:38 ip-172-31-34-178 python3[2494251]:   from pandas.core.computation.check import NUMEXPR_INSTALLED
+Feb 20 20:15:38 ip-172-31-34-178 python3[2494251]: /usr/local/lib/python3.12/dist-packages/pandas/core/arrays/masked.py:56: UserWarning: Pandas requires version '1.4.2' or newer of 'bottleneck' (version '1.3.5' currently installed).
+Feb 20 20:15:38 ip-172-31-34-178 python3[2494251]:   from pandas.core import (
+Feb 20 20:15:38 ip-172-31-34-178 python3[2494251]: DEBUG: tastytrade SDK imported
+Feb 20 20:19:44 ip-172-31-34-178 python3[2494251]: 127.0.0.1 - - [20/Feb/2026 20:19:44] "GET /api/signals HTTP/1.1" 200 -
+Feb 20 20:20:00 ip-172-31-34-178 python3[2494251]: 127.0.0.1 - - [20/Feb/2026 20:20:00] "GET /api/signals HTTP/1.1" 200 -
+STDERR: 
+RC: 0
+
+=== WS Logs ===
+STDOUT: Feb 20 20:09:37 ip-172-31-34-178 python3[2491762]:     raise self.protocol.handshake_exc
+Feb 20 20:09:37 ip-172-31-34-178 python3[2491762]: websockets.exceptions.InvalidMessage: did not receive a valid HTTP request
+Feb 20 20:14:23 ip-172-31-34-178 python3[2491762]: INFO:__main__:Broadcast signal to 1/1 clients
+Feb 20 20:14:23 ip-172-31-34-178 python3[2491762]: INFO:__main__:Broadcast signal to 1/1 clients
+Feb 20 20:14:28 ip-172-31-34-178 python3[2491762]: INFO:__main__:Broadcast signal to 1/1 clients
+Feb 20 20:14:28 ip-172-31-34-178 python3[2491762]: INFO:__main__:Broadcast signal to 1/1 clients
+Feb 20 20:20:16 ip-172-31-34-178 python3[2491762]: INFO:__main__:Broadcast signal to 1/1 clients
+Feb 20 20:20:16 ip-172-31-34-178 python3[2491762]: INFO:__main__:Broadcast signal to 1/1 clients
+Feb 20 20:20:21 ip-172-31-34-178 python3[2491762]: INFO:__main__:Broadcast signal to 1/1 clients
+Feb 20 20:20:21 ip-172-31-34-178 python3[2491762]: INFO:__main__:Broadcast signal to 1/1 clients
+STDERR: 
+RC: 0
+
+=== Health Check ===
+STDOUT: {"status": "ok", "service": "TradeMind Tastytrade API"}
+STDERR: 
+RC: 0
+
+=== httpx installed ===
+STDOUT: 0.28.1
+STDERR: 
+RC: 0
+
+=== Config google check ===
+STDOUT: 85:# 1. Google Secret Manager (if GOOGLE_CLOUD_PROJECT is set)
+89:if os.getenv('GOOGLE_CLOUD_PROJECT') and os.path.exists(os.path.expanduser('~/.config/gcloud')):
+STDERR: 
+RC: 0
+
+=== Server import test ===
+STDOUT: DEBUG: Script starting
+DEBUG: HTTP Server imported
+DEBUG: Standard libs imported
+/usr/local/lib/python3.12/dist-packages/pandas/core/computation/expressions.py:22: UserWarning: Pandas requires version '2.10.2' or newer of 'numexpr' (version '2.9.0' currently installed).
+  from pandas.core.computation.check import NUMEXPR_INSTALLED
+/usr/local/lib/python3.12/dist-packages/pandas/core/arrays/masked.py:56: UserWarning: Pandas requires version '1.4.2' or newer of 'bottleneck' (version '1.3.5' currently installed).
+  from pandas.core import (
+DEBUG: tastytrade SDK imported
+✅ Environment loaded from /home/ubuntu/tastywork-trading/.env
+✅ TASTYTRADE_CLIENT_ID: 340d790d-f...
+✅ TASTYTRADE_CLIENT_SECRET: 3055...
+✅ OAuth credential validation passed
+IMPORT_OK
+STDERR: 
+RC: 0

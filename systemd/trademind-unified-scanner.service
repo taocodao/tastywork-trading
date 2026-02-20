@@ -1,0 +1,15 @@
+[Unit]
+Description=TradeMind Unified Scanner (All Strategies)
+After=network.target trademind-ws.service
+
+[Service]
+Type=simple
+User=ubuntu
+WorkingDirectory=/home/ubuntu/tastywork-trading
+Environment="PATH=/home/ubuntu/.local/bin:/usr/local/bin:/usr/bin:/bin"
+ExecStart=/usr/bin/python3 /home/ubuntu/tastywork-trading/run_all_scanners.py
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target

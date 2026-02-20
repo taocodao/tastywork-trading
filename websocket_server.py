@@ -259,9 +259,31 @@ class BroadcastHandler(BaseHTTPRequestHandler):
 
 def run_http_server(port=8004):
     """Run HTTP server for broadcast triggers."""
-    server = HTTPServer(('0.0.0.0', port), BroadcastHandler)
-    logger.info(f"📡 HTTP broadcast endpoint: http://localhost:{port}/")
-    server.serve_forever()
+    max_retries = 5
+    for attempt in range(max_retries):
+        try:
+            import socket
+            # Pre-bind socket with SO_REUSEADDR
+            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+            sock.bind(('0.0.0.0', port))
+            sock.listen(5)
+            
+            # Create server using the pre-bound socket
+            server = HTTPServer(('0.0.0.0', port), BroadcastHandler, bind_and_activate=False)
+            server.socket = sock
+            server.server_address = sock.getsockname()
+            
+            logger.info(f"📡 HTTP broadcast endpoint: http://localhost:{port}/")
+            server.serve_forever()
+        except Exception as e:
+            logger.error(f"❌ HTTP Broadcast Server crashed: {e}")
+            if attempt < max_retries - 1:
+                import time
+                logger.info(f"Retrying in 5s (attempt {attempt + 1}/{max_retries})...")
+                time.sleep(5)
+            else:
+                logger.error("HTTP Broadcast Server failed to start after all retries")
 
 
 _event_loop = None

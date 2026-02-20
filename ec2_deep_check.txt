@@ -1,0 +1,8 @@
+/api/account: ERROR - HTTPConnectionPool(host='34.235.119.67', port=8002): Read timed out. (read timeout=5)
+/api/signals: ERROR - HTTPConnectionPool(host='34.235.119.67', port=8002): Read timed out. (read timeout=5)
+/signals: 404 - {"error": "Not found"}
+/health: 200 - {"status": "ok", "service": "TradeMind Tastytrade API"}
+/status: 404 - {"error": "Not found"}
+/api/health: 404 - {"error": "Not found"}
+Port 8003: OPEN
+Port 8004: CLOSED - timed out

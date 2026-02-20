@@ -86,12 +86,13 @@ IB_CLIENT_ID: int = 100
 # 2. Environment Variables (fallback)
 
 import os
-try:
-    from google_secrets import get_tastytrade_creds
-except ImportError:
-    # Google cloud libraries not available, fallback to env vars only
-    def get_tastytrade_creds():
-        return {}
+if os.getenv('GOOGLE_CLOUD_PROJECT') and os.path.exists(os.path.expanduser('~/.config/gcloud')):
+    try:
+        from google_secrets import get_tastytrade_creds
+    except Exception:
+        def get_tastytrade_creds(): return {}
+else:
+    def get_tastytrade_creds(): return {}
 
 # Try fetching from Google Secret Manager first
 _creds = get_tastytrade_creds()

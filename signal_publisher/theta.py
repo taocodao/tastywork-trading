@@ -133,6 +133,16 @@ def publish_theta_entry_signal(signal: ThetaEntrySignal) -> bool:
         data['strategy'] = 'theta'
         data['signal_type'] = 'entry'
         
+        # Calculate expiration: Market close today (16:00 ET)
+        try:
+            import pytz
+            ny_tz = pytz.timezone('US/Eastern')
+            now_ny = datetime.now(ny_tz)
+            market_close = now_ny.replace(hour=16, minute=0, second=0, microsecond=0)
+            data['expires_at'] = market_close.astimezone(pytz.UTC).replace(tzinfo=None).isoformat()
+        except ImportError:
+            pass
+        
         # STEP 1: Save to database for persistence
         try:
             from src.earnings_intelligence.database import SignalRepository
