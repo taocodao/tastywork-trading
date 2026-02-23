@@ -44,8 +44,9 @@ REGIME_PARAMS = {
 }
 
 class RegimeDetector:
-    def __init__(self):
+    def __init__(self, hmm_detector=None):
         self.spy_data = None
+        self.hmm_detector = hmm_detector
         
     def set_optimized_params(self, optimized_params):
         """
@@ -91,9 +92,17 @@ class RegimeDetector:
     def get_regime(self, date):
         """
         Return regime label and params for a given date.
+        If HMM is available, uses probability-blended params.
         """
         if self.spy_data is None or date not in self.spy_data.index:
             return 'NORMAL', REGIME_PARAMS['NORMAL'] # Default
+            
+        if self.hmm_detector and self.hmm_detector.is_trained:
+            # Optionally pass target_date into the hmm detector if you want strictly point-in-time
+            # For backtesting, we truncate the spy_data up to 'date' to avoid lookahead
+            historical_slice = self.spy_data.loc[:date]
+            label, params = self.hmm_detector.get_blended_regime_params(historical_slice, REGIME_PARAMS)
+            return label, params
             
         atr_pct = self.spy_data.loc[date]['Regime_ATR']
         

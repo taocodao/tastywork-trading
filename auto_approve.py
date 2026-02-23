@@ -63,7 +63,7 @@ DEFAULT_AUTO_APPROVE_SETTINGS = {
     },
     
     # Diagonal Spread settings (PMCC)
-    "diagonal": {
+    "pmcc": {
         "enabled": False,
         "risk_level": "MEDIUM",
         "risk_profiles": {
@@ -326,6 +326,8 @@ def auto_approve_signal(
             result = _execute_zebra_auto_approve(signal, session, account)
         elif "dvo" in strategy.lower():
             result = _execute_dvo_auto_approve(signal, session, account)
+        elif "pmcc" in strategy.lower():
+            result = _execute_pmcc_auto_approve(signal, session, account)
         else:
             result = _execute_calendar_auto_approve(signal, session, account)
         
@@ -503,6 +505,89 @@ def _execute_calendar_auto_approve(signal: Dict, session, account) -> Dict[str, 
         "adjustments": fill_result.get("adjustments_made", 0),
         "finalStatus": fill_result.get("final_status", "Unknown"),
         "autoApproved": True,
+        "timestamp": datetime.now().isoformat()
+    }
+
+
+def _execute_pmcc_auto_approve(signal: Dict, session, account) -> Dict[str, Any]:
+    """Execute auto-approved PMCC (Poor Man's Covered Call) trade."""
+    from tastytrade.order import NewOrder, OrderLeg, OrderAction, OrderType, OrderTimeInForce, PriceEffect
+    from tastytrade_client import TastytradeClient
+    from datetime import datetime
+    
+    symbol = signal.get("symbol", "")
+    long_strike = float(signal.get("long_strike", 0))
+    short_strike = float(signal.get("short_strike", 0))
+    long_expiry = signal.get("long_expiration", "")
+    short_expiry = signal.get("short_expiration", "")
+    
+    # Format OCC symbols
+    long_date = datetime.fromisoformat(long_expiry).strftime("%y%m%d") if long_expiry else ""
+    short_date = datetime.fromisoformat(short_expiry).strftime("%y%m%d") if short_expiry else ""
+    
+    long_strike_fmt = f"{int(long_strike * 1000):08d}"
+    short_strike_fmt = f"{int(short_strike * 1000):08d}"
+    
+    long_symbol = f"{symbol}  {long_date}C{long_strike_fmt}"
+    short_symbol = f"{symbol}  {short_date}C{short_strike_fmt}"
+    
+    price = round(float(signal.get("net_debit", 0)), 2)
+    contracts = int(signal.get("contracts", 1))
+    
+    logger.info(f"PMCC Execution: {symbol} Buy {long_strike}c, Sell {short_strike}c @ ${price}")
+    
+    # Build order
+    legs = [
+        OrderLeg(
+            instrument_type='Equity Option',
+            symbol=long_symbol.strip(),
+            quantity=contracts,
+            action=OrderAction.BUY_TO_OPEN
+        ),
+        OrderLeg(
+            instrument_type='Equity Option',
+            symbol=short_symbol.strip(),
+            quantity=contracts,
+            action=OrderAction.SELL_TO_OPEN
+        )
+    ]
+    
+    order = NewOrder(
+        time_in_force=OrderTimeInForce.DAY,
+        order_type=OrderType.LIMIT,
+        legs=legs,
+        price=price,
+        price_effect=PriceEffect.DEBIT
+    )
+    
+    try:
+        response = account.place_order(session, order, dry_run=False)
+        order_id = str(response.order.id) if hasattr(response, 'order') else "auto-submitted"
+        logger.info(f"📡 Auto-approved PMCC: {symbol} @ ${price}, Order ID: {order_id}")
+    except Exception as e:
+        logger.error(f"Failed placing PMCC trade via auto-approve: {e}")
+        return None
+        
+    client = TastytradeClient()
+    client.connect()
+    fill_result = client.monitor_and_fill(
+        order_id=order_id,
+        initial_price=price,
+        is_credit=False
+    )
+    client.disconnect()
+    
+    actual_price = fill_result.get("fill_price", price)
+    
+    return {
+        "orderId": order_id,
+        "symbol": symbol,
+        "strategy": "PMCC",
+        "long_strike": long_strike,
+        "short_strike": short_strike,
+        "limitPrice": price,
+        "fillPrice": actual_price,
+        "filled": fill_result.get("filled", False),
         "timestamp": datetime.now().isoformat()
     }
 

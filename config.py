@@ -313,6 +313,87 @@ ZEBRA_MAX_PORTFOLIO_Alloc_PCT: float = 0.10
 
 # =============================================================================
 
+# =============================================================================
+# TQQQ VIX-ADAPTIVE SPREAD STRATEGY SETTINGS
+# =============================================================================
+TQQQ_ENABLED: bool = True
+TQQQ_SYMBOL: str = "TQQQ"
+TQQQ_FALLBACK_SYMBOL: str = "QQQ"   # use QQQ when TQQQ options are illiquid
+
+# === SPREAD CONSTRUCTION ===
+TQQQ_SPREAD_WIDTH: int = 5               # $5 wide spread between strikes
+TQQQ_TARGET_DTE_MIN: int = 21            # minimum days to expiration
+TQQQ_TARGET_DTE_MAX: int = 45            # maximum days to expiration
+TQQQ_SHORT_PUT_DELTA: float = -0.30      # target short put delta (~30-delta)
+
+# === EXIT RULES (full spread) ===
+# === REGIME-SPECIFIC PARAMETERS ===
+# These supersede the flat variables below. The BO auto-tuner will optimize these.
+TQQQ_PARAMS_BY_REGIME = {
+    "LOW_VOL":  {"dte": 35, "delta": -0.25, "width": 3, "profit_target": 0.60, "loss_limit_mult": 2.0, "legout_short_threshold": 0.15, "long_put_profit_target": 2.0},
+    "NORMAL":   {"dte": 30, "delta": -0.30, "width": 5, "profit_target": 0.50, "loss_limit_mult": 2.0, "legout_short_threshold": 0.15, "long_put_profit_target": 2.0},
+    "HIGH_VOL": {"dte": 21, "delta": -0.35, "width": 5, "profit_target": 0.40, "loss_limit_mult": 2.0, "legout_short_threshold": 0.20, "long_put_profit_target": 2.5},
+    "CRISIS":   {"dte": 14, "delta": -0.20, "width": 3, "profit_target": 0.75, "loss_limit_mult": 3.0, "legout_short_threshold": 0.10, "long_put_profit_target": 3.0},
+}
+
+# === BEAR CALL CREDIT SPREAD PARAMS (Scenario B — validated +98.3% return 2019-2025) ===
+# Call spreads are ONLY traded in HIGH_VOL and CRISIS regimes.
+# Never in LOW_VOL (TQQQ uptrend too strong) or NORMAL (IC mode optional, not call-only).
+# Key differences vs puts: shorter DTE (TQQQ can rally violently), far OTM delta,
+# higher profit target (let theta decay further before closing).
+TQQQ_CALL_PARAMS_BY_REGIME = {
+    "HIGH_VOL": {
+        "dte": 14,              # Short DTE — limits exposure window; TQQQ can snap back
+        "delta": 0.14,          # Far OTM call delta (~14Δ) — room for TQQQ to bounce
+        "width": 5,             # $5 spread width
+        "profit_target": 0.70,  # Close at 70% of credit — faster exit than puts
+        "loss_limit_mult": 2.0, # Close if loss 2× credit collected
+        "legout_short_threshold": 0.12,  # Buy back short call if < 12% of credit remains
+        "long_call_profit_target": 2.0,  # If legged out, sell long call at 2× entry value
+    },
+    "CRISIS": {
+        "dte": 7,               # Very short DTE — crisis VIX can reverse viciously
+        "delta": 0.09,          # Very far OTM — market is collapsing, calls are nearly free
+        "width": 3,             # Narrow width — reduce capital at risk in crisis
+        "profit_target": 0.88,  # Let it mostly decay before closing
+        "loss_limit_mult": 3.0, # Wider stop in crisis — VIX spikes cause temporary reversals
+        "legout_short_threshold": 0.08,
+        "long_call_profit_target": 3.0,
+    },
+}
+
+# 5% intraday TQQQ rally → emergency close all call spreads immediately.
+# TQQQ is 3× leveraged: a +2% QQQ day = +6% TQQQ — short calls get blown through fast.
+TQQQ_CALL_RALLY_CIRCUIT_BREAKER_PCT: float = 0.05  # 5% from entry price
+
+# === EXIT & LEG-OUT RULES (Global Fallbacks) ===
+TQQQ_MIN_DTE_LEGOUT: int = 14              # must have ≥14 DTE remaining to leg out
+TQQQ_MIN_LONG_PUT_VALUE: float = 0.30      # abandon long put if value < $0.30
+
+# === ML CONFIDENCE GATES ===
+TQQQ_MIN_ENTRY_CONFIDENCE: float = 0.60   # minimum AI confidence to open a new spread
+TQQQ_MIN_LEGOUT_CONFIDENCE: float = 0.65  # minimum AI confidence to perform a leg-out
+
+# === RISK & POSITION SIZING ===
+TQQQ_MAX_CONCURRENT_SPREADS: int = 3      # max simultaneous TQQQ spreads
+TQQQ_MAX_RISK_PCT: float = 0.10           # 10% of portfolio at risk (ML-optimized from 5%)
+TQQQ_MIN_BP_RESERVE: float = 0.30         # reserve 30% buying power at all times
+TQQQ_MAX_DRAWDOWN_PCT: float = 0.10       # 10% drawdown → halt new entries
+
+# === LIQUIDITY FILTERS (hard rules, no ML override) ===
+TQQQ_MIN_VOLUME: int = 1000              # minimum daily option volume
+TQQQ_MIN_OI: int = 2000                  # minimum open interest
+TQQQ_MAX_SPREAD: float = 0.05            # maximum bid-ask spread ($)
+TQQQ_MIN_BID_SIZE: int = 50              # minimum bid size (contracts quoted)
+
+# === SCHEDULING ===
+TQQQ_SCAN_INTERVAL_MIN: int = 30         # scan for entry every 30 min
+TQQQ_POSITION_CHECK_MIN: int = 15        # check open positions every 15 min
+TQQQ_AUTO_TRADE: bool = False            # set True for paper/live execution
+
+# =============================================================================
+
+
 
 
 @dataclass

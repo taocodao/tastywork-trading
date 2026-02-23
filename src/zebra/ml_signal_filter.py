@@ -216,3 +216,68 @@ class ZebraMLFilter:
         except Exception as e:
             logger.error(f"Failed to load model: {e}")
             return False
+
+
+class PMCCFeatureExtractor:
+    @staticmethod
+    def extract(pmcc_record_dict):
+        """
+        Extracts the features directly from the recorded PMCCFeatureRecord dictionary.
+        This provides the exact ML observations cleanly without recomputing DataFrame rows.
+        """
+        try:
+            # We must map categorical data (like trend_label) to numeric for XGBoost
+            trend_map = {"UPTREND": 1, "SIDEWAYS": 0, "DOWNTREND": -1}
+            trend_val = trend_map.get(pmcc_record_dict.get('trend_label', 'SIDEWAYS'), 0)
+            
+            # Regime probabilities are flattened
+            regime_probs = pmcc_record_dict.get('regime_probs', {})
+            
+            return {
+                'iv_rank': pmcc_record_dict.get('iv_rank', 0.5),
+                'rsi_14': pmcc_record_dict.get('rsi_14', 50.0),
+                'macd_signal': pmcc_record_dict.get('macd_signal', 0.0),
+                'volume_ratio': pmcc_record_dict.get('volume_ratio', 1.0),
+                'atr_pct': pmcc_record_dict.get('atr_pct', 2.0),
+                'bb_pct_b': pmcc_record_dict.get('bb_pct_b', 0.5),
+                'resistance_proximity': pmcc_record_dict.get('resistance_proximity', 0.1),
+                'trend_label_enc': trend_val,
+                'composite_score': pmcc_record_dict.get('composite_score', 50.0),
+                'regime_LOW_VOL': regime_probs.get('LOW_VOL', 0.0),
+                'regime_NORMAL': regime_probs.get('NORMAL', 1.0),
+                'regime_HIGH_VOL': regime_probs.get('HIGH_VOL', 0.0),
+                'regime_CRISIS': regime_probs.get('CRISIS', 0.0)
+            }
+        except Exception as e:
+            logger.error(f"Error extracting PMCC features: {e}")
+            return None
+
+
+class PMCCMLFilter(ZebraMLFilter):
+    """
+    Extends the Zebra XGBoost classifier specifically for the PMCC strategy.
+    Trained to predict whether a proposed PMCC cycle will end in a profit or loss.
+    """
+    def __init__(self, confidence_threshold=0.65):
+        super().__init__(confidence_threshold=confidence_threshold)
+        # PMCC specific hyperparameter tuning
+        if XGBOOST_AVAILABLE:
+            self.model = XGBClassifier(
+                n_estimators=150,         
+                learning_rate=0.03,       
+                max_depth=5,              
+                min_child_weight=2,       
+                subsample=0.85,            
+                colsample_bytree=0.85,     
+                eval_metric='logloss',
+                use_label_encoder=False,
+                n_jobs=1,
+                verbosity=0
+            )
+
+    def save_model(self, filepath="pmcc_xgboost_model.joblib"):
+        return super().save_model(filepath)
+
+    def load_model(self, filepath="pmcc_xgboost_model.joblib"):
+        return super().load_model(filepath)
+

@@ -39,6 +39,22 @@ from .calendar import (
     spread_setup_to_signal
 )
 
+# PMCC signals
+from .pmcc import (
+    publish_pmcc_entry_signal,
+    publish_pmcc_cycle_signal
+)
+
+# TQQQ VIX-Adaptive signals
+from .tqqq import (
+    TQQQSpreadEntrySignal,
+    TQQQLegOutSignal,
+    TQQQLongPutSellSignal,
+    publish_tqqq_entry_signal,
+    publish_tqqq_legout_signal,
+    publish_tqqq_long_put_signal,
+)
+
 # Base classes
 from .base import BaseSignal
 
@@ -64,6 +80,10 @@ __all__ = [
     # Calendar
     'publish_calendar_signal',
     'spread_setup_to_signal',
+    
+    # PMCC
+    'publish_pmcc_entry_signal',
+    'publish_pmcc_cycle_signal',
     
     # Base
     'BaseSignal',

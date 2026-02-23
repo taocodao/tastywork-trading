@@ -101,7 +101,7 @@ def spread_setup_to_signal(setup) -> Dict[str, Any]:
         "riskLevel": risk_level.capitalize(),
         "winRate": win_rate,
         "createdAt": now.isoformat(),
-        "expiresAt": expires_at.isoformat(),
+        "expiresAt": expires_at,
         "rationale": f"Theta edge ${setup.theta_edge:.2f}/day, IV {setup.iv*100:.0f}%, Score {setup.score:.1f}",
         
         "contracts": 1, # Default

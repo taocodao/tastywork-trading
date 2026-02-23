@@ -72,6 +72,16 @@ def publish_dvo_entry_signal(signal: DVOEntrySignal) -> bool:
     try:
         data = signal.to_dict()
         
+        # Calculate expiration: Market close today (16:00 ET)
+        try:
+            import pytz
+            ny_tz = pytz.timezone('US/Eastern')
+            now_ny = datetime.now(ny_tz)
+            market_close = now_ny.replace(hour=16, minute=0, second=0, microsecond=0)
+            data['expires_at'] = market_close.astimezone(pytz.UTC).replace(tzinfo=None)
+        except ImportError:
+            pass
+        
         # 1. Save to DB
         try:
             repo = SignalRepository()

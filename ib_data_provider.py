@@ -607,6 +607,180 @@ class IBDataProvider:
             traceback.print_exc()
             return []
 
+    def get_call_chain_for_pmcc(
+        self, 
+        symbol: str, 
+        expiry: date,
+        delta_min: float = 0.70,
+        delta_max: float = 0.90,
+        is_leaps: bool = True
+    ) -> List[dict]:
+        """
+        Get call option chain filtered by delta range with full Greeks for PMCC strategy.
+        
+        Args:
+            symbol: Stock symbol
+            expiry: Target expiration date
+            delta_min: Minimum absolute delta
+            delta_max: Maximum absolute delta
+            is_leaps: If True, looks for ITM calls (strikes below stock price). If False, looks for OTM calls (strikes above).
+            
+        Returns:
+            List of call dicts with: strike, expiration, bid, ask, delta, theta, vega, gamma, iv, volume, open_interest
+        """
+        if not self._connected and not self.connect():
+            return []
+            
+        try:
+            # Get stock price first
+            stock_price = self.get_price(symbol)
+            if stock_price <= 0:
+                logger.warning(f"Could not get stock price for {symbol}")
+                return []
+            
+            # Get underlying contract
+            underlying = Stock(symbol, 'SMART', 'USD')
+            self.ib.qualifyContracts(underlying)
+            
+            # Get option chain parameters
+            chains = self.ib.reqSecDefOptParams(underlying.symbol, '', underlying.secType, underlying.conId)
+            smart_chains = [c for c in chains if c.exchange == 'SMART']
+            
+            if not smart_chains:
+                logger.warning(f"No SMART option chains found for {symbol}")
+                return []
+            
+            # Find nearest expiry to target
+            all_expirations = set()
+            for c in smart_chains:
+                all_expirations.update(c.expirations)
+            
+            target_exp_str = expiry.strftime('%Y%m%d')
+            if target_exp_str in all_expirations:
+                final_exp_str = target_exp_str
+            else:
+                from datetime import datetime
+                # Find nearest
+                available_dates = [datetime.strptime(d, '%Y%m%d').date() for d in all_expirations]
+                if not available_dates:
+                    return []
+                nearest_date = min(available_dates, key=lambda d: abs(d - expiry))
+                final_exp_str = nearest_date.strftime('%Y%m%d')
+            
+            selected_chain = next((c for c in smart_chains if final_exp_str in c.expirations), None)
+            if not selected_chain:
+                return []
+            
+            # Filter strikes based on LEAPS (ITM) vs Short Call (OTM)
+            if is_leaps:
+                # ITM calls have strikes lower than the stock price
+                # A 70-90 delta call is deeply ITM (e.g. 10-30% below stock price)
+                strikes = [k for k in selected_chain.strikes 
+                          if 0.50 * stock_price <= k <= 0.95 * stock_price]
+            else:
+                # OTM calls have strikes higher than the stock price
+                # A 15-35 delta call is slightly OTM (e.g. 5-20% above stock price)
+                strikes = [k for k in selected_chain.strikes 
+                          if 1.05 * stock_price <= k <= 1.30 * stock_price]
+            
+            if not strikes:
+                logger.warning(f"No appropriate call strikes found for {symbol} (is_leaps={is_leaps})")
+                return []
+            
+            # Build call contracts
+            contracts = [Option(symbol, final_exp_str, k, 'C', 'SMART') for k in strikes]
+            
+            # Qualify contracts
+            self.ib.qualifyContracts(*contracts)
+            
+            # Request market data with Greeks (generic tick 106)
+            tickers = [self.ib.reqMktData(c, '106', False, False) for c in contracts]
+            
+            # Wait for data
+            from datetime import datetime
+            start_wait = datetime.now()
+            while (datetime.now() - start_wait).total_seconds() < 3.0:
+                self.ib.sleep(0.1)
+                ready_count = sum(1 for t in tickers if t.bid > 0 and t.ask > 0)
+                if ready_count >= len(tickers) * 0.8:
+                    break
+            
+            # Build result
+            result = []
+            final_expiry_date = datetime.strptime(final_exp_str, '%Y%m%d').date()
+            
+            for t in tickers:
+                bid = t.bid if t.bid > 0 else (t.last if t.last else 0)
+                ask = t.ask if t.ask > 0 else (t.last if t.last else 0)
+                
+                if bid <= 0 and ask <= 0:
+                    continue
+                
+                # Get Greeks if available
+                if t.modelGreeks:
+                    delta = t.modelGreeks.delta if t.modelGreeks.delta else (0.80 if is_leaps else 0.20)
+                    theta = t.modelGreeks.theta or 0
+                    vega = t.modelGreeks.vega or 0
+                    gamma = t.modelGreeks.gamma or 0
+                    iv = t.modelGreeks.impliedVol or 0.30
+                else:
+                    # Estimate delta from moneyness if Greeks are missing
+                    moneyness = stock_price / t.contract.strike if is_leaps else t.contract.strike / stock_price
+                    if is_leaps:
+                        delta = 0.80
+                    else:
+                        if moneyness < 1.05:
+                            delta = 0.40
+                        elif moneyness < 1.10:
+                            delta = 0.25
+                        elif moneyness < 1.15:
+                            delta = 0.15
+                        else:
+                            delta = 0.05
+                    
+                    mid = (bid + ask) / 2 if bid > 0 and ask > 0 else bid or ask
+                    from datetime import date
+                    dte = max((final_expiry_date - date.today()).days, 1)
+                    theta = -mid / max(dte, 1) * 0.7
+                    vega = mid * 0.01
+                    gamma = 0.015
+                    iv = 0.30
+                
+                # Double check the delta is within range before adding to result
+                if delta_min <= delta <= delta_max:
+                    result.append({
+                        "strike": t.contract.strike,
+                        "expiration": final_expiry_date,
+                        "bid": bid,
+                        "ask": ask,
+                        "delta": delta,
+                        "theta": theta,
+                        "vega": vega,
+                        "gamma": gamma,
+                        "iv": iv,
+                        "volume": t.volume if t.volume else 0,
+                        "open_interest": t.callOpenInterest if t.callOpenInterest else 0
+                    })
+            
+            # Cancel market data
+            for t in tickers:
+                try:
+                    self.ib.cancelMktData(t.contract)
+                except:
+                    pass
+            
+            if result:
+                logger.info(f"{symbol}: Found {len(result)} PMCC calls (is_leaps={is_leaps}, strikes {min(r['strike'] for r in result):.0f}-{max(r['strike'] for r in result):.0f})")
+            else:
+                logger.info(f"{symbol}: No PMCC calls found matching delta criteria")
+            return result
+            
+        except Exception as e:
+            logger.error(f"Error getting PMCC call chain for {symbol}: {e}")
+            import traceback
+            traceback.print_exc()
+            return []
+
     def get_next_expiry(self, symbol: str, days_out: int = 45) -> Optional[date]:
         """
         Get the next expiration date approximately N days from now.

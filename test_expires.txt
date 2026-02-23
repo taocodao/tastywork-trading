@@ -1,0 +1,7 @@
+﻿============================= test session starts =============================
+platform win32 -- Python 3.10.7, pytest-9.0.2, pluggy-1.6.0 -- C:\Python310\python.exe
+cachedir: .pytest_cache
+rootdir: D:\Projects\tastywork-trading-1
+plugins: anyio-4.12.1
+collecting ... collected 40 items / 36 deselected / 4 selected
+

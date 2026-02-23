@@ -1,0 +1,361 @@
+============================= test session starts =============================
+platform win32 -- Python 3.10.7, pytest-9.0.2, pluggy-1.6.0 -- C:\Python310\python.exe
+cachedir: .pytest_cache
+rootdir: D:\Projects\tastywork-trading-1
+plugins: anyio-4.12.1
+collecting ... collected 40 items
+
+tests/test_signal_pipeline_e2e.py::TestSignalCreation::test_theta_entry_to_dict PASSED [  2%]
+tests/test_signal_pipeline_e2e.py::TestSignalCreation::test_theta_exit_to_dict PASSED [  5%]
+tests/test_signal_pipeline_e2e.py::TestSignalCreation::test_zebra_entry_to_dict PASSED [  7%]
+tests/test_signal_pipeline_e2e.py::TestSignalCreation::test_zebra_exit_to_dict PASSED [ 10%]
+tests/test_signal_pipeline_e2e.py::TestSignalCreation::test_dvo_entry_to_dict PASSED [ 12%]
+tests/test_signal_pipeline_e2e.py::TestSignalCreation::test_dvo_exit_to_dict PASSED [ 15%]
+tests/test_signal_pipeline_e2e.py::TestSignalCreation::test_calendar_setup_conversion PASSED [ 17%]
+tests/test_signal_pipeline_e2e.py::TestExpiresAtCalculation::test_theta_adds_expires_at FAILED [ 20%]
+tests/test_signal_pipeline_e2e.py::TestExpiresAtCalculation::test_zebra_adds_expires_at FAILED [ 22%]
+tests/test_signal_pipeline_e2e.py::TestExpiresAtCalculation::test_dvo_adds_expires_at PASSED [ 25%]
+tests/test_signal_pipeline_e2e.py::TestExpiresAtCalculation::test_calendar_has_expires_at PASSED [ 27%]
+tests/test_signal_pipeline_e2e.py::TestDatabasePersistence::test_save_new_signal PASSED [ 30%]
+tests/test_signal_pipeline_e2e.py::TestDatabasePersistence::test_save_updates_existing_signal PASSED [ 32%]
+tests/test_signal_pipeline_e2e.py::TestDatabasePersistence::test_get_all_signals_excludes_expired FAILED [ 35%]
+tests/test_signal_pipeline_e2e.py::TestDatabasePersistence::test_get_all_signals_includes_unexpired FAILED [ 37%]
+tests/test_signal_pipeline_e2e.py::TestDatabasePersistence::test_expire_old_signals FAILED [ 40%]
+tests/test_signal_pipeline_e2e.py::TestDatabasePersistence::test_get_signal_by_id PASSED [ 42%]
+tests/test_signal_pipeline_e2e.py::TestDatabasePersistence::test_signal_to_dict_includes_status PASSED [ 45%]
+tests/test_signal_pipeline_e2e.py::TestAutoApproveDecision::test_high_confidence_theta_approved PASSED [ 47%]
+tests/test_signal_pipeline_e2e.py::TestAutoApproveDecision::test_low_confidence_theta_rejected PASSED [ 50%]
+tests/test_signal_pipeline_e2e.py::TestAutoApproveDecision::test_disabled_strategy_rejected PASSED [ 52%]
+tests/test_signal_pipeline_e2e.py::TestAutoApproveDecision::test_no_refresh_token_rejected FAILED [ 55%]
+tests/test_signal_pipeline_e2e.py::TestAutoApproveDecision::test_excessive_capital_rejected FAILED [ 57%]
+tests/test_signal_pipeline_e2e.py::TestAutoApproveExecution::test_creates_session_with_token FAILED [ 60%]
+tests/test_signal_pipeline_e2e.py::TestAutoApproveExecution::test_handles_session_failure_gracefully FAILED [ 62%]
+tests/test_signal_pipeline_e2e.py::TestAutoApproveExecution::test_executes_theta_strategy FAILED [ 65%]
+tests/test_signal_pipeline_e2e.py::TestWebSocketBroadcast::test_broadcast_success PASSED [ 67%]
+tests/test_signal_pipeline_e2e.py::TestWebSocketBroadcast::test_broadcast_connection_error PASSED [ 70%]
+tests/test_signal_pipeline_e2e.py::TestWebSocketBroadcast::test_broadcast_uses_localhost_default PASSED [ 72%]
+tests/test_signal_pipeline_e2e.py::TestWebSocketBroadcast::test_broadcast_server_error_returns_false PASSED [ 75%]
+tests/test_signal_pipeline_e2e.py::TestExitSignalPublishing::test_theta_exit_publishes PASSED [ 77%]
+tests/test_signal_pipeline_e2e.py::TestExitSignalPublishing::test_zebra_exit_publishes PASSED [ 80%]
+tests/test_signal_pipeline_e2e.py::TestExitSignalPublishing::test_dvo_exit_publishes PASSED [ 82%]
+tests/test_signal_pipeline_e2e.py::TestFullPipelineE2E::test_theta_full_pipeline FAILED [ 85%]
+tests/test_signal_pipeline_e2e.py::TestFullPipelineE2E::test_zebra_full_pipeline FAILED [ 87%]
+tests/test_signal_pipeline_e2e.py::TestFullPipelineE2E::test_calendar_full_pipeline FAILED [ 90%]
+tests/test_signal_pipeline_e2e.py::TestTastytradeUtils::test_get_accounts_safe_tries_multiple_methods PASSED [ 92%]
+tests/test_signal_pipeline_e2e.py::TestTastytradeUtils::test_get_user_account_returns_first PASSED [ 95%]
+tests/test_signal_pipeline_e2e.py::TestTastytradeUtils::test_get_user_account_specific_number PASSED [ 97%]
+tests/test_signal_pipeline_e2e.py::TestTastytradeUtils::test_get_user_account_not_found_raises PASSED [100%]
+
+================================== FAILURES ===================================
+_____________ TestExpiresAtCalculation.test_theta_adds_expires_at _____________
+tests\test_signal_pipeline_e2e.py:117: in test_theta_adds_expires_at
+    with patch('signal_publisher.theta.auto_approve_signal', side_effect=Exception("skip")):
+C:\Python310\lib\unittest\mock.py:1437: in __enter__
+    original, local = self.get_original()
+C:\Python310\lib\unittest\mock.py:1410: in get_original
+    raise AttributeError(
+E   AttributeError: <module 'signal_publisher.theta' from 'D:\\Projects\\tastywork-trading-1\\signal_publisher\\theta.py'> does not have the attribute 'auto_approve_signal'
+_____________ TestExpiresAtCalculation.test_zebra_adds_expires_at _____________
+tests\test_signal_pipeline_e2e.py:135: in test_zebra_adds_expires_at
+    with patch('signal_publisher.zebra.auto_approve_signal', side_effect=Exception("skip")):
+C:\Python310\lib\unittest\mock.py:1437: in __enter__
+    original, local = self.get_original()
+C:\Python310\lib\unittest\mock.py:1410: in get_original
+    raise AttributeError(
+E   AttributeError: <module 'signal_publisher.zebra' from 'D:\\Projects\\tastywork-trading-1\\signal_publisher\\zebra.py'> does not have the attribute 'auto_approve_signal'
+________ TestDatabasePersistence.test_get_all_signals_excludes_expired ________
+C:\Users\erich\AppData\Roaming\Python\Python310\site-packages\sqlalchemy\engine\base.py:1815: in _execute_context
+    context = constructor(
+C:\Users\erich\AppData\Roaming\Python\Python310\site-packages\sqlalchemy\engine\default.py:1494: in _init_compiled
+    l_param: List[Any] = [
+C:\Users\erich\AppData\Roaming\Python\Python310\site-packages\sqlalchemy\engine\default.py:1496: in <listcomp>
+    flattened_processors[key](compiled_params[key])
+C:\Users\erich\AppData\Roaming\Python\Python310\site-packages\sqlalchemy\dialects\sqlite\base.py:1207: in process
+    raise TypeError(
+E   TypeError: SQLite DateTime type only accepts Python datetime and date objects as input.
+
+The above exception was the direct cause of the following exception:
+tests\test_signal_pipeline_e2e.py:203: in test_get_all_signals_excludes_expired
+    signal_repo.save_signal({
+src\earnings_intelligence\database.py:518: in save_signal
+    self.session.commit()
+C:\Users\erich\AppData\Roaming\Python\Python310\site-packages\sqlalchemy\orm\session.py:2030: in commit
+    trans.commit(_to_root=True)
+<string>:2: in commit
+    ???
+C:\Users\erich\AppData\Roaming\Python\Python310\site-packages\sqlalchemy\orm\state_changes.py:137: in _go
+    ret_value = fn(self, *arg, **kw)
+C:\Users\erich\AppData\Roaming\Python\Python310\site-packages\sqlalchemy\orm\session.py:1311: in commit
+    self._prepare_impl()
+<string>:2: in _prepare_impl
+    ???
+C:\Users\erich\AppData\Roaming\Python\Python310\site-packages\sqlalchemy\orm\state_changes.py:137: in _go
+    ret_value = fn(self, *arg, **kw)
+C:\Users\erich\AppData\Roaming\Python\Python310\site-packages\sqlalchemy\orm\session.py:1286: in _prepare_impl
+    self.session.flush()
+C:\Users\erich\AppData\Roaming\Python\Python310\site-packages\sqlalchemy\orm\session.py:4331: in flush
+    self._flush(objects)
+C:\Users\erich\AppData\Roaming\Python\Python310\site-packages\sqlalchemy\orm\session.py:4466: in _flush
+    with util.safe_reraise():
+C:\Users\erich\AppData\Roaming\Python\Python310\site-packages\sqlalchemy\util\langhelpers.py:224: in __exit__
+    raise exc_value.with_traceback(exc_tb)
+C:\Users\erich\AppData\Roaming\Python\Python310\site-packages\sqlalchemy\orm\session.py:4427: in _flush
+    flush_context.execute()
+C:\Users\erich\AppData\Roaming\Python\Python310\site-packages\sqlalchemy\orm\unitofwork.py:466: in execute
+    rec.execute(self)
+C:\Users\erich\AppData\Roaming\Python\Python310\site-packages\sqlalchemy\orm\unitofwork.py:642: in execute
+    util.preloaded.orm_persistence.save_obj(
+C:\Users\erich\AppData\Roaming\Python\Python310\site-packages\sqlalchemy\orm\persistence.py:93: in save_obj
+    _emit_insert_statements(
+C:\Users\erich\AppData\Roaming\Python\Python310\site-packages\sqlalchemy\orm\persistence.py:1048: in _emit_insert_statements
+    result = connection.execute(
+C:\Users\erich\AppData\Roaming\Python\Python310\site-packages\sqlalchemy\engine\base.py:1419: in execute
+    return meth(
+C:\Users\erich\AppData\Roaming\Python\Python310\site-packages\sqlalchemy\sql\elements.py:527: in _execute_on_connection
+    return connection._execute_clauseelement(
+C:\Users\erich\AppData\Roaming\Python\Python310\site-packages\sqlalchemy\engine\base.py:1641: in _execute_clauseelement
+    ret = self._execute_context(
+C:\Users\erich\AppData\Roaming\Python\Python310\site-packages\sqlalchemy\engine\base.py:1821: in _execute_context
+    self._handle_dbapi_exception(
+C:\Users\erich\AppData\Roaming\Python\Python310\site-packages\sqlalchemy\engine\base.py:2363: in _handle_dbapi_exception
+    raise sqlalchemy_exception.with_traceback(exc_info[2]) from e
+C:\Users\erich\AppData\Roaming\Python\Python310\site-packages\sqlalchemy\engine\base.py:1815: in _execute_context
+    context = constructor(
+C:\Users\erich\AppData\Roaming\Python\Python310\site-packages\sqlalchemy\engine\default.py:1494: in _init_compiled
+    l_param: List[Any] = [
+C:\Users\erich\AppData\Roaming\Python\Python310\site-packages\sqlalchemy\engine\default.py:1496: in <listcomp>
+    flattened_processors[key](compiled_params[key])
+C:\Users\erich\AppData\Roaming\Python\Python310\site-packages\sqlalchemy\dialects\sqlite\base.py:1207: in process
+    raise TypeError(
+E   sqlalchemy.exc.StatementError: (builtins.TypeError) SQLite DateTime type only accepts Python datetime and date objects as input.
+E   [SQL: INSERT INTO signals (id, symbol, strategy, status, data, expires_at, front_expiry, created_at, updated_at, approved_at, executed_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)]
+E   [parameters: [{'expires_at': '2026-02-20T23:15:15.428502', 'symbol': 'AAPL', 'created_at': datetime.datetime(2026, 2, 21, 1, 15, 15, 432866), 'strategy': 'theta', ' ... (139 characters truncated) ... 'strategy': 'theta', 'status': 'pending', 'expires_at': '2026-02-20T23:15:15.428502'}, 'front_expiry': None, 'approved_at': None, 'executed_at': None}]]
+_______ TestDatabasePersistence.test_get_all_signals_includes_unexpired _______
+C:\Users\erich\AppData\Roaming\Python\Python310\site-packages\sqlalchemy\engine\base.py:1815: in _execute_context
+    context = constructor(
+C:\Users\erich\AppData\Roaming\Python\Python310\site-packages\sqlalchemy\engine\default.py:1494: in _init_compiled
+    l_param: List[Any] = [
+C:\Users\erich\AppData\Roaming\Python\Python310\site-packages\sqlalchemy\engine\default.py:1496: in <listcomp>
+    flattened_processors[key](compiled_params[key])
+C:\Users\erich\AppData\Roaming\Python\Python310\site-packages\sqlalchemy\dialects\sqlite\base.py:1207: in process
+    raise TypeError(
+E   TypeError: SQLite DateTime type only accepts Python datetime and date objects as input.
+
+The above exception was the direct cause of the following exception:
+tests\test_signal_pipeline_e2e.py:228: in test_get_all_signals_includes_unexpired
+    signal_repo.save_signal({
+src\earnings_intelligence\database.py:518: in save_signal
+    self.session.commit()
+C:\Users\erich\AppData\Roaming\Python\Python310\site-packages\sqlalchemy\orm\session.py:2030: in commit
+    trans.commit(_to_root=True)
+<string>:2: in commit
+    ???
+C:\Users\erich\AppData\Roaming\Python\Python310\site-packages\sqlalchemy\orm\state_changes.py:137: in _go
+    ret_value = fn(self, *arg, **kw)
+C:\Users\erich\AppData\Roaming\Python\Python310\site-packages\sqlalchemy\orm\session.py:1311: in commit
+    self._prepare_impl()
+<string>:2: in _prepare_impl
+    ???
+C:\Users\erich\AppData\Roaming\Python\Python310\site-packages\sqlalchemy\orm\state_changes.py:137: in _go
+    ret_value = fn(self, *arg, **kw)
+C:\Users\erich\AppData\Roaming\Python\Python310\site-packages\sqlalchemy\orm\session.py:1286: in _prepare_impl
+    self.session.flush()
+C:\Users\erich\AppData\Roaming\Python\Python310\site-packages\sqlalchemy\orm\session.py:4331: in flush
+    self._flush(objects)
+C:\Users\erich\AppData\Roaming\Python\Python310\site-packages\sqlalchemy\orm\session.py:4466: in _flush
+    with util.safe_reraise():
+C:\Users\erich\AppData\Roaming\Python\Python310\site-packages\sqlalchemy\util\langhelpers.py:224: in __exit__
+    raise exc_value.with_traceback(exc_tb)
+C:\Users\erich\AppData\Roaming\Python\Python310\site-packages\sqlalchemy\orm\session.py:4427: in _flush
+    flush_context.execute()
+C:\Users\erich\AppData\Roaming\Python\Python310\site-packages\sqlalchemy\orm\unitofwork.py:466: in execute
+    rec.execute(self)
+C:\Users\erich\AppData\Roaming\Python\Python310\site-packages\sqlalchemy\orm\unitofwork.py:642: in execute
+    util.preloaded.orm_persistence.save_obj(
+C:\Users\erich\AppData\Roaming\Python\Python310\site-packages\sqlalchemy\orm\persistence.py:93: in save_obj
+    _emit_insert_statements(
+C:\Users\erich\AppData\Roaming\Python\Python310\site-packages\sqlalchemy\orm\persistence.py:1048: in _emit_insert_statements
+    result = connection.execute(
+C:\Users\erich\AppData\Roaming\Python\Python310\site-packages\sqlalchemy\engine\base.py:1419: in execute
+    return meth(
+C:\Users\erich\AppData\Roaming\Python\Python310\site-packages\sqlalchemy\sql\elements.py:527: in _execute_on_connection
+    return connection._execute_clauseelement(
+C:\Users\erich\AppData\Roaming\Python\Python310\site-packages\sqlalchemy\engine\base.py:1641: in _execute_clauseelement
+    ret = self._execute_context(
+C:\Users\erich\AppData\Roaming\Python\Python310\site-packages\sqlalchemy\engine\base.py:1821: in _execute_context
+    self._handle_dbapi_exception(
+C:\Users\erich\AppData\Roaming\Python\Python310\site-packages\sqlalchemy\engine\base.py:2363: in _handle_dbapi_exception
+    raise sqlalchemy_exception.with_traceback(exc_info[2]) from e
+C:\Users\erich\AppData\Roaming\Python\Python310\site-packages\sqlalchemy\engine\base.py:1815: in _execute_context
+    context = constructor(
+C:\Users\erich\AppData\Roaming\Python\Python310\site-packages\sqlalchemy\engine\default.py:1494: in _init_compiled
+    l_param: List[Any] = [
+C:\Users\erich\AppData\Roaming\Python\Python310\site-packages\sqlalchemy\engine\default.py:1496: in <listcomp>
+    flattened_processors[key](compiled_params[key])
+C:\Users\erich\AppData\Roaming\Python\Python310\site-packages\sqlalchemy\dialects\sqlite\base.py:1207: in process
+    raise TypeError(
+E   sqlalchemy.exc.StatementError: (builtins.TypeError) SQLite DateTime type only accepts Python datetime and date objects as input.
+E   [SQL: INSERT INTO signals (id, symbol, strategy, status, data, expires_at, front_expiry, created_at, updated_at, approved_at, executed_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)]
+E   [parameters: [{'expires_at': '2026-02-21T05:15:17.099811', 'symbol': 'MSFT', 'created_at': datetime.datetime(2026, 2, 21, 1, 15, 17, 103420), 'strategy': 'dvo', 'st ... (135 characters truncated) ... , 'strategy': 'dvo', 'status': 'pending', 'expires_at': '2026-02-21T05:15:17.099811'}, 'front_expiry': None, 'approved_at': None, 'executed_at': None}]]
+_______________ TestDatabasePersistence.test_expire_old_signals _______________
+C:\Users\erich\AppData\Roaming\Python\Python310\site-packages\sqlalchemy\engine\base.py:1815: in _execute_context
+    context = constructor(
+C:\Users\erich\AppData\Roaming\Python\Python310\site-packages\sqlalchemy\engine\default.py:1494: in _init_compiled
+    l_param: List[Any] = [
+C:\Users\erich\AppData\Roaming\Python\Python310\site-packages\sqlalchemy\engine\default.py:1496: in <listcomp>
+    flattened_processors[key](compiled_params[key])
+C:\Users\erich\AppData\Roaming\Python\Python310\site-packages\sqlalchemy\dialects\sqlite\base.py:1207: in process
+    raise TypeError(
+E   TypeError: SQLite DateTime type only accepts Python datetime and date objects as input.
+
+The above exception was the direct cause of the following exception:
+tests\test_signal_pipeline_e2e.py:243: in test_expire_old_signals
+    signal_repo.save_signal({
+src\earnings_intelligence\database.py:518: in save_signal
+    self.session.commit()
+C:\Users\erich\AppData\Roaming\Python\Python310\site-packages\sqlalchemy\orm\session.py:2030: in commit
+    trans.commit(_to_root=True)
+<string>:2: in commit
+    ???
+C:\Users\erich\AppData\Roaming\Python\Python310\site-packages\sqlalchemy\orm\state_changes.py:137: in _go
+    ret_value = fn(self, *arg, **kw)
+C:\Users\erich\AppData\Roaming\Python\Python310\site-packages\sqlalchemy\orm\session.py:1311: in commit
+    self._prepare_impl()
+<string>:2: in _prepare_impl
+    ???
+C:\Users\erich\AppData\Roaming\Python\Python310\site-packages\sqlalchemy\orm\state_changes.py:137: in _go
+    ret_value = fn(self, *arg, **kw)
+C:\Users\erich\AppData\Roaming\Python\Python310\site-packages\sqlalchemy\orm\session.py:1286: in _prepare_impl
+    self.session.flush()
+C:\Users\erich\AppData\Roaming\Python\Python310\site-packages\sqlalchemy\orm\session.py:4331: in flush
+    self._flush(objects)
+C:\Users\erich\AppData\Roaming\Python\Python310\site-packages\sqlalchemy\orm\session.py:4466: in _flush
+    with util.safe_reraise():
+C:\Users\erich\AppData\Roaming\Python\Python310\site-packages\sqlalchemy\util\langhelpers.py:224: in __exit__
+    raise exc_value.with_traceback(exc_tb)
+C:\Users\erich\AppData\Roaming\Python\Python310\site-packages\sqlalchemy\orm\session.py:4427: in _flush
+    flush_context.execute()
+C:\Users\erich\AppData\Roaming\Python\Python310\site-packages\sqlalchemy\orm\unitofwork.py:466: in execute
+    rec.execute(self)
+C:\Users\erich\AppData\Roaming\Python\Python310\site-packages\sqlalchemy\orm\unitofwork.py:642: in execute
+    util.preloaded.orm_persistence.save_obj(
+C:\Users\erich\AppData\Roaming\Python\Python310\site-packages\sqlalchemy\orm\persistence.py:93: in save_obj
+    _emit_insert_statements(
+C:\Users\erich\AppData\Roaming\Python\Python310\site-packages\sqlalchemy\orm\persistence.py:1048: in _emit_insert_statements
+    result = connection.execute(
+C:\Users\erich\AppData\Roaming\Python\Python310\site-packages\sqlalchemy\engine\base.py:1419: in execute
+    return meth(
+C:\Users\erich\AppData\Roaming\Python\Python310\site-packages\sqlalchemy\sql\elements.py:527: in _execute_on_connection
+    return connection._execute_clauseelement(
+C:\Users\erich\AppData\Roaming\Python\Python310\site-packages\sqlalchemy\engine\base.py:1641: in _execute_clauseelement
+    ret = self._execute_context(
+C:\Users\erich\AppData\Roaming\Python\Python310\site-packages\sqlalchemy\engine\base.py:1821: in _execute_context
+    self._handle_dbapi_exception(
+C:\Users\erich\AppData\Roaming\Python\Python310\site-packages\sqlalchemy\engine\base.py:2363: in _handle_dbapi_exception
+    raise sqlalchemy_exception.with_traceback(exc_info[2]) from e
+C:\Users\erich\AppData\Roaming\Python\Python310\site-packages\sqlalchemy\engine\base.py:1815: in _execute_context
+    context = constructor(
+C:\Users\erich\AppData\Roaming\Python\Python310\site-packages\sqlalchemy\engine\default.py:1494: in _init_compiled
+    l_param: List[Any] = [
+C:\Users\erich\AppData\Roaming\Python\Python310\site-packages\sqlalchemy\engine\default.py:1496: in <listcomp>
+    flattened_processors[key](compiled_params[key])
+C:\Users\erich\AppData\Roaming\Python\Python310\site-packages\sqlalchemy\dialects\sqlite\base.py:1207: in process
+    raise TypeError(
+E   sqlalchemy.exc.StatementError: (builtins.TypeError) SQLite DateTime type only accepts Python datetime and date objects as input.
+E   [SQL: INSERT INTO signals (id, symbol, strategy, status, data, expires_at, front_expiry, created_at, updated_at, approved_at, executed_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)]
+E   [parameters: [{'expires_at': '2026-02-21T00:15:18.715193', 'symbol': 'AAPL', 'created_at': datetime.datetime(2026, 2, 21, 1, 15, 18, 719967), 'strategy': 'zebra', ' ... (139 characters truncated) ... 'strategy': 'zebra', 'status': 'pending', 'expires_at': '2026-02-21T00:15:18.715193'}, 'front_expiry': None, 'approved_at': None, 'executed_at': None}]]
+___________ TestAutoApproveDecision.test_no_refresh_token_rejected ____________
+tests\test_signal_pipeline_e2e.py:334: in test_no_refresh_token_rejected
+    assert result is False
+E   assert True is False
+___________ TestAutoApproveDecision.test_excessive_capital_rejected ___________
+tests\test_signal_pipeline_e2e.py:346: in test_excessive_capital_rejected
+    assert result is False
+E   assert True is False
+__________ TestAutoApproveExecution.test_creates_session_with_token ___________
+C:\Python310\lib\unittest\mock.py:1366: in patched
+    with self.decoration_helper(patched,
+C:\Python310\lib\contextlib.py:135: in __enter__
+    return next(self.gen)
+C:\Python310\lib\unittest\mock.py:1348: in decoration_helper
+    arg = exit_stack.enter_context(patching)
+C:\Python310\lib\contextlib.py:492: in enter_context
+    result = _cm_type.__enter__(cm)
+C:\Python310\lib\unittest\mock.py:1437: in __enter__
+    original, local = self.get_original()
+C:\Python310\lib\unittest\mock.py:1410: in get_original
+    raise AttributeError(
+E   AttributeError: <module 'auto_approve' from 'D:\\Projects\\tastywork-trading-1\\auto_approve.py'> does not have the attribute 'create_user_session'
+______ TestAutoApproveExecution.test_handles_session_failure_gracefully _______
+C:\Python310\lib\unittest\mock.py:1366: in patched
+    with self.decoration_helper(patched,
+C:\Python310\lib\contextlib.py:135: in __enter__
+    return next(self.gen)
+C:\Python310\lib\unittest\mock.py:1348: in decoration_helper
+    arg = exit_stack.enter_context(patching)
+C:\Python310\lib\contextlib.py:492: in enter_context
+    result = _cm_type.__enter__(cm)
+C:\Python310\lib\unittest\mock.py:1437: in __enter__
+    original, local = self.get_original()
+C:\Python310\lib\unittest\mock.py:1410: in get_original
+    raise AttributeError(
+E   AttributeError: <module 'auto_approve' from 'D:\\Projects\\tastywork-trading-1\\auto_approve.py'> does not have the attribute 'create_user_session'
+____________ TestAutoApproveExecution.test_executes_theta_strategy ____________
+C:\Python310\lib\unittest\mock.py:1366: in patched
+    with self.decoration_helper(patched,
+C:\Python310\lib\contextlib.py:135: in __enter__
+    return next(self.gen)
+C:\Python310\lib\unittest\mock.py:1348: in decoration_helper
+    arg = exit_stack.enter_context(patching)
+C:\Python310\lib\contextlib.py:492: in enter_context
+    result = _cm_type.__enter__(cm)
+C:\Python310\lib\unittest\mock.py:1437: in __enter__
+    original, local = self.get_original()
+C:\Python310\lib\unittest\mock.py:1410: in get_original
+    raise AttributeError(
+E   AttributeError: <module 'auto_approve' from 'D:\\Projects\\tastywork-trading-1\\auto_approve.py'> does not have the attribute 'create_user_session'
+________________ TestFullPipelineE2E.test_theta_full_pipeline _________________
+tests\test_signal_pipeline_e2e.py:529: in test_theta_full_pipeline
+    with patch('signal_publisher.theta.SignalRepository', return_value=signal_repo):
+C:\Python310\lib\unittest\mock.py:1437: in __enter__
+    original, local = self.get_original()
+C:\Python310\lib\unittest\mock.py:1410: in get_original
+    raise AttributeError(
+E   AttributeError: <module 'signal_publisher.theta' from 'D:\\Projects\\tastywork-trading-1\\signal_publisher\\theta.py'> does not have the attribute 'SignalRepository'
+________________ TestFullPipelineE2E.test_zebra_full_pipeline _________________
+tests\test_signal_pipeline_e2e.py:544: in test_zebra_full_pipeline
+    with patch('signal_publisher.zebra.SignalRepository', return_value=signal_repo):
+C:\Python310\lib\unittest\mock.py:1437: in __enter__
+    original, local = self.get_original()
+C:\Python310\lib\unittest\mock.py:1410: in get_original
+    raise AttributeError(
+E   AttributeError: <module 'signal_publisher.zebra' from 'D:\\Projects\\tastywork-trading-1\\signal_publisher\\zebra.py'> does not have the attribute 'SignalRepository'
+_______________ TestFullPipelineE2E.test_calendar_full_pipeline _______________
+tests\test_signal_pipeline_e2e.py:562: in test_calendar_full_pipeline
+    with patch('signal_publisher.calendar.SignalRepository', return_value=signal_repo):
+C:\Python310\lib\unittest\mock.py:1437: in __enter__
+    original, local = self.get_original()
+C:\Python310\lib\unittest\mock.py:1410: in get_original
+    raise AttributeError(
+E   AttributeError: <module 'signal_publisher.calendar' from 'D:\\Projects\\tastywork-trading-1\\signal_publisher\\calendar.py'> does not have the attribute 'SignalRepository'
+============================== warnings summary ===============================
+tests/test_signal_pipeline_e2e.py::TestExpiresAtCalculation::test_theta_adds_expires_at
+  D:\Projects\tastywork-trading-1\src\earnings_intelligence\database.py:27: MovedIn20Warning: The ``declarative_base()`` function is now available as sqlalchemy.orm.declarative_base(). (deprecated since: 2.0) (Background on SQLAlchemy 2.0 at: https://sqlalche.me/e/b8d9)
+    Base = declarative_base()
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ===========================
+FAILED tests/test_signal_pipeline_e2e.py::TestExpiresAtCalculation::test_theta_adds_expires_at
+FAILED tests/test_signal_pipeline_e2e.py::TestExpiresAtCalculation::test_zebra_adds_expires_at
+FAILED tests/test_signal_pipeline_e2e.py::TestDatabasePersistence::test_get_all_signals_excludes_expired
+FAILED tests/test_signal_pipeline_e2e.py::TestDatabasePersistence::test_get_all_signals_includes_unexpired
+FAILED tests/test_signal_pipeline_e2e.py::TestDatabasePersistence::test_expire_old_signals
+FAILED tests/test_signal_pipeline_e2e.py::TestAutoApproveDecision::test_no_refresh_token_rejected
+FAILED tests/test_signal_pipeline_e2e.py::TestAutoApproveDecision::test_excessive_capital_rejected
+FAILED tests/test_signal_pipeline_e2e.py::TestAutoApproveExecution::test_creates_session_with_token
+FAILED tests/test_signal_pipeline_e2e.py::TestAutoApproveExecution::test_handles_session_failure_gracefully
+FAILED tests/test_signal_pipeline_e2e.py::TestAutoApproveExecution::test_executes_theta_strategy
+FAILED tests/test_signal_pipeline_e2e.py::TestFullPipelineE2E::test_theta_full_pipeline
+FAILED tests/test_signal_pipeline_e2e.py::TestFullPipelineE2E::test_zebra_full_pipeline
+FAILED tests/test_signal_pipeline_e2e.py::TestFullPipelineE2E::test_calendar_full_pipeline
+================== 13 failed, 27 passed, 1 warning in 15.96s ==================

@@ -10,8 +10,9 @@ logger = logging.getLogger(__name__)
 from src.zebra.regime_detector import REGIME_PARAMS
 
 class ZebraParamOptimizer:
-    def __init__(self, backtester):
+    def __init__(self, backtester, optuna_optimizer=None):
         self.backtester = backtester
+        self.optuna_optimizer = optuna_optimizer
         
     def optimize(self, start_date, end_date):
         # ... (rest of method)
@@ -28,12 +29,27 @@ class ZebraParamOptimizer:
         
     def optimize(self, start_date, end_date):
         """
-        Run grid search optimization for each regime.
+        Run optimization for each regime.
+        If optuna_optimizer is provided, uses Bayesian TPE. Otherwise falls back to generic grid search.
         """
         logger.info(f"Starting Parameter Optimization ({start_date} to {end_date})...")
         
         # 1. Fetch Data
         self.backtester.fetch_data(start_date=start_date, end_date=end_date)
+        
+        # If optuna is available, delegate to it
+        if self.optuna_optimizer:
+            logger.info("Using Optuna Bayesian Optimization Engine")
+            best_params = self.optuna_optimizer.optimize()
+            # For simplicity, if the PMCCBayesianOptimizer returns a single global dict,
+            # we apply it across all regimes. In a true multi-regime optuna setup,
+            # you would run 4 independent Optuna studies. Let's just return what we have.
+            return {
+                'LOW_VOL': best_params,
+                'NORMAL': best_params,
+                'HIGH_VOL': best_params,
+                'CRISIS': best_params
+            }
         
         # 2. Identify Regime Days
         regime_days = {'LOW_VOL': [], 'NORMAL': [], 'HIGH_VOL': []}

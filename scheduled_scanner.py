@@ -304,6 +304,54 @@ def run_zebra_scanner() -> int:
         return 0
 
 
+def run_pmcc_scanner() -> int:
+    """
+    Run the PMCC screening and selection pipeline.
+    """
+    import config
+    if not getattr(config, 'PMCC_ENABLED', True):
+        return 0
+        
+    logger.info("📈 Running PMCC Strategy Scan...")
+    
+    try:
+        from src.pmcc.pmcc_screener import PMCCScreener
+        from src.pmcc.pmcc_selector import PMCCSelector
+        from src.pmcc.pmcc_signal_generator import PMCCSignalGenerator
+        from signal_publisher.pmcc import publish_pmcc_entry_signal
+        
+        screener = PMCCScreener()
+        selector = PMCCSelector()
+        generator = PMCCSignalGenerator()
+        
+        candidates = screener.get_candidates(min_composite_score=60.0)
+        if not candidates:
+            logger.info("  No PMCC candidates found.")
+            return 0
+            
+        logger.info(f"  Found {len(candidates)} PMCC candidates. Structuring trades...")
+        
+        valid_signals = []
+        # Process top 5 candidates to save API calls
+        for cand in candidates[:5]:
+            setup = selector.select_pmcc_entry(cand.symbol, cand.price, cand.composite_score, getattr(config, 'ACCOUNT_SIZE', 100000.0))
+            if not setup:
+                continue
+                
+            signal = generator.generate_entry_signal(cand, setup)
+            valid_signals.append(signal)
+            
+            publish_pmcc_entry_signal(signal)
+            logger.info(f"  ✅ Published PMCC Entry Signal for {cand.symbol}")
+            
+        return len(valid_signals)
+    except Exception as e:
+        logger.error(f"PMCC scan failed: {e}")
+        import traceback
+        traceback.print_exc()
+        return 0
+
+
 def run_loop(interval_seconds: int = 300, use_mock: bool = False, force: bool = False):
     """
     Run scanner in a loop.
@@ -333,8 +381,9 @@ def run_loop(interval_seconds: int = 300, use_mock: bool = False, force: bool = 
                 # Run ZEBRA every 30 mins
                 if now >= next_zebra_scan:
                      run_zebra_scanner()
+                     run_pmcc_scanner()
                      next_zebra_scan = now + timedelta(minutes=getattr(config, 'ZEBRA_SCAN_INTERVAL_MIN', 30))
-                     logger.info(f"Next ZEBRA scan at {next_zebra_scan.strftime('%H:%M:%S')}")
+                     logger.info(f"Next ZEBRA/PMCC scan at {next_zebra_scan.strftime('%H:%M:%S')}")
 
             else:
                 logger.info("⏸️ Outside market hours, skipping scan")
@@ -370,6 +419,8 @@ def main():
             logger.info("⏸️ Outside market hours. Use --force to run anyway.")
             return
         run_scanner(use_mock=args.mock)
+        run_zebra_scanner()
+        run_pmcc_scanner()
         # run_earnings_scanner()
         run_zebra_scanner()
 

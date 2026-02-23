@@ -139,7 +139,7 @@ def publish_zebra_entry_signal(signal: ZebraEntrySignal) -> bool:
             ny_tz = pytz.timezone('US/Eastern')
             now_ny = datetime.now(ny_tz)
             market_close = now_ny.replace(hour=16, minute=0, second=0, microsecond=0)
-            data['expires_at'] = market_close.astimezone(pytz.UTC).replace(tzinfo=None).isoformat()
+            data['expires_at'] = market_close.astimezone(pytz.UTC).replace(tzinfo=None)
         except ImportError:
             pass
         

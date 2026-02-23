@@ -1,0 +1,18 @@
+{
+  "summary": {
+    "total_trades": 92,
+    "total_pnl": 18257.55,
+    "win_rate": 62.0,
+    "avg_win": 545.17,
+    "avg_loss": -366.21,
+    "initial_capital": 25000,
+    "final_capital": 43257.55,
+    "total_return_pct": 73.0,
+    "avg_hold_cycles": 2.6
+  },
+  "bci_impact": {
+    "compliant_trades_win_rate": 60.0,
+    "violation_trades_win_rate": 75.0
+  },
+  "period": "2022-01-01 to 2024-12-31"
+}

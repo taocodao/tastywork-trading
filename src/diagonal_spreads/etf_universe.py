@@ -25,6 +25,7 @@ class UniverseTier(Enum):
     TIER_1_CORE = 1      # Always include, highest liquidity
     TIER_2_ROTATION = 2  # Rotate based on conditions
     TIER_3_OPPORTUNISTIC = 3  # Only when IV conditions exceptional
+    TIER_4_EQUITIES = 4  # Individual mega-cap equities for PMCC
 
 
 @dataclass
@@ -271,6 +272,73 @@ TIER_3_OPPORTUNISTIC: Dict[str, SecurityConfig] = {
 }
 
 
+# ============================================================================
+# TIER 4: MEGA CAL EQUITIES - Primarily for PMCC Strategy
+# ============================================================================
+TIER_4_MEGA_CAP_EQUITIES: Dict[str, SecurityConfig] = {
+    "AAPL": SecurityConfig(
+        symbol="AAPL",
+        name="Apple Inc.",
+        tier=UniverseTier.TIER_4_EQUITIES,
+        liquidity_score=99,
+        weight=0.05,
+        sector="Technology",
+        correlation_group="MegaCapTech",
+        has_earnings_risk=True,
+    ),
+    "MSFT": SecurityConfig(
+        symbol="MSFT",
+        name="Microsoft Corporation",
+        tier=UniverseTier.TIER_4_EQUITIES,
+        liquidity_score=99,
+        weight=0.05,
+        sector="Technology",
+        correlation_group="MegaCapTech",
+        has_earnings_risk=True,
+    ),
+    "NVDA": SecurityConfig(
+        symbol="NVDA",
+        name="NVIDIA Corporation",
+        tier=UniverseTier.TIER_4_EQUITIES,
+        liquidity_score=98,
+        weight=0.04,
+        sector="Technology",
+        correlation_group="Semis",
+        has_earnings_risk=True,
+    ),
+    "AMZN": SecurityConfig(
+        symbol="AMZN",
+        name="Amazon.com Inc.",
+        tier=UniverseTier.TIER_4_EQUITIES,
+        liquidity_score=98,
+        weight=0.04,
+        sector="Consumer Discretionary",
+        correlation_group="eCommerce",
+        has_earnings_risk=True,
+    ),
+    "META": SecurityConfig(
+        symbol="META",
+        name="Meta Platforms Inc.",
+        tier=UniverseTier.TIER_4_EQUITIES,
+        liquidity_score=95,
+        weight=0.03,
+        sector="Communication Services",
+        correlation_group="SocialMedia",
+        has_earnings_risk=True,
+    ),
+    "GOOGL": SecurityConfig(
+        symbol="GOOGL",
+        name="Alphabet Inc.",
+        tier=UniverseTier.TIER_4_EQUITIES,
+        liquidity_score=95,
+        weight=0.03,
+        sector="Communication Services",
+        correlation_group="Search",
+        has_earnings_risk=True,
+    ),
+}
+
+
 class ETFUniverse:
     """
     Manages the 3-tier ETF universe for diagonal spread trading.
@@ -288,6 +356,7 @@ class ETFUniverse:
         self.tier1 = TIER_1_CORE_ETFS.copy()
         self.tier2 = TIER_2_SECTOR_ETFS.copy()
         self.tier3 = TIER_3_OPPORTUNISTIC.copy()
+        self.tier4 = TIER_4_MEGA_CAP_EQUITIES.copy()
         self._active_correlation_groups: Set[str] = set()
     
     def get_all_securities(self) -> Dict[str, SecurityConfig]:
@@ -296,6 +365,7 @@ class ETFUniverse:
         combined.update(self.tier1)
         combined.update(self.tier2)
         combined.update(self.tier3)
+        combined.update(self.tier4)
         return combined
     
     def get_tier_securities(self, tier: UniverseTier) -> Dict[str, SecurityConfig]:
@@ -304,8 +374,10 @@ class ETFUniverse:
             return self.tier1
         elif tier == UniverseTier.TIER_2_ROTATION:
             return self.tier2
-        else:
+        elif tier == UniverseTier.TIER_3_OPPORTUNISTIC:
             return self.tier3
+        else:
+            return self.tier4
     
     def get_symbols_by_tier(self, tier: UniverseTier) -> List[str]:
         """Get list of symbols for a tier."""
@@ -354,7 +426,8 @@ class ETFUniverse:
     def get_prioritized_scan_list(
         self,
         include_tier2: bool = True,
-        include_tier3: bool = False
+        include_tier3: bool = False,
+        include_tier4: bool = False
     ) -> List[str]:
         """
         Get prioritized list of symbols to scan, ordered by liquidity score.
@@ -362,6 +435,7 @@ class ETFUniverse:
         Args:
             include_tier2: Include Tier 2 securities
             include_tier3: Include Tier 3 securities (only for exceptional IV)
+            include_tier4: Include Tier 4 equities (e.g. for PMCC)
             
         Returns:
             List of symbols sorted by priority (liquidity score)
@@ -374,6 +448,9 @@ class ETFUniverse:
         
         if include_tier3:
             securities.extend(self.tier3.values())
+            
+        if include_tier4:
+            securities.extend(self.tier4.values())
         
         # Sort by liquidity score (highest first)
         securities.sort(key=lambda x: x.liquidity_score, reverse=True)
@@ -390,8 +467,10 @@ class ETFUniverse:
             return (0.60, 0.70)
         elif tier == UniverseTier.TIER_2_ROTATION:
             return (0.20, 0.25)
-        else:
+        elif tier == UniverseTier.TIER_3_OPPORTUNISTIC:
             return (0.05, 0.15)
+        else:
+            return (0.00, 0.20)  # PMCC Equities have higher risk / custom allocation
 
 
 # Singleton instance

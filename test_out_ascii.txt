@@ -1,0 +1,45 @@
+============================= test session starts =============================
+platform win32 -- Python 3.10.7, pytest-9.0.2, pluggy-1.6.0 -- C:\Python310\python.exe
+cachedir: .pytest_cache
+rootdir: D:\Projects\tastywork-trading-1
+plugins: anyio-4.12.1
+collecting ... collected 40 items / 36 deselected / 4 selected
+
+tests/test_signal_pipeline_e2e.py::TestExpiresAtCalculation::test_theta_adds_expires_at FAILED [ 25%]
+tests/test_signal_pipeline_e2e.py::TestExpiresAtCalculation::test_zebra_adds_expires_at FAILED [ 50%]
+tests/test_signal_pipeline_e2e.py::TestExpiresAtCalculation::test_dvo_adds_expires_at PASSED [ 75%]
+tests/test_signal_pipeline_e2e.py::TestExpiresAtCalculation::test_calendar_has_expires_at PASSED [100%]
+
+================================== FAILURES ===================================
+_____________ TestExpiresAtCalculation.test_theta_adds_expires_at _____________
+C:\Python310\lib\unittest\mock.py:1366: in patched
+    with self.decoration_helper(patched,
+C:\Python310\lib\contextlib.py:135: in __enter__
+    return next(self.gen)
+C:\Python310\lib\unittest\mock.py:1348: in decoration_helper
+    arg = exit_stack.enter_context(patching)
+C:\Python310\lib\contextlib.py:492: in enter_context
+    result = _cm_type.__enter__(cm)
+C:\Python310\lib\unittest\mock.py:1437: in __enter__
+    original, local = self.get_original()
+C:\Python310\lib\unittest\mock.py:1410: in get_original
+    raise AttributeError(
+E   AttributeError: <module 'signal_publisher.theta' from 'D:\\Projects\\tastywork-trading-1\\signal_publisher\\theta.py'> does not have the attribute 'SignalRepository'
+_____________ TestExpiresAtCalculation.test_zebra_adds_expires_at _____________
+tests\test_signal_pipeline_e2e.py:134: in test_zebra_adds_expires_at
+    with patch('signal_publisher.zebra.SignalRepository', autospec=True):
+C:\Python310\lib\unittest\mock.py:1437: in __enter__
+    original, local = self.get_original()
+C:\Python310\lib\unittest\mock.py:1410: in get_original
+    raise AttributeError(
+E   AttributeError: <module 'signal_publisher.zebra' from 'D:\\Projects\\tastywork-trading-1\\signal_publisher\\zebra.py'> does not have the attribute 'SignalRepository'
+============================== warnings summary ===============================
+tests/test_signal_pipeline_e2e.py::TestExpiresAtCalculation::test_dvo_adds_expires_at
+  D:\Projects\tastywork-trading-1\src\earnings_intelligence\database.py:27: MovedIn20Warning: The ``declarative_base()`` function is now available as sqlalchemy.orm.declarative_base(). (deprecated since: 2.0) (Background on SQLAlchemy 2.0 at: https://sqlalche.me/e/b8d9)
+    Base = declarative_base()
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ===========================
+FAILED tests/test_signal_pipeline_e2e.py::TestExpiresAtCalculation::test_theta_adds_expires_at
+FAILED tests/test_signal_pipeline_e2e.py::TestExpiresAtCalculation::test_zebra_adds_expires_at
+============ 2 failed, 2 passed, 36 deselected, 1 warning in 5.68s ============

@@ -1,0 +1,25 @@
+{
+  "scenarios": {
+    "Scenario A \u2014 Put Credit Spreads Only (Baseline)": {
+      "return_pct": 36.2,
+      "sharpe": 17.29,
+      "max_dd_pct": -0.7,
+      "trades": 85,
+      "final_equity": 34039
+    },
+    "Scenario B \u2014 Put + Bear Call Credit Spreads": {
+      "return_pct": 98.26271291682299,
+      "sharpe": 6.014971840614874,
+      "max_dd_pct": -10.447546004738244,
+      "trades": 97,
+      "final_equity": 49565.67822920575
+    },
+    "Scenario C \u2014 Put + Call + Iron Condors (Full)": {
+      "return_pct": 64.62459477627996,
+      "sharpe": 5.744148165347633,
+      "max_dd_pct": -8.457689854256586,
+      "trades": 89,
+      "final_equity": 41156.14869406999
+    }
+  }
+}

@@ -15,6 +15,45 @@ except ImportError:
 logger = logging.getLogger(__name__)
 
 
+def _get_accounts_safe(session) -> list:
+    """
+    Version-safe account fetcher for the tastytrade SDK.
+    
+    Different SDK versions use different class method names.
+    This tries each known method name and falls back to raw HTTP.
+    """
+    # Try known SDK class methods
+    for method_name in ['get_accounts', 'a_get_accounts', 'get_customer_accounts']:
+        if hasattr(Account, method_name):
+            method = getattr(Account, method_name)
+            try:
+                return method(session)
+            except Exception as e:
+                logger.debug(f"Account.{method_name} failed: {e}")
+                continue
+    
+    # Fall back to raw HTTP using the session token
+    logger.warning("No SDK method for get_accounts found, using raw HTTP fallback")
+    try:
+        import httpx
+        token = getattr(session, 'session_token', None) or getattr(session, 'token', None)
+        if not token:
+            raise ValueError("Could not extract session token for HTTP fallback")
+        headers = {'Authorization': token}
+        resp = httpx.get(
+            'https://api.tastyworks.com/customers/me/accounts',
+            headers=headers,
+            timeout=10
+        )
+        resp.raise_for_status()
+        items = resp.json().get('data', {}).get('items', [])
+        logger.info(f"✅ Fetched {len(items)} accounts via HTTP fallback")
+        return items
+    except Exception as e:
+        logger.error(f"❌ HTTP fallback for accounts also failed: {e}")
+        raise
+
+
 def create_user_session(refresh_token: str) -> Session:
     """
     Create an OAuth session for a user with their refresh token.
@@ -99,7 +138,7 @@ def get_user_account(
     Raises:
         ValueError: If no accounts are found or specified account doesn't exist
     """
-    accounts = Account.get_accounts(session)
+    accounts = _get_accounts_safe(session)
     
     if not accounts:
         raise ValueError("No accounts found for user")
@@ -132,7 +171,7 @@ def get_all_user_accounts(session: Session) -> List[Account]:
     Raises:
         ValueError: If no accounts are found
     """
-    accounts = Account.get_accounts(session)
+    accounts = _get_accounts_safe(session)
     
     if not accounts:
         raise ValueError("No accounts found for user")

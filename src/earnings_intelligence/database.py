@@ -167,6 +167,51 @@ class TrainingDataPoint(Base):
         return f"<TrainingDataPoint(symbol={self.symbol}, class={self.actual_class})>"
 
 
+class PMCCFeatureRecord(Base):
+    """
+    ML Feature Store table specifically for tracking the state of PMCC decisions.
+    Records the full 15+ dimension context array required for the LinUCB Contextual Bandit
+    and PPO RL model training, along with the eventual outcome/reward.
+    """
+    __tablename__ = 'pmcc_ml_features'
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    symbol = Column(String(10), nullable=False, index=True)
+    evaluation_date = Column(DateTime, default=datetime.utcnow, index=True)
+    position_id = Column(String, nullable=True)  # Links to PMCCPosition if it led to a trade/roll
+    
+    # Context Features (Observations)
+    regime_probs = Column(JSON)          # e.g., {"NORMAL": 0.8, "HIGH_VOL": 0.2}
+    iv_rank = Column(Float)
+    rsi_14 = Column(Float)
+    macd_signal = Column(Float)
+    volume_ratio = Column(Float)
+    atr_pct = Column(Float)
+    bb_pct_b = Column(Float)
+    resistance_proximity = Column(Float)
+    trend_label = Column(String(20))
+    composite_score = Column(Float)
+    
+    # PMCC Specific State
+    days_since_last_roll = Column(Integer, nullable=True)
+    cumulative_premium = Column(Float, nullable=True)
+    leaps_dte = Column(Integer, nullable=True)
+    
+    # Decisions & Rewards (Labels)
+    action_taken = Column(String(20))    # e.g., 'ENTRY', 'ROLL_UP', 'HOLD', 'SKIP'
+    decision_source = Column(String(20)) # e.g., 'RULE_BASED', 'BANDIT', 'RL_AGENT'
+    ml_confidence = Column(Float)
+    
+    # Populated asynchronously when the cycle/trade closes
+    cycle_pnl = Column(Float, nullable=True)     # Reward signal for bandit
+    outcome_label = Column(String(20), nullable=True) # e.g., 'PROFIT_TARGET', 'STOP_LOSS'
+
+    def __repr__(self):
+        return f"<PMCCFeatureRecord(symbol={self.symbol}, date={self.evaluation_date.date()})>"
+
+
+
+
 # Database utility functions
 def init_db():
     """Initialize database tables."""
@@ -301,6 +346,40 @@ class TrainingDataRepository:
     def get_training_data_count(self) -> int:
         """Get count of training data points."""
         return self.session.query(TrainingDataPoint).count()
+
+
+class PMCCFeatureRepository:
+    """Repository for PMCC ML Feature tracking."""
+
+    def __init__(self, session=None):
+        self.session = session or get_session()
+
+    def save_feature_record(self, data: Dict[str, Any]) -> PMCCFeatureRecord:
+        """Save a new PMCC evaluation context array."""
+        record = PMCCFeatureRecord(**data)
+        self.session.add(record)
+        self.session.commit()
+        self.session.refresh(record)
+        return record
+
+    def update_outcome(self, record_id: int, cycle_pnl: float, outcome_label: str) -> Optional[PMCCFeatureRecord]:
+        """Update a feature record with its final outcome (reward)."""
+        record = self.session.query(PMCCFeatureRecord).filter(PMCCFeatureRecord.id == record_id).first()
+        if record:
+            record.cycle_pnl = cycle_pnl
+            record.outcome_label = outcome_label
+            self.session.commit()
+            self.session.refresh(record)
+        return record
+
+    def get_recent_records(self, symbol: str = None, limit: int = 100) -> List[PMCCFeatureRecord]:
+        """Get recent PMCC feature records."""
+        query = self.session.query(PMCCFeatureRecord)
+        if symbol:
+            query = query.filter(PMCCFeatureRecord.symbol == symbol)
+        return query.order_by(PMCCFeatureRecord.evaluation_date.desc()).limit(limit).all()
+
+
 
 
 class Signal(Base):
@@ -481,6 +560,157 @@ class Position(Base):
         return (self.front_expiry - date.today()).days
 
 
+class PMCCPosition(Base):
+    """Track long-term PMCC positions (the LEAPS leg and overall performance)."""
+    __tablename__ = "pmcc_positions"
+
+    id = Column(String(64), primary_key=True, index=True)  # Order ID of the LEAPS entry
+    user_id = Column(String(64), nullable=False, index=True)
+    symbol = Column(String(10), nullable=False, index=True)
+    
+    # LEAPS Leg Details
+    long_expiry = Column(DateTime, nullable=False)
+    long_strike = Column(Float, nullable=False)
+    quantity = Column(Integer, default=1)
+    long_symbol = Column(String(50), nullable=True)  # OCC symbol
+    
+    # Entry Pricing
+    entry_stock_price = Column(Float, nullable=True)
+    entry_debit = Column(Float, nullable=True)  # Cost of LEAPS
+    entry_iv = Column(Float, nullable=True)
+    
+    # Cumulative Performance
+    total_credits_received = Column(Float, default=0.0)
+    current_unrealized_pnl = Column(Float, default=0.0)
+    net_basis = Column(Float, nullable=True)  # entry_debit - total_credits_received
+    
+    # State tracking
+    active_short_call_id = Column(String(64), nullable=True)
+    status = Column(String(20), default="open", index=True)  # open, closed, assigned
+    closed_at = Column(DateTime, nullable=True)
+    exit_pnl = Column(Float, nullable=True)
+    
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    # Relationships
+    short_calls = relationship("PMCCShortCall", back_populates="pmcc_position", foreign_keys="[PMCCShortCall.pmcc_id]")
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "id": self.id,
+            "userId": self.user_id,
+            "symbol": self.symbol,
+            "longExpiry": self.long_expiry.isoformat() if self.long_expiry else None,
+            "longStrike": self.long_strike,
+            "quantity": self.quantity,
+            "longSymbol": self.long_symbol,
+            "entryStockPrice": self.entry_stock_price,
+            "entryDebit": self.entry_debit,
+            "entryIv": self.entry_iv,
+            "totalCreditsReceived": self.total_credits_received,
+            "currentUnrealizedPnl": self.current_unrealized_pnl,
+            "netBasis": self.net_basis,
+            "activeShortCallId": self.active_short_call_id,
+            "status": self.status,
+            "exitPnl": self.exit_pnl,
+            "createdAt": self.created_at.isoformat() if self.created_at else None,
+            "closedAt": self.closed_at.isoformat() if self.closed_at else None,
+        }
+
+
+class PMCCShortCall(Base):
+    """Track individual short call cycles within a PMCC position."""
+    __tablename__ = "pmcc_short_calls"
+
+    id = Column(String(64), primary_key=True, index=True)  # Order ID
+    pmcc_id = Column(String(64), ForeignKey("pmcc_positions.id"), nullable=False, index=True)
+    
+    # Call details
+    expiry = Column(DateTime, nullable=False)
+    strike = Column(Float, nullable=False)
+    quantity = Column(Integer, default=1)
+    occ_symbol = Column(String(50), nullable=True)
+    
+    # Cycle Pricing
+    entry_credit = Column(Float, nullable=False)
+    entry_stock_price = Column(Float, nullable=True)
+    entry_iv = Column(Float, nullable=True)
+    entry_delta = Column(Float, nullable=True)
+    
+    # Cycle State
+    status = Column(String(20), default="open", index=True)  # open, closed, rolled, assigned, expired
+    closed_at = Column(DateTime, nullable=True)
+    exit_debit = Column(Float, nullable=True)
+    exit_reason = Column(String(50), nullable=True)  # profit_target, stop_loss, roll, expiry
+    
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    # Relationships
+    pmcc_position = relationship("PMCCPosition", back_populates="short_calls", foreign_keys=[pmcc_id])
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "id": self.id,
+            "pmccId": self.pmcc_id,
+            "expiry": self.expiry.isoformat() if self.expiry else None,
+            "strike": self.strike,
+            "quantity": self.quantity,
+            "occSymbol": self.occ_symbol,
+            "entryCredit": self.entry_credit,
+            "entryStockPrice": self.entry_stock_price,
+            "entryIv": self.entry_iv,
+            "entryDelta": self.entry_delta,
+            "status": self.status,
+            "exitDebit": self.exit_debit,
+            "exitReason": self.exit_reason,
+            "closedAt": self.closed_at.isoformat() if self.closed_at else None,
+        }
+
+
+class PMCCRepository:
+    """Repository for PMCC operations."""
+
+    def __init__(self, session=None):
+        self.session = session or get_session()
+
+    def get_active_positions(self, user_id: str) -> List[PMCCPosition]:
+        """Get all open PMCC positions for a user."""
+        return self.session.query(PMCCPosition).filter(
+            PMCCPosition.user_id == user_id,
+            PMCCPosition.status == 'open'
+        ).all()
+
+    def get_position(self, pmcc_id: str) -> Optional[PMCCPosition]:
+        """Get a PMCC position by ID."""
+        return self.session.query(PMCCPosition).filter(PMCCPosition.id == pmcc_id).first()
+
+    def save_position(self, position: PMCCPosition) -> PMCCPosition:
+        """Save a new or update an existing PMCC position."""
+        existing = self.get_position(position.id)
+        if not existing:
+            self.session.add(position)
+        self.session.commit()
+        if not existing:
+            self.session.refresh(position)
+        return position
+
+    def save_short_call(self, short_call: PMCCShortCall) -> PMCCShortCall:
+        """Save a new or update an existing short call."""
+        existing = self.session.query(PMCCShortCall).filter(PMCCShortCall.id == short_call.id).first()
+        if not existing:
+            self.session.add(short_call)
+        self.session.commit()
+        if not existing:
+            self.session.refresh(short_call)
+        return short_call
+
+    def get_short_calls(self, pmcc_id: str) -> List[PMCCShortCall]:
+        """Get all short calls associated with a PMCC position."""
+        return self.session.query(PMCCShortCall).filter(PMCCShortCall.pmcc_id == pmcc_id).order_by(PMCCShortCall.created_at.desc()).all()
+
+
 class SignalRepository:
     """Repository for signal operations."""
 
@@ -490,12 +720,21 @@ class SignalRepository:
     def save_signal(self, signal_data: Dict[str, Any]) -> Signal:
         """Save or update a signal."""
         signal_id = signal_data.get('id')
+        
+        # Create a JSON-safe copy of the data for the JSON column
+        json_safe_data = {}
+        for k, v in signal_data.items():
+            if isinstance(v, datetime):
+                json_safe_data[k] = v.isoformat()
+            else:
+                json_safe_data[k] = v
+
         existing = self.session.query(Signal).filter(Signal.id == signal_id).first()
 
         if existing:
             # Update fields
             existing.status = signal_data.get('status', existing.status)
-            existing.data = signal_data
+            existing.data = json_safe_data
             if existing.status == 'approved' and not existing.approved_at:
                 existing.approved_at = datetime.utcnow()
             if existing.status == 'executed' and not existing.executed_at:
@@ -510,7 +749,7 @@ class SignalRepository:
                 symbol=signal_data.get('symbol'),
                 strategy=signal_data.get('strategy'),
                 status=signal_data.get('status', 'pending'),
-                data=signal_data,
+                data=json_safe_data,
                 expires_at=signal_data.get('expires_at'),  # Store signal expiration
                 created_at=datetime.utcnow()
             )

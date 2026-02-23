@@ -1,0 +1,77 @@
+﻿python : INFO:signal_publ
+isher.theta:Γ£à Theta sig
+nal saved to database: AA
+PL
+At line:1 char:1
++ python -X utf8 test_pro
+duction_flow.py > test_fl
+ow_output.txt 2>&1
++ ~~~~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~
+    + CategoryInfo       
+       : NotSpecified:   
+  (INFO:signal_pub...    
+ database: AAPL:Strin    
+g) [], RemoteExcepti    o
+n
+    + FullyQualifiedErro 
+   rId : NativeCommandE  
+  rror
+ 
+INFO:auto_approve:Γ£à Aut
+o-approve criteria met fo
+r AAPL (theta/MEDIUM)
+INFO:auto_approve:≡ƒñû Au
+to-approving signal: AAPL
+ theta
+INFO:tastytrade_utils:Γ£à
+ TASTYTRADE_CLIENT_SECRET
+ loaded: 3055...40cd
+INFO:httpx:HTTP Request: 
+POST https://api.tastywor
+ks.com/oauth/token "HTTP/
+1.1 200 OK"
+DEBUG:tastytrade:Refreshe
+d token, expires in 900ms
+INFO:httpx:HTTP Request: 
+GET https://api.tastywork
+s.com/api-quote-tokens "H
+TTP/1.1 200 OK"
+INFO:tastytrade_utils:Γ£à
+ Created user session (po
+sitional) expires: 2026-0
+2-20 19:38:26.580127-05:0
+0
+ERROR:auto_approve:Γ¥î Au
+to-approve execution fail
+ed: get_accounts
+Traceback (most recent ca
+ll last):
+  File "D:\Projects\tasty
+work-trading-1\auto_appro
+ve.py", line 317, in auto
+_approve_signal
+    account = get_user_ac
+count(session, account_nu
+mber)
+  File "D:\Projects\tasty
+work-trading-1\tastytrade
+_utils.py", line 102, in 
+get_user_account
+    accounts = Account.ge
+t_accounts(session)
+  File "C:\Python310\lib\
+site-packages\pydantic\_i
+nternal\_model_constructi
+on.py", line 289, in __ge
+tattr__
+    raise AttributeError(
+item)
+AttributeError: get_accou
+nts
+WARNING:signal_publisher.
+websocket_client:ΓÜá∩╕Å W
+ebSocket server not avail
+able for channel: theta_p
+uts

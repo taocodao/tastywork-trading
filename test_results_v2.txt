@@ -1,0 +1,43 @@
+﻿============================= test session starts =============================
+platform win32 -- Python 3.10.7, pytest-9.0.2, pluggy-1.6.0 -- C:\Python310\python.exe
+cachedir: .pytest_cache
+rootdir: D:\Projects\tastywork-trading-1
+plugins: anyio-4.12.1
+collecting ... collected 40 items
+
+tests/test_signal_pipeline_e2e.py::TestSignalCreation::test_theta_entry_to_dict PASSED [  2%]
+tests/test_signal_pipeline_e2e.py::TestSignalCreation::test_theta_exit_to_dict PASSED [  5%]
+tests/test_signal_pipeline_e2e.py::TestSignalCreation::test_zebra_entry_to_dict PASSED [  7%]
+tests/test_signal_pipeline_e2e.py::TestSignalCreation::test_zebra_exit_to_dict PASSED [ 10%]
+tests/test_signal_pipeline_e2e.py::TestSignalCreation::test_dvo_entry_to_dict PASSED [ 12%]
+tests/test_signal_pipeline_e2e.py::TestSignalCreation::test_dvo_exit_to_dict PASSED [ 15%]
+tests/test_signal_pipeline_e2e.py::TestSignalCreation::test_calendar_setup_conversion PASSED [ 17%]
+tests/test_signal_pipeline_e2e.py::TestExpiresAtCalculation::test_theta_adds_expires_at FAILED [ 20%]
+tests/test_signal_pipeline_e2e.py::TestExpiresAtCalculation::test_zebra_adds_expires_at FAILED [ 22%]
+tests/test_signal_pipeline_e2e.py::TestExpiresAtCalculation::test_dvo_adds_expires_at FAILED [ 25%]
+tests/test_signal_pipeline_e2e.py::TestExpiresAtCalculation::test_calendar_has_expires_at PASSED [ 27%]
+tests/test_signal_pipeline_e2e.py::TestDatabasePersistence::test_save_new_signal PASSED [ 30%]
+tests/test_signal_pipeline_e2e.py::TestDatabasePersistence::test_save_updates_existing_signal PASSED [ 32%]
+tests/test_signal_pipeline_e2e.py::TestDatabasePersistence::test_get_all_signals_excludes_expired FAILED [ 35%]
+tests/test_signal_pipeline_e2e.py::TestDatabasePersistence::test_get_all_signals_includes_unexpired FAILED [ 37%]
+tests/test_signal_pipeline_e2e.py::TestDatabasePersistence::test_expire_old_signals FAILED [ 40%]
+tests/test_signal_pipeline_e2e.py::TestDatabasePersistence::test_get_signal_by_id PASSED [ 42%]
+tests/test_signal_pipeline_e2e.py::TestDatabasePersistence::test_signal_to_dict_includes_status PASSED [ 45%]
+tests/test_signal_pipeline_e2e.py::TestAutoApproveDecision::test_high_confidence_theta_approved PASSED [ 47%]
+tests/test_signal_pipeline_e2e.py::TestAutoApproveDecision::test_low_confidence_theta_rejected PASSED [ 50%]
+tests/test_signal_pipeline_e2e.py::TestAutoApproveDecision::test_disabled_strategy_rejected PASSED [ 52%]
+tests/test_signal_pipeline_e2e.py::TestAutoApproveDecision::test_no_refresh_token_rejected FAILED [ 55%]
+tests/test_signal_pipeline_e2e.py::TestAutoApproveDecision::test_excessive_capital_rejected FAILED [ 57%]
+tests/test_signal_pipeline_e2e.py::TestAutoApproveExecution::test_creates_session_with_token FAILED [ 60%]
+tests/test_signal_pipeline_e2e.py::TestAutoApproveExecution::test_handles_session_failure_gracefully FAILED [ 62%]
+tests/test_signal_pipeline_e2e.py::TestAutoApproveExecution::test_executes_theta_strategy FAILED [ 65%]
+tests/test_signal_pipeline_e2e.py::TestWebSocketBroadcast::test_broadcast_success PASSED [ 67%]
+tests/test_signal_pipeline_e2e.py::TestWebSocketBroadcast::test_broadcast_connection_error PASSED [ 70%]
+tests/test_signal_pipeline_e2e.py::TestWebSocketBroadcast::test_broadcast_uses_localhost_default PASSED [ 72%]
+tests/test_signal_pipeline_e2e.py::TestWebSocketBroadcast::test_broadcast_server_error_returns_false PASSED [ 75%]
+tests/test_signal_pipeline_e2e.py::TestExitSignalPublishing::test_theta_exit_publishes PASSED [ 77%]
+tests/test_signal_pipeline_e2e.py::TestExitSignalPublishing::test_zebra_exit_publishes PASSED [ 80%]
+tests/test_signal_pipeline_e2e.py::TestExitSignalPublishing::test_dvo_exit_publishes PASSED [ 82%]
+tests/test_signal_pipeline_e2e.py::TestFullPipelineE2E::test_theta_full_pipeline FAILED [ 85%]
+tests/test_signal_pipeline_e2e.py::TestFullPipelineE2E::test_zebra_full_pipeline FAILED [ 87%]
+tests/test_signal_pipeline_e2e.py::TestFullPipelineE2E::test_calendar_full_pipeline FAILED [ 90%]
