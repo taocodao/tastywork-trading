@@ -358,6 +358,43 @@ class TQQQScheduler:
             f"───────────────────────────────────────────────────"
         )
 
+    def _persist_status(self, regime_result, vix_result, snapshot) -> None:
+        """Write current VIX regime and TQQQ price to tqqq_status.json."""
+        import json, os
+        from datetime import datetime
+        status = {
+            'regime': regime_result.regime,
+            'can_trade': regime_result.regime != 'CRISIS',
+            'vix': snapshot.get('vix', 0),
+            'vix_direction': vix_result.direction,
+            'tqqq_price': snapshot.get('tqqq_price', 0),
+            'position_multiplier': 1.0,
+            'early_warning': regime_result.regime == 'HIGH_VOL',
+            'message': f'{regime_result.regime} regime | VIX {vix_result.direction} '
+                       f'(conf: {vix_result.confidence:.0%})',
+            'timestamp': datetime.now().isoformat(),
+        }
+        path = os.path.expanduser('~/tastywork-trading/tqqq_status.json')
+        with open(path, 'w') as f:
+            json.dump(status, f, indent=2)
+        logger.info(f"Persisted TQQQ status: regime={status['regime']}")
+
+    def _persist_signal(self, signal_dict: dict) -> None:
+        """Append a new signal to tqqq_signals.json."""
+        import json, os
+        path = os.path.expanduser('~/tastywork-trading/tqqq_signals.json')
+        signals = []
+        if os.path.exists(path):
+            try:
+                with open(path) as f:
+                    signals = json.load(f)
+            except Exception:
+                pass
+        signals.append(signal_dict)
+        with open(path, 'w') as f:
+            json.dump(signals, f, indent=2)
+        logger.info(f"Persisted TQQQ signal: {signal_dict.get('id', 'unknown')}")
+
 
 # ── Entry point ───────────────────────────────────────────────────────────────
 
