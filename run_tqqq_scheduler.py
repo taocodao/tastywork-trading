@@ -165,6 +165,14 @@ class TQQQScheduler:
         logger.info(f"Morning refresh complete. Current regime: {regime_result.regime} "
                     f"(conf: {regime_result.confidence:.0%})")
 
+        # Persist status so API can serve /api/tqqq/status
+        try:
+            snapshot = self.data_pipeline.get_live_snapshot()
+            vix_result = self.vix_predictor.predict(df)
+            self._persist_status(regime_result, vix_result, snapshot)
+        except Exception as _e:
+            logger.warning(f"Could not persist TQQQ status: {_e}")
+
     async def _scan_for_entry(self) -> None:
         """Evaluate whether to open a new spread, governed by the Intraday Timing Engine."""
         logger.info("── Entry Scan ──────────────────────────────────────")
@@ -234,6 +242,9 @@ class TQQQScheduler:
                 f"ENTRY SIGNAL: {signal_msg.short_strike}P / {signal_msg.long_strike}P "
                 f"| Credit: ${signal_msg.credit:.2f}"
             )
+
+            # Persist signal so API can serve it via /api/tqqq/signals
+            self._persist_signal(signal_msg.to_dict())
 
             if TQQQ_AUTO_TRADE:
                 await self.order_manager.place_spread_order(

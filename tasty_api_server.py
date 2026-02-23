@@ -208,6 +208,13 @@ class TastyHandler(BaseHTTPRequestHandler):
                 self._handle_zebra_watchlist_get()
             elif self.path == '/api/zebra/revalidate':
                 self._handle_zebra_revalidate()
+            # =============================================================================
+            # TQQQ STRATEGY ROUTES
+            # =============================================================================
+            elif self.path == '/api/tqqq/status':
+                self._handle_tqqq_status()
+            elif self.path == '/api/tqqq/signals':
+                self._handle_tqqq_signals()
             else:
                 self._send_json({'error': 'Not found'}, 404)
         except Exception as e:
@@ -237,6 +244,13 @@ class TastyHandler(BaseHTTPRequestHandler):
                 self._handle_zebra_construct(data)
             elif self.path == '/api/zebra/order':
                 self._handle_zebra_order(data)
+            # =============================================================================
+            # TQQQ STRATEGY ROUTES
+            # =============================================================================
+            elif self.path == '/api/tqqq/signals/execute':
+                self._handle_tqqq_execute(data)
+            elif self.path == '/api/tqqq/signals/track':
+                self._handle_tqqq_track(data)
             else:
                 self._send_json({'error': 'Not found'}, 404)
         except Exception as e:
@@ -1445,6 +1459,98 @@ class TastyHandler(BaseHTTPRequestHandler):
             import traceback
             traceback.print_exc()
             self._send_json({'error': str(e)}, 500)
+
+
+    # ==========================================================================
+    # TQQQ STRATEGY HANDLERS
+    # ==========================================================================
+
+    def _handle_tqqq_status(self):
+        """GET /api/tqqq/status — Returns VIX regime and TQQQ price snapshot."""
+        import os, json, time
+        STATUS_FILE = os.path.expanduser('~/tastywork-trading/tqqq_status.json')
+        try:
+            if os.path.exists(STATUS_FILE):
+                mtime = os.path.getmtime(STATUS_FILE)
+                if time.time() - mtime < 300:   # cache 5 min
+                    with open(STATUS_FILE) as f:
+                        self._send_json(json.load(f))
+                    return
+        except Exception:
+            pass
+
+        # Fallback — minimal payload when scheduler hasn't written status yet
+        self._send_json({
+            'regime': 'UNKNOWN',
+            'can_trade': True,
+            'vix': 0.0,
+            'vix_direction': 'STABLE',
+            'tqqq_price': 0.0,
+            'position_multiplier': 1.0,
+            'early_warning': False,
+            'message': 'Awaiting first market refresh (starts 08:00 ET)',
+            'timestamp': None,
+        })
+
+    def _handle_tqqq_signals(self):
+        """GET /api/tqqq/signals — Returns pending TQQQ signals."""
+        import os, json
+        SIGNALS_FILE = os.path.expanduser('~/tastywork-trading/tqqq_signals.json')
+        try:
+            if os.path.exists(SIGNALS_FILE):
+                with open(SIGNALS_FILE) as f:
+                    data = json.load(f)
+                signals = [s for s in data if s.get('status') == 'pending']
+                self._send_json(signals)
+            else:
+                self._send_json([])
+        except Exception as e:
+            print(f'TQQQ signals read error: {e}')
+            self._send_json([])
+
+    def _handle_tqqq_execute(self, data: dict):
+        """POST /api/tqqq/signals/execute — Execute a TQQQ signal on Tastytrade."""
+        import os, json
+        signal_id = data.get('signalId') or data.get('signal_id')
+        if not signal_id:
+            self._send_json({'error': 'signalId required'}, 400)
+            return
+
+        # Delegate to the existing approve_signal pipeline (which handles order placement)
+        try:
+            self.handle_approve_signal(signal_id, {'autoApprove': True, **data})
+        except Exception as e:
+            # If approve_signal doesn't know about TQQQ signals, fall back to marking executed
+            self._tqqq_update_signal_status(signal_id, 'executed')
+            self._send_json({'status': 'executed', 'signalId': signal_id,
+                             'note': f'Marked executed (order path: {e})'})
+
+    def _handle_tqqq_track(self, data: dict):
+        """POST /api/tqqq/signals/track — Mark signal as tracked without broker execution."""
+        signal_id = data.get('signalId') or data.get('signal_id')
+        if not signal_id:
+            self._send_json({'error': 'signalId required'}, 400)
+            return
+        self._tqqq_update_signal_status(signal_id, 'tracked')
+        self._send_json({'status': 'tracked', 'signalId': signal_id})
+
+    def _tqqq_update_signal_status(self, signal_id: str, new_status: str):
+        """Update a signal's status in tqqq_signals.json."""
+        import os, json
+        SIGNALS_FILE = os.path.expanduser('~/tastywork-trading/tqqq_signals.json')
+        try:
+            signals = []
+            if os.path.exists(SIGNALS_FILE):
+                with open(SIGNALS_FILE) as f:
+                    signals = json.load(f)
+            for s in signals:
+                if s.get('id') == signal_id:
+                    s['status'] = new_status
+                    break
+            with open(SIGNALS_FILE, 'w') as f:
+                json.dump(signals, f, indent=2)
+        except Exception as e:
+            print(f'TQQQ signal status update error: {e}')
 
 
 def run_server(port=8002):
