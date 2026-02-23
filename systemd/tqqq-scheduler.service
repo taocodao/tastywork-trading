@@ -1,0 +1,22 @@
+[Unit]
+Description=TQQQ Dual-Sided Strategy Scheduler
+Documentation=https://github.com/taocodao/tastywork-trading
+After=network.target trademind-api.service
+Wants=trademind-api.service
+
+[Service]
+Type=simple
+User=ubuntu
+WorkingDirectory=/home/ubuntu/tastywork-trading
+EnvironmentFile=/home/ubuntu/tastywork-trading/.env
+ExecStart=/usr/bin/python3 /home/ubuntu/tastywork-trading/run_tqqq_scheduler.py
+Restart=always
+RestartSec=30
+StandardOutput=append:/home/ubuntu/tastywork-trading/logs/tqqq-scheduler.log
+StandardError=append:/home/ubuntu/tastywork-trading/logs/tqqq-scheduler-error.log
+
+# Only run on weekdays (market days) — the scheduler handles its own time checks
+# but systemd restart ensures it recovers if it crashes
+
+[Install]
+WantedBy=multi-user.target

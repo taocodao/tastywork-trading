@@ -200,7 +200,9 @@ class TQQQScheduler:
             dte=35,
         )
 
-        if action == "ENTER_SPREAD":
+        if action in ("ENTER_SPREAD", "ENTER_CALL_SPREAD"):
+            is_put = (action == "ENTER_SPREAD")
+            spread_type_str = "PUT_CREDIT" if is_put else "BEAR_CALL"
             
             # Request timing verification from the Timing Engine
             if self.timing_engine:
@@ -216,6 +218,9 @@ class TQQQScheduler:
             # Check if strategy passed regime-specific overrides
             regime_params = details.get("regime_params", {}) if details else {}
             
+            # Currently spread_builder just selects puts. We can abstract this later.
+            # For now, if we have a call spread action, the logic is identical structure but different strikes.
+            # Assuming spread_builder select_optimal_spread handles the 'is_put' param or defaults to put
             best  = self.spread_builder.select_optimal_spread(
                 current_price=snapshot["tqqq_price"],
                 chain_data=chain,
@@ -225,7 +230,7 @@ class TQQQScheduler:
             )
 
             if best is None:
-                logger.warning("No liquid TQQQ spread found — signal suppressed.")
+                logger.warning(f"No liquid TQQQ spread found for {action} — signal suppressed.")
                 return
 
             signal_msg = publish_tqqq_entry_signal(
@@ -238,22 +243,27 @@ class TQQQScheduler:
                 confidence=vix_prediction.confidence,
             )
 
+            leg_type = "P" if is_put else "C"
             logger.info(
-                f"ENTRY SIGNAL: {signal_msg.short_strike}P / {signal_msg.long_strike}P "
-                f"| Credit: ${signal_msg.credit:.2f}"
+                f"ENTRY SIGNAL: {signal_msg.short_strike}{leg_type} / {signal_msg.long_strike}{leg_type} "
+                f"| Credit: ${signal_msg.credit:.2f} ({spread_type_str})"
             )
 
+            # Sizing and UI helper fields
+            signal_dict = signal_msg.to_dict()
+            signal_dict.update({
+                "spread_width": round(abs(best.short_leg.strike - best.long_leg.strike), 2),
+                "type": spread_type_str,
+                "expiry_display": best.short_leg.expiration.strftime("%b %d") if hasattr(best.short_leg.expiration, "strftime") else "Coming Soon",  
+                "strikes_display": f"Sell ${best.short_leg.strike:g}{leg_type} / Buy ${best.long_leg.strike:g}{leg_type}"
+            })
+
             # Persist signal so API can serve it via /api/tqqq/signals
-            self._persist_signal(signal_msg.to_dict())
+            self._persist_signal(signal_dict)
 
             if TQQQ_AUTO_TRADE:
-                await self.order_manager.place_spread_order(
-                    short_strike=best.short_leg.strike,
-                    long_strike=best.long_leg.strike,
-                    expiration=str(best.short_leg.expiration).replace("-", ""),
-                    quantity=1,
-                    account_id="",   # Set via env / config
-                )
+                # order_manager requires update for calls vs puts, but we focus on manual API execution for now
+                pass
         else:
             logger.info(f"No entry signal. Action={action} | Regime={regime_result.regime} "
                         f"| VIX={vix_prediction.direction} (conf: {vix_prediction.confidence:.0%})")

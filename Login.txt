@@ -1,0 +1,16 @@
+ssh -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.235.119.67
+# Check TQQQ scheduler deployed
+sudo systemctl status tqqq-scheduler.service
+
+# If first deploy — install the service manually
+cd ~/tastywork-trading
+sudo cp systemd/tqqq-scheduler.service /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable tqqq-scheduler.service
+sudo systemctl start tqqq-scheduler.service
+
+# Check logs
+tail -f logs/tqqq-scheduler.log
+
+# Check GitHub Actions already ran
+git log --oneline -3

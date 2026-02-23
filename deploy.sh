@@ -180,11 +180,44 @@ echo "  QQQ: 30%/40% targets, 7 DTE exit (optimized)"
 echo "  SPY: 45%/55% targets, 3 DTE exit"
 echo "  IWM: 50%/60% targets, 2 DTE exit (aggressive)"
 echo ""
+
+# Step 8: TQQQ Dual-Sided Scheduler Service
+echo -e "${YELLOW}[8/8] Setting up TQQQ Dual-Sided Scheduler...${NC}"
+
+# Test TQQQ import before installing service
+if python3 -c "from run_tqqq_scheduler import main" 2>/dev/null; then
+    echo -e "${GREEN}✓ TQQQ scheduler import OK${NC}"
+else
+    echo -e "${YELLOW}⚠ TQQQ scheduler import check failed — installing service anyway${NC}"
+fi
+
+# Copy systemd service file
+TQQQ_SERVICE="tqqq-scheduler.service"
+if [ -f "$PROJECT_DIR/systemd/$TQQQ_SERVICE" ]; then
+    sudo cp $PROJECT_DIR/systemd/$TQQQ_SERVICE /etc/systemd/system/$TQQQ_SERVICE
+    sudo systemctl daemon-reload
+    sudo systemctl enable $TQQQ_SERVICE
+    sudo systemctl restart $TQQQ_SERVICE
+    sleep 2
+    if sudo systemctl is-active --quiet $TQQQ_SERVICE; then
+        echo -e "${GREEN}✓ tqqq-scheduler.service is running${NC}"
+    else
+        echo -e "${YELLOW}⚠ tqqq-scheduler.service failed to start — check logs:${NC}"
+        echo "  sudo journalctl -u tqqq-scheduler.service -n 30"
+    fi
+else
+    echo -e "${YELLOW}⚠ systemd/$TQQQ_SERVICE not found — skipping TQQQ service setup${NC}"
+fi
+
+echo ""
 echo "Manual controls:"
 echo "  Start monitor: ./scripts/run_position_monitor.sh &"
 echo "  Stop monitor:  pkill -f position_monitor_daemon.py"
 echo "  View logs:     tail -f logs/*.log"
+echo "  TQQQ status:   sudo systemctl status tqqq-scheduler.service"
+echo "  TQQQ logs:     tail -f logs/tqqq-scheduler.log"
 echo ""
 echo "Next: Monitor logs tomorrow at 9:45 AM"
 echo "      tail -f logs/signals.log"
 echo "========================================================================"
+

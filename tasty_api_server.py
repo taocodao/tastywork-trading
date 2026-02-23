@@ -1508,22 +1508,82 @@ class TastyHandler(BaseHTTPRequestHandler):
             print(f'TQQQ signals read error: {e}')
             self._send_json([])
 
+    def _tqqq_get_signal(self, signal_id: str):
+        """Helper to retrieve a signal from tqqq_signals.json."""
+        import os, json
+        SIGNALS_FILE = os.path.expanduser('~/tastywork-trading/tqqq_signals.json')
+        try:
+            if os.path.exists(SIGNALS_FILE):
+                with open(SIGNALS_FILE) as f:
+                    signals = json.load(f)
+                for s in signals:
+                    if s.get('id') == signal_id:
+                        return s
+        except Exception as e:
+            print(f"Error reading tqqq_signals.json: {e}")
+        return None
+
     def _handle_tqqq_execute(self, data: dict):
         """POST /api/tqqq/signals/execute — Execute a TQQQ signal on Tastytrade."""
-        import os, json
+        import traceback
         signal_id = data.get('signalId') or data.get('signal_id')
-        if not signal_id:
-            self._send_json({'error': 'signalId required'}, 400)
-            return
+        refresh_token = data.get('refreshToken')
+        account_number = data.get('accountNumber')
+        quantity = data.get('quantity', 1)
+        user_id = data.get('userId', 'anonymous')
 
-        # Delegate to the existing approve_signal pipeline (which handles order placement)
+        if not signal_id:
+            return self._send_json({'error': 'signalId required'}, 400)
+        if not refresh_token:
+            return self._send_json({'error': 'refreshToken required for Tastytrade execution'}, 401)
+        if not account_number:
+            return self._send_json({'error': 'accountNumber required for Tastytrade execution'}, 401)
+
+        # 1. Read signal from tqqq_signals.json
+        signal = self._tqqq_get_signal(signal_id)
+        if not signal:
+            return self._send_json({'error': 'Signal not found'}, 404)
+        
+        # 2. Prevent double execution (Optional server-side check)
+        # Assuming we track per-user execution using the database for future enhancement,
+        # but for now we just place the order or test it directly.
+        from src.tqqq.tastytrade_executor import TastytradeExecutor
+
         try:
-            self.handle_approve_signal(signal_id, {'autoApprove': True, **data})
-        except Exception as e:
-            # If approve_signal doesn't know about TQQQ signals, fall back to marking executed
+            # Create per-user session
+            session = TastytradeExecutor.create_session(refresh_token)
+            account = TastytradeExecutor.get_account(session, account_number)
+
+            spread_type_str = signal.get('type', 'PUT_CREDIT')
+            spread_type = "PUT" if "PUT" in spread_type_str else "CALL"
+            
+            # Place the vertical spread order
+            result = TastytradeExecutor.place_vertical_spread(
+                session=session,
+                account=account,
+                symbol="TQQQ",
+                short_strike=float(signal['short_strike']),
+                long_strike=float(signal['long_strike']),
+                expiration=str(signal['expiration']),
+                spread_type=spread_type,
+                credit=float(signal['credit']),
+                quantity=int(quantity),
+                dry_run=False  # Set to True if we just want to test
+            )
+
+            # 3. Update signal status globally (or track per-user later)
             self._tqqq_update_signal_status(signal_id, 'executed')
-            self._send_json({'status': 'executed', 'signalId': signal_id,
-                             'note': f'Marked executed (order path: {e})'})
+
+            self._send_json({
+                'status': 'executed',
+                'order': result,
+                'signalId': signal_id,
+                'message': f'Trade executed: {quantity}x {spread_type_str} on TQQQ'
+            })
+
+        except Exception as e:
+            traceback.print_exc()
+            self._send_json({'error': f'Trade execution failed: {str(e)}'}, 500)
 
     def _handle_tqqq_track(self, data: dict):
         """POST /api/tqqq/signals/track — Mark signal as tracked without broker execution."""
