@@ -156,25 +156,68 @@ kill <PID>
 - Check firewall allows WSS (port 443) if using reverse proxy
 - Check SSL certificate if using HTTPS/WSS
 
+## Deployment Workflow (Canonical — Feb 2026)
+
+> **IMPORTANT**: EC2 project directory is `~/tastywork-trading` (no `-1` suffix).
+> Do NOT use `~/tastywork-trading-1` — that path does not exist on EC2.
+
+### Local → EC2 Deploy (Git Push, preferred)
+
+```powershell
+# Local (PowerShell — use semicolons, NOT &&)
+git add <files>; git commit -m "feat: description"; git push origin main
+```
+
+```bash
+# EC2 (SSH)
+cd ~/tastywork-trading
+git pull origin main
+sudo systemctl restart trademind-api
+```
+
+### If git pull fails (SCP conflict)
+If files were SCP'd to EC2 before the git push, git pull will abort with "local changes would be overwritten". Fix:
+
+```bash
+cd ~/tastywork-trading
+git stash
+git pull origin main
+git stash drop
+sudo systemctl restart trademind-api
+```
+
+### Avoid SCP for code deployment
+- SCP is fine for one-off data files (optimizer results, JSON)  
+- For **source code**, always use git push + git pull  
+- This keeps git history clean and avoids the stash conflict problem
+
+---
+
 ## Quick Commands Reference
 
 ```bash
-# Check EC2 instance status
-aws ec2 describe-instance-status --instance-ids <id>
-
-# Start EC2
-aws ec2 start-instances --instance-ids <id>
-
 # SSH into EC2
 ssh -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.235.119.67
 
-# Start WebSocket server (on EC2)
+# Deploy latest code from git (on EC2)
 cd ~/tastywork-trading
-nohup python3 websocket_server.py > websocket.log 2>&1 &
+git pull origin main
+sudo systemctl restart trademind-api
+
+# Start nohup background job (e.g. overnight optimizer)
+cd ~/tastywork-trading
+nohup python3 tqqq_backtest_simulation.py --optimize > tqqq_optimize_run.log 2>&1 &
+echo "PID: $!"
+
+# Check nohup job progress
+tail -20 ~/tastywork-trading/tqqq_optimize_run.log
 
 # Check WebSocket is running
 ps aux | grep websocket_server
 netstat -tulpn | grep -E "8003|8004"
+
+# Check service status
+sudo systemctl status trademind-api
 
 # Send test signal (from local)
 python send_calendar_signal_to_production.py
