@@ -251,6 +251,8 @@ class TastyHandler(BaseHTTPRequestHandler):
                 self._handle_tqqq_execute(data)
             elif self.path == '/api/tqqq/signals/track':
                 self._handle_tqqq_track(data)
+            elif self.path == '/api/tqqq/signals/update_status':
+                self._handle_tqqq_update_status(data)
             else:
                 self._send_json({'error': 'Not found'}, 404)
         except Exception as e:
@@ -1594,9 +1596,10 @@ class TastyHandler(BaseHTTPRequestHandler):
         self._tqqq_update_signal_status(signal_id, 'tracked')
         self._send_json({'status': 'tracked', 'signalId': signal_id})
 
-    def _tqqq_update_signal_status(self, signal_id: str, new_status: str):
+    def _tqqq_update_signal_status(self, signal_id: str, new_status: str, extra=None):
         """Update a signal's status in tqqq_signals.json."""
         import os, json
+        from datetime import datetime
         SIGNALS_FILE = os.path.expanduser('~/tastywork-trading/tqqq_signals.json')
         try:
             signals = []
@@ -1606,11 +1609,30 @@ class TastyHandler(BaseHTTPRequestHandler):
             for s in signals:
                 if s.get('id') == signal_id:
                     s['status'] = new_status
+                    if new_status == 'EXECUTED' and extra:
+                        s['executed_at'] = datetime.utcnow().isoformat()
+                        if 'quantity' in extra:
+                            s['quantity'] = extra['quantity']
+                        if 'fillPrice' in extra:
+                            s['fill_price'] = extra['fillPrice']
                     break
             with open(SIGNALS_FILE, 'w') as f:
                 json.dump(signals, f, indent=2)
         except Exception as e:
             print(f'TQQQ signal status update error: {e}')
+            
+    def _handle_tqqq_update_status(self, data: dict):
+        """POST /api/tqqq/signals/update_status — Force update status without executing."""
+        signal_id = data.get('signalId') or data.get('signal_id')
+        status = data.get('status')
+        if not signal_id or not status:
+            self._send_json({'error': 'signalId and status required'}, 400)
+            return
+        
+        # Support upper/lower case
+        status = status.upper() if status.lower() == 'executed' else status
+        self._tqqq_update_signal_status(signal_id, status, extra=data)
+        self._send_json({'status': 'updated', 'signalId': signal_id})
 
 
 def run_server(port=8002):

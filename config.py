@@ -388,7 +388,7 @@ TQQQ_MAX_DRAWDOWN_PCT: float = 0.10       # 10% drawdown → halt new entries
 
 # === DE-OPTIMIZED GLOBAL TRADE FILTERS ===
 TQQQ_IV_MULTIPLIER: float = 2.10          # IV premium (TQQQ IV ≈ 2.1× realized vol, DE-optimized)
-TQQQ_COOLDOWN_DAYS: int = 6               # minimum days between consecutive trade entries
+TQQQ_COOLDOWN_DAYS: int = 0               # (Disabled) Allow multiple spreads to scale with principal
 TQQQ_SLIPPAGE_PCT: float = 0.008          # 0.8% slippage model per leg (DE-optimized)
 TQQQ_VIX_5D_MAX: float = 4.0             # skip entry if VIX rose >4.0 pts over last 5 days
 

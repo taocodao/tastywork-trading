@@ -92,6 +92,7 @@ class TQQQScheduler:
         self._ml_retrain_needed: bool = False
         self._scheduler: Optional[AsyncIOScheduler] = None
         self._last_entry_date: Optional[date] = None   # cooldown tracking
+        self._last_entry_strikes: Optional[tuple] = None # intraday deduplication
 
     # ─────────────────────── Startup ─────────────────────────────────────
 
@@ -189,13 +190,12 @@ class TQQQScheduler:
         regime_result   = self.regime_detector.predict(df)
         vix_prediction  = self.vix_predictor.predict(df)
 
-        # ── Cooldown gate: enforce minimum days between entries ────────────
+        # ── Intraday Deduplication gate ────────────
+        # (Allows multiple distinct signals per day to scale with principal, but prevents exact dupes)
         if self._last_entry_date is not None:
             days_since = (date.today() - self._last_entry_date).days
             if days_since < TQQQ_COOLDOWN_DAYS:
-                logger.info(
-                    f"Cooldown active: {days_since}/{TQQQ_COOLDOWN_DAYS} days since last entry. Skipping."
-                )
+                logger.info(f"Cooldown active: {days_since}/{TQQQ_COOLDOWN_DAYS} days since last entry. Skipping.")
                 return
 
         # ── VIX 5-day change gate: skip if VIX rising sharply ────────────
@@ -254,6 +254,12 @@ class TQQQScheduler:
             if best is None:
                 logger.warning(f"No liquid TQQQ spread found for {action} — signal suppressed.")
                 return
+                
+            # Prevent intraday spam of the exact same signal
+            current_strikes = (best.short_leg.strike, best.long_leg.strike)
+            if self._last_entry_date == date.today() and self._last_entry_strikes == current_strikes:
+                logger.info("Skipping exact duplicate signal (same strikes) already generated today.")
+                return
 
             signal_msg = publish_tqqq_entry_signal(
                 short_strike=best.short_leg.strike,
@@ -283,6 +289,7 @@ class TQQQScheduler:
             # Persist signal so API can serve it via /api/tqqq/signals
             self._persist_signal(signal_dict)
             self._last_entry_date = date.today()   # record for cooldown
+            self._last_entry_strikes = current_strikes
 
             if TQQQ_AUTO_TRADE:
                 # order_manager requires update for calls vs puts, but we focus on manual API execution for now
