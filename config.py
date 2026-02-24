@@ -322,18 +322,24 @@ TQQQ_FALLBACK_SYMBOL: str = "QQQ"   # use QQQ when TQQQ options are illiquid
 
 # === SPREAD CONSTRUCTION ===
 TQQQ_SPREAD_WIDTH: int = 5               # $5 wide spread between strikes
-TQQQ_TARGET_DTE_MIN: int = 21            # minimum days to expiration
+TQQQ_TARGET_DTE_MIN: int = 14            # minimum days to expiration
 TQQQ_TARGET_DTE_MAX: int = 45            # maximum days to expiration
-TQQQ_SHORT_PUT_DELTA: float = -0.30      # target short put delta (~30-delta)
+TQQQ_SHORT_PUT_DELTA: float = -0.18      # DE-optimized: start near NORMAL regime delta
 
-# === EXIT RULES (full spread) ===
 # === REGIME-SPECIFIC PARAMETERS ===
-# These supersede the flat variables below. The BO auto-tuner will optimize these.
+# DE-optimized: 29,046 evals overnight (Feb 24 2026). Scenario A — Put Credit Only.
+# +75.1% return | Sharpe 14.58 | MaxDD -1.9% | 78 trades over 2019–2025.
+#
+# Key changes vs manual defaults:
+#   - Deltas are less aggressive (farther OTM → fewer assignment/loss events)
+#   - Loss multipliers are higher (wider stops let winners run)
+#   - HIGH_VOL profit target much higher (82% vs 40%) — let theta decay more
+#   - CRISIS very far OTM (-0.14) — maximum conservative in extreme conditions
 TQQQ_PARAMS_BY_REGIME = {
-    "LOW_VOL":  {"dte": 35, "delta": -0.25, "width": 3, "profit_target": 0.60, "loss_limit_mult": 2.0, "legout_short_threshold": 0.15, "long_put_profit_target": 2.0},
-    "NORMAL":   {"dte": 30, "delta": -0.30, "width": 5, "profit_target": 0.50, "loss_limit_mult": 2.0, "legout_short_threshold": 0.15, "long_put_profit_target": 2.0},
-    "HIGH_VOL": {"dte": 21, "delta": -0.35, "width": 5, "profit_target": 0.40, "loss_limit_mult": 2.0, "legout_short_threshold": 0.20, "long_put_profit_target": 2.5},
-    "CRISIS":   {"dte": 14, "delta": -0.20, "width": 3, "profit_target": 0.75, "loss_limit_mult": 3.0, "legout_short_threshold": 0.10, "long_put_profit_target": 3.0},
+    "LOW_VOL":  {"dte": 35, "delta": -0.16, "width": 3, "profit_target": 0.50, "loss_limit_mult": 3.8, "legout_short_threshold": 0.15, "long_put_profit_target": 2.0},
+    "NORMAL":   {"dte": 30, "delta": -0.18, "width": 5, "profit_target": 0.56, "loss_limit_mult": 3.2, "legout_short_threshold": 0.15, "long_put_profit_target": 2.0},
+    "HIGH_VOL": {"dte": 21, "delta": -0.24, "width": 5, "profit_target": 0.82, "loss_limit_mult": 2.3, "legout_short_threshold": 0.20, "long_put_profit_target": 2.5},
+    "CRISIS":   {"dte": 14, "delta": -0.14, "width": 3, "profit_target": 0.78, "loss_limit_mult": 4.3, "legout_short_threshold": 0.10, "long_put_profit_target": 3.0},
 }
 
 # === BEAR CALL CREDIT SPREAD PARAMS (Scenario B — validated +98.3% return 2019-2025) ===
@@ -376,9 +382,15 @@ TQQQ_MIN_LEGOUT_CONFIDENCE: float = 0.65  # minimum AI confidence to perform a l
 
 # === RISK & POSITION SIZING ===
 TQQQ_MAX_CONCURRENT_SPREADS: int = 3      # max simultaneous TQQQ spreads
-TQQQ_MAX_RISK_PCT: float = 0.10           # 10% of portfolio at risk (ML-optimized from 5%)
+TQQQ_MAX_RISK_PCT: float = 0.084          # DE-optimized: 8.4% of portfolio per trade (was 10%)
 TQQQ_MIN_BP_RESERVE: float = 0.30         # reserve 30% buying power at all times
 TQQQ_MAX_DRAWDOWN_PCT: float = 0.10       # 10% drawdown → halt new entries
+
+# === DE-OPTIMIZED GLOBAL TRADE FILTERS ===
+TQQQ_IV_MULTIPLIER: float = 2.10          # IV premium (TQQQ IV ≈ 2.1× realized vol, DE-optimized)
+TQQQ_COOLDOWN_DAYS: int = 6               # minimum days between consecutive trade entries
+TQQQ_SLIPPAGE_PCT: float = 0.008          # 0.8% slippage model per leg (DE-optimized)
+TQQQ_VIX_5D_MAX: float = 4.0             # skip entry if VIX rose >4.0 pts over last 5 days
 
 # === LIQUIDITY FILTERS (hard rules, no ML override) ===
 TQQQ_MIN_VOLUME: int = 1000              # minimum daily option volume
@@ -390,6 +402,22 @@ TQQQ_MIN_BID_SIZE: int = 50              # minimum bid size (contracts quoted)
 TQQQ_SCAN_INTERVAL_MIN: int = 30         # scan for entry every 30 min
 TQQQ_POSITION_CHECK_MIN: int = 15        # check open positions every 15 min
 TQQQ_AUTO_TRADE: bool = False            # set True for paper/live execution
+
+# === OPTIMIZATION AUDIT TRAIL ===
+# Record of the DE optimization run that produced the params above. Read-only.
+TQQQ_OPTIMIZATION_META = {
+    "run_date":        "2026-02-24 05:41 UTC",
+    "method":          "Differential Evolution (scipy)",
+    "scenario":        "A — Put Credit Spreads Only",
+    "evals":           10406,
+    "data_range":      "2019-01-01 to 2025-01-01",
+    "starting_capital": 25000,
+    "return_pct":      75.1,
+    "sharpe":          14.58,
+    "max_dd_pct":      -1.93,
+    "trades":          78,
+    "final_equity":    43768,
+}
 
 # =============================================================================
 

@@ -51,6 +51,7 @@ from signal_publisher.tqqq import (
 from config import (
     TQQQ_ENABLED, TQQQ_AUTO_TRADE,
     TQQQ_SCAN_INTERVAL_MIN, TQQQ_POSITION_CHECK_MIN,
+    TQQQ_COOLDOWN_DAYS, TQQQ_VIX_5D_MAX,
 )
 
 logging.basicConfig(
@@ -90,6 +91,7 @@ class TQQQScheduler:
         self._active_positions: list[TQQQPosition] = []
         self._ml_retrain_needed: bool = False
         self._scheduler: Optional[AsyncIOScheduler] = None
+        self._last_entry_date: Optional[date] = None   # cooldown tracking
 
     # ─────────────────────── Startup ─────────────────────────────────────
 
@@ -187,6 +189,25 @@ class TQQQScheduler:
         regime_result   = self.regime_detector.predict(df)
         vix_prediction  = self.vix_predictor.predict(df)
 
+        # ── Cooldown gate: enforce minimum days between entries ────────────
+        if self._last_entry_date is not None:
+            days_since = (date.today() - self._last_entry_date).days
+            if days_since < TQQQ_COOLDOWN_DAYS:
+                logger.info(
+                    f"Cooldown active: {days_since}/{TQQQ_COOLDOWN_DAYS} days since last entry. Skipping."
+                )
+                return
+
+        # ── VIX 5-day change gate: skip if VIX rising sharply ────────────
+        if "vix5d" in df.columns:
+            vix5d_change = float(df["vix5d"].iloc[-1]) if not df["vix5d"].isna().iloc[-1] else 0.0
+            if vix5d_change > TQQQ_VIX_5D_MAX:
+                logger.info(
+                    f"VIX 5-day filter: VIX rose {vix5d_change:.1f} pts (max {TQQQ_VIX_5D_MAX}). "
+                    f"Skipping entry to avoid elevated vol."
+                )
+                return
+
         # Create a stub "IDLE" position for evaluation
         stub_pos = TQQQPosition(id="stub", symbol="TQQQ")
         action, details = self.strategy.evaluate(
@@ -226,7 +247,8 @@ class TQQQScheduler:
                 chain_data=chain,
                 target_dte=regime_params.get("dte"),
                 target_delta=regime_params.get("delta"),
-                spread_width=regime_params.get("width")
+                spread_width=regime_params.get("width"),
+                vix_prediction=vix_prediction,  # spike zone targeting
             )
 
             if best is None:
@@ -260,6 +282,7 @@ class TQQQScheduler:
 
             # Persist signal so API can serve it via /api/tqqq/signals
             self._persist_signal(signal_dict)
+            self._last_entry_date = date.today()   # record for cooldown
 
             if TQQQ_AUTO_TRADE:
                 # order_manager requires update for calls vs puts, but we focus on manual API execution for now
@@ -382,6 +405,24 @@ class TQQQScheduler:
     def _persist_signal(self, signal_dict: dict) -> None:
         """Append a new signal to tqqq_signals.json."""
         import json, os
+        
+        # Add frontend-compatible field aliases
+        signal_dict.setdefault('strikes', signal_dict.get('strikes_display', ''))
+        signal_dict.setdefault('expiry', signal_dict.get('expiry_display', ''))
+        signal_dict.setdefault('createdAt', signal_dict.get('created_at', ''))
+        signal_dict.setdefault('vixDirection', signal_dict.get('vix_direction', 'STABLE'))
+        signal_dict.setdefault('vixLevel', signal_dict.get('metadata', {}).get('vix', 0))
+        
+        # confidence: backend 0.0–1.0 → frontend 0–100
+        raw_conf = signal_dict.get('confidence', 0)
+        if isinstance(raw_conf, float) and raw_conf <= 1.0:
+            signal_dict['confidence'] = round(raw_conf * 100)
+            
+        # maxLoss = spread_width - credit
+        sw = signal_dict.get('spread_width', 5.0)
+        cr = signal_dict.get('credit', 0)
+        signal_dict.setdefault('maxLoss', round(sw - cr, 2))
+
         path = os.path.expanduser('~/tastywork-trading/tqqq_signals.json')
         signals = []
         if os.path.exists(path):

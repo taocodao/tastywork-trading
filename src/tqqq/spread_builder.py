@@ -67,7 +67,8 @@ class SpreadBuilder:
         target_delta: Optional[float] = None,
         spread_width: Optional[int] = None,
         fallback_to_qqq: bool = True,
-        use_iv_surface: bool = True
+        use_iv_surface: bool = True,
+        vix_prediction=None,   # VIXPrediction from VIXEnsemblePredictor (spike zone targeting)
     ) -> Optional[SpreadMetrics]:
         """
         Scans an options chain to find the optimal spread matching our configuration.
@@ -81,6 +82,10 @@ class SpreadBuilder:
         t_dte = target_dte
         t_delta = target_delta if target_delta is not None else TQQQ_SHORT_PUT_DELTA
         s_width = spread_width if spread_width is not None else TQQQ_SPREAD_WIDTH
+
+        # Apply spike-zone targeting: adjust delta based on VIX predictor confidence
+        if vix_prediction is not None:
+            t_delta = self._adjust_delta_by_vix_prediction(t_delta, vix_prediction)
         
         if use_iv_surface:
             try:
@@ -220,6 +225,49 @@ class SpreadBuilder:
                 opt['expiration_date'] = expiry_date
                 valid.append(opt)
         return valid
+
+    @staticmethod
+    def _adjust_delta_by_vix_prediction(base_delta: float, vix_prediction) -> float:
+        """
+        Spike-zone targeting: adjust the short put delta based on VIX predictor confidence.
+
+        Logic:
+          VIX_FALLING + high confidence → TQQQ likely rising → safer to go closer to ATM
+            → shift delta toward 0 (e.g. -0.18 → -0.15). More credit, still safe.
+          VIX_RISING + high confidence → TQQQ likely falling → need more cushion
+            → shift delta further OTM (e.g. -0.18 → -0.23). Less credit, more protection.
+          NEUTRAL or low confidence → no adjustment.
+
+        Max adjustment: ±0.05 delta units.
+        """
+        try:
+            direction  = vix_prediction.direction
+            confidence = vix_prediction.confidence
+
+            # Only adjust when confidence is meaningfully above the 60% entry gate
+            if confidence < 0.65:
+                return base_delta
+
+            # Scale adjustment: 0% at 65% conf → 5 delta pts at 90%+ conf
+            adj = min(0.05, (confidence - 0.65) / 0.25 * 0.05)
+
+            if direction == "VIX_FALLING":
+                # VIX compressing → TQQQ rallying → move delta toward ATM (less negative)
+                adjusted = base_delta + adj   # e.g. -0.18 + 0.03 = -0.15
+                logger.info(f"VIX_FALLING ({confidence:.0%}): delta adjusted {base_delta:.3f} → {adjusted:.3f}")
+            elif direction == "VIX_RISING":
+                # VIX expanding → TQQQ falling → move delta further OTM (more negative)
+                adjusted = base_delta - adj   # e.g. -0.18 - 0.03 = -0.21
+                logger.info(f"VIX_RISING ({confidence:.0%}): delta adjusted {base_delta:.3f} → {adjusted:.3f}")
+            else:
+                adjusted = base_delta
+
+            # Hard cap: never exceed -0.35 OTM (too far, no credit) or -0.10 ATM (too risky)
+            return float(max(-0.35, min(-0.10, adjusted)))
+
+        except Exception as e:
+            logger.warning(f"VIX delta adjustment failed: {e}. Using base delta.")
+            return base_delta
 
     def _filter_liquidity(self, options: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         """Enforces hard rules-based liquidity filters."""

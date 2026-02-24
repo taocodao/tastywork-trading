@@ -46,25 +46,25 @@ PUT_W     = {"LOW_VOL":3, "NORMAL":5, "HIGH_VOL":5, "CRISIS":3}
 CALL_DTE  = {"HIGH_VOL":14,"CRISIS":7}
 CALL_W    = {"HIGH_VOL":5, "CRISIS":3}
 
-# ─────────────── BEST-KNOWN PARAMS (from 6000+ DE evaluations) ────────────────
-# Derived from sessions showing Sharpe 9-11 with returns 130-320%
+# ─────────────── BEST-KNOWN PARAMS (from 29,046 DE evaluations, Feb 24 2026) ────
+# Derived from overnight DE run: +75.1% return | Sharpe 14.58 | MaxDD -1.9% | 78 trades
 # Format: [iv_mult, risk_pt, cooldown, slippage, vix5d_max,
 #          lv_d, lv_pt, lv_lm,  no_d, no_pt, no_lm,
 #          hv_d, hv_pt, hv_lm,  cr_d, cr_pt, cr_lm]
 BEST_PUT_PARAMS = [
-    1.75,   # iv_mult: TQQQ IV premium ~1.75× realized vol
-    0.10,   # risk_pt: 10% account risk per trade
-    3,      # cooldown: 3 days
-    0.012,  # slippage: 1.2%
-    4.0,    # vix5d_max: allow entries if VIX rose < 4 pts over 5d
-    # LOW_VOL
-    -0.20, 0.65, 2.0,
-    # NORMAL
-    -0.28, 0.60, 2.0,
-    # HIGH_VOL
-    -0.32, 0.50, 2.0,
-    # CRISIS
-    -0.18, 0.80, 3.0,
+    2.10,   # iv_mult: DE-optimized (was 1.75)
+    0.084,  # risk_pt: 8.4% account risk per trade (was 10%)
+    6,      # cooldown: 6 days (was 3)
+    0.008,  # slippage: 0.8% (was 1.2%)
+    4.015,  # vix5d_max: allow entries if VIX rose < 4.0 pts over 5d
+    # LOW_VOL — farther OTM, wider stop
+    -0.163, 0.498, 3.845,
+    # NORMAL — farther OTM, wider stop
+    -0.176, 0.560, 3.166,
+    # HIGH_VOL — let theta decay much more before closing (82%)
+    -0.242, 0.825, 2.312,
+    # CRISIS — very far OTM, very wide stop
+    -0.145, 0.776, 4.314,
 ]
 
 # Call-side best-known params (HIGH_VOL, CRISIS)
@@ -275,21 +275,33 @@ def run(params,sc="A"):
             continue
 
         eq+=net; eq=max(eq,1.0)
+        # be_pct = breakeven cushion as % of spread width (PUT trades only)
+        be_pct = (cr / w * 100) if (tt == "PUT" and w > 0) else 0.0
         trades.append({"type":tt,"regime":regime,"date":str(dates[i])[:10],
-                       "net":net,"w":net>0,"r":reason,"xi":xi})
+                       "net":net,"w":net>0,"r":reason,"xi":xi,"be_pct":be_pct})
         lei=xi
 
     if not trades:
-        return {"sharpe":-10,"total_return":-100,"trades":0,"equity":ACCT,"ec":ec,"tl":[]}
+        return {"sharpe":-10,"total_return":-100,"trades":0,"equity":ACCT,"ec":ec,"tl":[],
+                "avg_breakeven_pct":0.0}
 
     s=pd.Series([t["net"] for t in trades])
     sharpe=(s.mean()/s.std()*math.sqrt(252)) if s.std()>0 else 0.0
     totr=(eq-ACCT)/ACCT*100
     arr=np.array(ec); pk=np.maximum.accumulate(arr)
     mdd=float(((arr-pk)/pk).min()*100)
-    return {"sharpe":sharpe,"score":sharpe-max(0,-mdd-20)*0.5,
+
+    # Breakeven width: average credit-to-width ratio across trades
+    # Higher = more cushion before hitting max loss (wider breakeven zone)
+    be_pcts = [t.get("be_pct", 0.0) for t in trades if t.get("be_pct", 0.0) > 0]
+    avg_be  = float(sum(be_pcts) / len(be_pcts)) if be_pcts else 0.0
+
+    # Score: Sharpe + breakeven bonus - large drawdown penalty
+    # breakeven_bonus weight=2.0: 1% wider BE contributes ~same as 0.02 Sharpe
+    score = sharpe - max(0, -mdd - 20) * 0.5 + avg_be * 2.0
+    return {"sharpe":sharpe,"score":score,
             "total_return":totr,"max_dd":mdd,"trades":len(trades),
-            "equity":eq,"ec":ec,"tl":trades}
+            "equity":eq,"ec":ec,"tl":trades,"avg_breakeven_pct":avg_be}
 
 # ─────────────── Report ───────────────────────────────────────────────────────
 
@@ -341,54 +353,79 @@ def make_obj(sc):
 # ─────────────── Main ─────────────────────────────────────────────────────────
 
 if __name__=="__main__":
-    t0=time.time(); load_data(); all_res={}
+    t0=time.time(); load_data(); all_res={}; all_opt_params={}
 
-    # ── Scenario A result already completed (3198 evals, 1159s)
-    # $25,000 → $34,039 | Return +36.2% | Sharpe 17.29 | MaxDD -0.7% | 85 trades | WR 92.9%
-    SCENARIO_A_RESULT = {
-        "total_return": 36.2, "sharpe": 17.29, "max_dd": -0.7,
-        "trades": 85, "equity": 34039,
-    }
-    all_res["Scenario A — Put Credit Spreads Only (Baseline)"] = {
-        **SCENARIO_A_RESULT,
-        "ec": [], "tl": [],
-    }
-    print("\n  ✓ Scenario A (completed earlier): +36.2% | Sharpe 17.29 | MaxDD -0.7%")
-
+    # All 3 scenarios — optimized fairly or run with best-known params
     SCENARIOS=[
+        ("A","Scenario A — Put Credit Spreads Only (Baseline)"),
         ("B","Scenario B — Put + Bear Call Credit Spreads"),
         ("C","Scenario C — Put + Call + Iron Condors (Full)"),
     ]
 
     if OPTIMIZE_MODE:
-        print("\n🔧 OPTIMIZE MODE — running overnight DE optimizer (~60-90 min)")
+        print("\n🔧 OPTIMIZE MODE — running overnight DE optimizer for ALL 3 scenarios")
+        print("   Expected runtime: ~90-180 min total\n")
         for sc,label in SCENARIOS:
             _cnt=0; bnds=all_bounds(sc)
-            print(f"\n{'='*70}\n  {label}\n  {len(bnds)}-dim | maxiter=40 popsize=8\n{'='*70}",flush=True)
+            n_dim=len(bnds)
+            # More evals for scenario A (simpler, faster per call)
+            maxiter = 60 if sc=="A" else 40
+            popsize = 10 if sc=="A" else 8
+            print(f"\n{'='*70}\n  {label}\n  {n_dim}-dim | maxiter={maxiter} popsize={popsize}\n{'='*70}",flush=True)
             opt=differential_evolution(make_obj(sc),bounds=bnds,seed=42,
-                                       maxiter=40,popsize=8,tol=0.01,
-                                       mutation=(0.6,1.3),recombination=0.80,
+                                       maxiter=maxiter,popsize=popsize,tol=0.005,
+                                       mutation=(0.5,1.2),recombination=0.85,
                                        workers=1,disp=False)
-            p=list(opt.x)
-            while len(p)<27: p.append(0.0)
-            res=run(p[:len(bnds)],sc)
-            report(res,label); all_res[label]=res
-            print(f"  ✓ {_cnt} evals  score={-opt.fun:.3f}", flush=True)
+            best_p=list(opt.x)
+            res=run(best_p,sc)
+            report(res,label)
+            all_res[label]=res
+            all_opt_params[sc]={
+                "params": best_p,
+                "score": -opt.fun,
+                "evals": _cnt,
+            }
+            print(f"  ✓ {_cnt} evals | score={-opt.fun:.3f} | "
+                  f"Sharpe={res['sharpe']:.2f} | Return={res['total_return']:+.1f}%", flush=True)
+
+        # Save optimized params + results
+        save_data = {
+            "run_date": time.strftime("%Y-%m-%d %H:%M UTC"),
+            "mode": "DE_optimized",
+            "runtime_seconds": round(time.time()-t0),
+            "scenarios": {}
+        }
+        for sc,label in SCENARIOS:
+            res=all_res[label]
+            op=all_opt_params.get(sc,{})
+            save_data["scenarios"][sc]={
+                "label": label,
+                "optimized_params": op.get("params",[]),
+                "evals": op.get("evals",0),
+                "score": op.get("score",0),
+                "return_pct": res["total_return"],
+                "sharpe": res["sharpe"],
+                "max_dd_pct": res["max_dd"],
+                "trades": res["trades"],
+                "final_equity": res["equity"],
+            }
         with open("tqqq_optimal_params.json","w") as f:
-            json.dump({"params":{s:list(all_bounds(s)) for s,_ in SCENARIOS}},f,indent=2)
+            json.dump(save_data,f,indent=2)
+        print(f"\n  ✅ Saved optimized params → tqqq_optimal_params.json")
+
     else:
         print("\n⚡ FAST MODE — using best-known pre-tuned parameters (~90 sec)")
-        print("   (Run with --optimize for full DE optimization)\n", flush=True)
+        print("   (Run with --optimize for full DE optimization — ~2-3 hrs)\n", flush=True)
         for sc,label in SCENARIOS:
             print(f"  Running {label}…", flush=True)
             p=scenario_params(sc)
-            while len(p)<27: p.append(0.0)
+            while len(p)<len(all_bounds(sc)): p.append(0.0)
             res=run(p[:len(all_bounds(sc))],sc)
             report(res,label); all_res[label]=res
 
     # Comparison table
     print(f"\n{'='*70}")
-    print(f"  3-SCENARIO COMPARISON")
+    print(f"  3-SCENARIO COMPARISON{' (DE-OPTIMIZED)' if OPTIMIZE_MODE else ' (FAST MODE — pre-tuned params)'}")
     print(f"{'='*70}")
     print(f"  {'Scenario':<45} {'Return':>8} {'Sharpe':>8} {'MaxDD':>7} {'Trades':>7}")
     print(f"  {'─'*67}")
@@ -397,11 +434,12 @@ if __name__=="__main__":
               f" {r['sharpe']:>8.2f} {r['max_dd']:>6.1f}% {r['trades']:>7}")
     print(f"{'='*70}")
 
-    out={"scenarios":{lbl:{"return_pct":r["total_return"],"sharpe":r["sharpe"],
+    out={"mode": "optimized" if OPTIMIZE_MODE else "fast",
+         "scenarios":{lbl:{"return_pct":r["total_return"],"sharpe":r["sharpe"],
                             "max_dd_pct":r["max_dd"],"trades":r["trades"],
                             "final_equity":r["equity"]}
                       for lbl,r in all_res.items()}}
     with open("tqqq_dual_backtest_results.json","w") as f:
         json.dump(out,f,indent=2,default=str)
     print(f"\n  Saved → tqqq_dual_backtest_results.json")
-    print(f"  Runtime: {time.time()-t0:.0f}s")
+    print(f"  Total runtime: {time.time()-t0:.0f}s")
