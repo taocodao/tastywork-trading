@@ -55,6 +55,12 @@ from .tqqq import (
     publish_tqqq_long_put_signal,
 )
 
+# Diagonal signals
+from .diagonal import (
+    DiagonalEntrySignal,
+    publish_diagonal_entry_signal
+)
+
 # Base classes
 from .base import BaseSignal
 
@@ -84,6 +90,10 @@ __all__ = [
     # PMCC
     'publish_pmcc_entry_signal',
     'publish_pmcc_cycle_signal',
+    
+    # Diagonal
+    'DiagonalEntrySignal',
+    'publish_diagonal_entry_signal',
     
     # Base
     'BaseSignal',

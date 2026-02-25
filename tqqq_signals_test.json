@@ -1,0 +1,28 @@
+[
+    {
+        "id": "test-signal-2026-02-23",
+        "symbol": "TQQQ",
+        "strategy": "tqqq_vix_adaptive",
+        "status": "pending",
+        "created_at": "2026-02-23T19:50:00Z",
+        "expires_at": "2026-02-24T01:50:00Z",
+        "short_strike": 45.0,
+        "long_strike": 40.0,
+        "expiration": "2026-03-20",
+        "credit": 0.50,
+        "regime": "NORMAL",
+        "vix_direction": "STABLE",
+        "confidence": 80,
+        "quantity": 3,
+        "spread_width": 5.0,
+        "type": "PUT_CREDIT",
+        "expiry_display": "Mar 20",
+        "strikes_display": "Sell $45P / Buy $40P",
+        "strikes": "Sell $45P / Buy $40P",
+        "expiry": "Mar 20",
+        "createdAt": "2026-02-23T19:50:00Z",
+        "vixDirection": "STABLE",
+        "vixLevel": 19.5,
+        "maxLoss": 4.50
+    }
+]

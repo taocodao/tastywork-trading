@@ -382,6 +382,10 @@ def run_loop(interval_seconds: int = 300, use_mock: bool = False, force: bool = 
                 if now >= next_zebra_scan:
                      run_zebra_scanner()
                      run_pmcc_scanner()
+                     
+                     from diagonal_strategy.live_scanner import run_diagonal_scanner
+                     run_diagonal_scanner()
+                     
                      next_zebra_scan = now + timedelta(minutes=getattr(config, 'ZEBRA_SCAN_INTERVAL_MIN', 30))
                      logger.info(f"Next ZEBRA/PMCC scan at {next_zebra_scan.strftime('%H:%M:%S')}")
 
@@ -423,6 +427,9 @@ def main():
         run_pmcc_scanner()
         # run_earnings_scanner()
         run_zebra_scanner()
+        
+        from diagonal_strategy.live_scanner import run_diagonal_scanner
+        run_diagonal_scanner()
 
 
 if __name__ == '__main__':
