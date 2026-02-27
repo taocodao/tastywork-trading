@@ -1,9 +1,11 @@
 """
 TQQQ Order Manager
 ==================
-Handles Interactive Brokers order placement for TQQQ put credit spreads
+Handles Interactive Brokers order placement for TQQQ credit spreads
 using ib_insync. Supports:
-  - Placing a combo (BAG) spread order
+  - Placing a combo (BAG) put credit spread order
+  - Placing a combo (BAG) bear call credit spread order
+  - Closing a spread (buy-to-close)
   - Closing a single leg (leg-out or profit-take)
   - Smart limit order walking (mid → improve $0.01 every 15 s)
 """
@@ -87,6 +89,71 @@ class TQQQOrderManager:
         result = await self._walk_and_fill(trade, mid, direction="credit")
         return result
 
+    async def place_call_spread_order(
+        self,
+        short_strike: float,
+        long_strike: float,
+        expiration: str,
+        quantity: int,
+        account_id: str,
+    ) -> OrderResult:
+        """
+        Opens a TQQQ bear call credit spread (sell lower call / buy higher call)
+        as an ib_insync BAG combo order.
+
+        ``short_strike``: lower strike (sold, closer to ATM)
+        ``long_strike``:  higher strike (bought, further OTM)
+        ``expiration``:   YYYYMMDD string
+        """
+        if self._sim_mode:
+            logger.info(f"[SIM] Place CALL spread {short_strike}C / {long_strike}C x{quantity}")
+            return OrderResult(success=True, fill_price=0.55, message="SIMULATED")
+
+        short_con = self._make_tqqq_call(short_strike, expiration)
+        long_con  = self._make_tqqq_call(long_strike, expiration)
+
+        await self._qualify([short_con, long_con])
+
+        combo = self._build_combo(short_con, long_con, quantity)
+        mid   = await self._get_mid(combo)
+
+        order = self._limit_order("SELL", quantity, round(mid, 2), account_id)
+        trade = self.ib.placeOrder(combo, order)
+
+        result = await self._walk_and_fill(trade, mid, direction="credit")
+        return result
+
+    async def close_call_spread_order(
+        self,
+        short_strike: float,
+        long_strike: float,
+        expiration: str,
+        quantity: int,
+        account_id: str,
+    ) -> OrderResult:
+        """
+        Closes (buy-to-close) an open bear call credit spread.
+        This is a debit order — we pay to close.
+        """
+        if self._sim_mode:
+            logger.info(f"[SIM] Close CALL spread {short_strike}C / {long_strike}C x{quantity}")
+            return OrderResult(success=True, fill_price=0.20, message="SIMULATED")
+
+        short_con = self._make_tqqq_call(short_strike, expiration)
+        long_con  = self._make_tqqq_call(long_strike, expiration)
+
+        await self._qualify([short_con, long_con])
+
+        # Reverse the combo: BUY back short, SELL back long
+        combo = self._build_combo(long_con, short_con, quantity)  # reversed
+        mid   = await self._get_mid(combo)
+
+        order = self._limit_order("BUY", quantity, round(mid, 2), account_id)
+        trade = self.ib.placeOrder(combo, order)
+
+        result = await self._walk_and_fill(trade, mid, direction="debit")
+        return result
+
     async def close_single_leg(
         self,
         strike: float,
@@ -94,16 +161,20 @@ class TQQQOrderManager:
         quantity: int,
         action: str,          # "BUY" (leg-out) or "SELL" (take profit)
         account_id: str,
+        right: str = "P",     # "P" for put, "C" for call
     ) -> OrderResult:
         """
-        Manages a single put leg: either buying back the short put (leg-out)
-        or selling the retained long put (profit capture).
+        Manages a single option leg: either buying back (leg-out)
+        or selling (profit capture). Works for both puts and calls.
         """
         if self._sim_mode:
-            logger.info(f"[SIM] {action} single leg {strike}P x{quantity}")
+            logger.info(f"[SIM] {action} single leg {strike}{right} x{quantity}")
             return OrderResult(success=True, fill_price=0.12, message="SIMULATED")
 
-        con = self._make_tqqq_put(strike, expiration)
+        if right == "C":
+            con = self._make_tqqq_call(strike, expiration)
+        else:
+            con = self._make_tqqq_put(strike, expiration)
         await self._qualify([con])
 
         mid   = await self._get_mid(con)
@@ -115,17 +186,24 @@ class TQQQOrderManager:
 
     # ─────────────────────── IB Helpers ──────────────────────────────────
 
-    def _make_tqqq_put(self, strike: float, expiration: str) -> "Contract":
+    def _make_tqqq_option(self, strike: float, expiration: str, right: str) -> "Contract":
+        """Create a TQQQ option contract for the given right ('P' or 'C')."""
         con = Contract()
         con.symbol    = "TQQQ"
         con.secType   = "OPT"
         con.exchange  = "SMART"
         con.currency  = "USD"
-        con.right     = "P"
+        con.right     = right
         con.strike    = strike
         con.lastTradeDateOrContractMonth = expiration
         con.multiplier = "100"
         return con
+
+    def _make_tqqq_put(self, strike: float, expiration: str) -> "Contract":
+        return self._make_tqqq_option(strike, expiration, "P")
+
+    def _make_tqqq_call(self, strike: float, expiration: str) -> "Contract":
+        return self._make_tqqq_option(strike, expiration, "C")
 
     def _build_combo(
         self, short_con: "Contract", long_con: "Contract", quantity: int

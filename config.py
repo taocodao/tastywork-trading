@@ -401,7 +401,19 @@ TQQQ_MIN_BID_SIZE: int = 50              # minimum bid size (contracts quoted)
 # === SCHEDULING ===
 TQQQ_SCAN_INTERVAL_MIN: int = 30         # scan for entry every 30 min
 TQQQ_POSITION_CHECK_MIN: int = 15        # check open positions every 15 min
-TQQQ_AUTO_TRADE: bool = False            # set True for paper/live execution
+TQQQ_AUTO_TRADE: bool = True             # PRODUCTION: live execution enabled
+
+# === CAPITAL POOL ALLOCATION (Layer 1+2 non-conflicting) ===
+TQQQ_THETA_POOL_PCT: float = 0.70        # 70% of capital for theta (credit spread) positions
+TQQQ_SWING_POOL_PCT: float = 0.30        # 30% of capital for swing (diagonal) positions
+
+# === SWING OVERLAY PARAMETERS (Layer 2) ===
+# Independent of theta layer — uses separate capital pool and entry signals.
+TQQQ_SWING_RSI_THRESHOLD: float = 20.0   # RSI-2 threshold (relaxed from 10 for more signals)
+TQQQ_SWING_MIN_CRASH_GUARD: int = 55     # Minimum CrashGuard score to enter swing
+TQQQ_SWING_MAX_CONCURRENT: int = 3       # Max simultaneous swing positions
+TQQQ_SWING_MAX_HOLD_DAYS: int = 7        # Force close after 7 days
+TQQQ_SWING_COOLDOWN_MIN: int = 15        # Minutes between consecutive swing entries
 
 # === OPTIMIZATION AUDIT TRAIL ===
 # Record of the DE optimization run that produced the params above. Read-only.
@@ -418,6 +430,19 @@ TQQQ_OPTIMIZATION_META = {
     "trades":          78,
     "final_equity":    43768,
 }
+
+# === TURBOBOUNCE OPTIONS CONFIGURATION ===
+TQQQ_RISK_LEVEL: str = "Medium"  # Default (can be "Low", "Medium", "High")
+
+# Independent capital tranches for the swing strategy
+TQQQ_SWING_THRESHOLDS = {
+    "Deep":  {"rsi": 5.0,  "budget_pct": 0.40},
+    "Mod":   {"rsi": 10.0, "budget_pct": 0.30},
+    "Light": {"rsi": 15.0, "budget_pct": 0.30},
+}
+
+TQQQ_HURST_GATE: float = 0.45          # Skip entries if market strongly trending down
+TQQQ_BP_STOP_LOSS_PCT: float = 0.15      # 15% Buying Power stop loss
 
 # =============================================================================
 

@@ -65,6 +65,12 @@ class VIXAdaptiveStrategy:
         tqqq_current_price: Optional[float] = None, # TQQQ price right now (for circuit breaker)
         short_call_value: Optional[float] = None,
         long_call_value: Optional[float] = None,
+        # Diagonal spread live values
+        rsi_2: Optional[float] = None,
+        sma_5: Optional[float] = None,
+        regime_score: Optional[int] = None,
+        ml_prob: Optional[float] = None,
+        days_held: Optional[int] = None,
     ) -> Tuple[str, Optional[Dict[str, Any]]]:
         """
         Evaluates the current state and returns an action + detail dict.
@@ -126,6 +132,24 @@ class VIXAdaptiveStrategy:
 
         # ── IDLE: Entry Decision ──────────────────────────────────────────────
         if position.state == TQQQStrategyState.IDLE:
+        
+            # First check for Diagonal entries (highest edge)
+            # Intraday 5-min RSI-2 < 20 triggers the signal, with Hybrid Score >= 55
+            # Now supports multiple entries per day based on `concurrent_diagonals` count.
+            concurrent_diagonals = getattr(position, "concurrent_diagonals", 0)
+            max_diagonals = getattr(position, "max_diagonals", 3)
+            time_since_last_entry = getattr(position, "minutes_since_last_entry", 999)
+            
+            if concurrent_diagonals < max_diagonals:
+                if rsi_2 is not None and rsi_2 < 20.0 and regime_score is not None and regime_score >= 55:
+                    if time_since_last_entry >= 15: # 15-minute cooldown
+                        logger.info(f"DIAGONAL ENTRY met (RSI: {rsi_2:.1f}, Score: {regime_score}, Active: {concurrent_diagonals}/{max_diagonals})")
+                        return "ENTER_DIAGONAL", {"regime_score": regime_score, "ml_prob": ml_prob or 0.5}
+                    else:
+                        logger.info(f"DIAGONAL ENTRY skipped: Cooldown active ({time_since_last_entry}m < 15m)")
+            else:
+                if rsi_2 is not None and rsi_2 < 20.0 and regime_score is not None and regime_score >= 55:
+                    logger.info(f"DIAGONAL ENTRY skipped: Max concurrent positions reached ({max_diagonals})")
 
             if regime == "CRISIS":
                 # CRISIS: ONLY sell call spreads — puts are too risky during freefall.
@@ -248,6 +272,33 @@ class VIXAdaptiveStrategy:
                 logger.info("Long call near worthless or expiring. Abandoning.")
                 return "ABANDON_LONG_CALL", {"reason": "THETA_DECAY"}
             return "NONE", None
+
+        # ── DIAGONAL_OPEN (Put Diagonal Swing Trade) ──────────────────────────
+        elif position.state == TQQQStrategyState.DIAGONAL_OPEN:
+            try:
+                from src.tqqq.swing_exit_engine import SwingExitEngine, ExitDecisionType
+                engine = SwingExitEngine()
+                decision = engine.evaluate(
+                    position=position,
+                    current_price=tqqq_current_price or 0.0,
+                    rsi_2=rsi_2 or 50.0,
+                    sma_5=sma_5 or 0.0,
+                    regime_score=regime_score or 50,
+                    ml_prob=ml_prob or 0.5,
+                    days_held=days_held or 0
+                )
+                
+                if decision.decision == ExitDecisionType.CLOSE_ALL:
+                    logger.info(f"Closing diagonal spread: {decision.reason}")
+                    return "CLOSE_DIAGONAL", {"reason": decision.reason, "priority": decision.priority}
+                elif decision.decision == ExitDecisionType.ROLL_HEDGE:
+                    logger.info(f"Rolling diagonal hedge: {decision.reason}")
+                    return "ROLL_HEDGE", {"reason": decision.reason, "priority": decision.priority}
+                
+                return "NONE", None
+            except ImportError:
+                logger.error("SwingExitEngine missing, cannot evaluate DIAGONAL_OPEN state.")
+                return "NONE", None
 
         return "NONE", None
 

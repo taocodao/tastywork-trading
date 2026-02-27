@@ -2,10 +2,14 @@
 TQQQ Signal Publisher
 =====================
 Publishing signals for the VIX-Adaptive TQQQ Spread Strategy.
-Three signal types:
-  - TQQQSpreadEntrySignal  : open a new put credit spread
-  - TQQQLegOutSignal       : buy back the short put, retain the long
-  - TQQQLongPutSellSignal  : take profit or abandon the retained long put
+Signal types:
+  - TQQQSpreadEntrySignal      : open a new put credit spread
+  - TQQQCallSpreadEntrySignal  : open a new bear call credit spread
+  - TQQQCallSpreadCloseSignal  : close a bear call credit spread
+  - TQQQLegOutSignal           : buy back the short put, retain the long
+  - TQQQLongPutSellSignal      : take profit or abandon the retained long put
+  - TQQQDiagonalEntrySignal    : open a diagonal swing trade
+  - TQQQDiagonalExitSignal     : close or roll a diagonal swing trade
 
 All classes extend BaseSignal for compatibility with the unified signal router.
 """
@@ -195,3 +199,294 @@ class TQQQLongPutSellSignal(BaseSignal):
             "reason":        self.reason,
         })
         return base
+
+@dataclass
+class TQQQCallSpreadEntrySignal(BaseSignal):
+    """Signal to open a new TQQQ bear call credit spread."""
+    short_call_strike: float = 0.0
+    long_call_strike:  float = 0.0
+    expiration:        str   = ""
+    credit:            float = 0.0
+    regime:            str   = ""
+    vix_direction:     str   = ""
+    confidence:        float = 0.0
+    quantity:          int   = 1
+    tqqq_entry_price:  float = 0.0  # For rally circuit breaker
+
+    def to_dict(self) -> Dict[str, Any]:
+        base = super().to_dict()
+        base.update({
+            "short_call_strike": self.short_call_strike,
+            "long_call_strike":  self.long_call_strike,
+            "expiration":        self.expiration,
+            "credit":            self.credit,
+            "regime":            self.regime,
+            "vix_direction":     self.vix_direction,
+            "confidence":        self.confidence,
+            "quantity":          self.quantity,
+            "tqqq_entry_price":  self.tqqq_entry_price,
+        })
+        return base
+
+
+@dataclass
+class TQQQCallSpreadCloseSignal(BaseSignal):
+    """Signal to close (buy-to-close) a bear call credit spread."""
+    position_id: str   = ""
+    reason:      str   = ""   # PROFIT_TARGET | LOSS_LIMIT | RALLY_CIRCUIT_BREAKER | DTE_EXIT
+    pnl:         float = 0.0
+
+    def to_dict(self) -> Dict[str, Any]:
+        base = super().to_dict()
+        base.update({
+            "position_id": self.position_id,
+            "reason":      self.reason,
+            "pnl":         self.pnl,
+        })
+        return base
+
+
+@dataclass
+class TQQQDiagonalEntrySignal(BaseSignal):
+    """Signal to open a new TQQQ put diagonal swing trade."""
+    anchor_strike: float = 0.0
+    anchor_expiration: str = ""
+    hedge_strike: float = 0.0
+    hedge_expiration: str = ""
+    net_credit: float = 0.0
+    rsi_2: float = 0.0
+    ml_prob: float = 0.0
+    regime_score: int = 0
+    quantity: int = 1
+    risk_level: str = "Medium"
+
+    def to_dict(self) -> Dict[str, Any]:
+        base = super().to_dict()
+        base.update({
+            "anchor_strike": self.anchor_strike,
+            "anchor_expiration": self.anchor_expiration,
+            "hedge_strike": self.hedge_strike,
+            "hedge_expiration": self.hedge_expiration,
+            "net_credit": self.net_credit,
+            "rsi_2": self.rsi_2,
+            "ml_prob": self.ml_prob,
+            "regime_score": self.regime_score,
+            "quantity": self.quantity,
+            "risk_level": self.risk_level,
+        })
+        return base
+
+@dataclass
+class TQQQDiagonalExitSignal(BaseSignal):
+    """Signal to close or roll a TQQQ diagonal spread."""
+    position_id: str = ""
+    action: str = "" # "CLOSE_ALL" or "ROLL_HEDGE"
+    reason: str = ""
+    pnl: float = 0.0
+    days_held: int = 0
+    roll_count: int = 0
+    risk_level: str = "Medium"
+    
+    def to_dict(self) -> Dict[str, Any]:
+        base = super().to_dict()
+        base.update({
+            "position_id": self.position_id,
+            "action": self.action,
+            "reason": self.reason,
+            "pnl": self.pnl,
+            "days_held": self.days_held,
+            "roll_count": self.roll_count,
+            "risk_level": self.risk_level,
+        })
+        return base
+
+@dataclass
+class TQQQBackspreadEntrySignal(BaseSignal):
+    """Signal to open a new 1x2 TQQQ call ratio backspread (Deep tranche)."""
+    short_strike: float = 0.0
+    long_strike: float = 0.0
+    expiration: str = ""
+    net_cost: float = 0.0
+    rsi_2: float = 0.0
+    ml_prob: float = 0.0
+    regime_score: int = 0
+    quantity: int = 1
+    risk_level: str = "Medium"
+
+    def to_dict(self) -> Dict[str, Any]:
+        base = super().to_dict()
+        base.update({
+            "short_strike": self.short_strike,
+            "long_strike": self.long_strike,
+            "expiration": self.expiration,
+            "net_cost": self.net_cost,
+            "rsi_2": self.rsi_2,
+            "ml_prob": self.ml_prob,
+            "regime_score": self.regime_score,
+            "quantity": self.quantity,
+            "risk_level": self.risk_level,
+        })
+        return base
+
+def publish_tqqq_call_entry_signal(
+    short_call_strike: float,
+    long_call_strike: float,
+    expiration: str,
+    credit: float,
+    regime: str,
+    vix_direction: str,
+    confidence: float,
+    tqqq_entry_price: float,
+    quantity: int = 1,
+    metadata: Optional[Dict[str, Any]] = None,
+) -> "TQQQCallSpreadEntrySignal":
+    sig = TQQQCallSpreadEntrySignal(
+        id=str(uuid.uuid4()),
+        symbol="TQQQ",
+        strategy="tqqq_vix_adaptive_call",
+        status="pending",
+        created_at=datetime.utcnow(),
+        expires_at=datetime.utcnow() + timedelta(hours=6),
+        short_call_strike=short_call_strike,
+        long_call_strike=long_call_strike,
+        expiration=expiration,
+        credit=credit,
+        regime=regime,
+        vix_direction=vix_direction,
+        confidence=confidence,
+        quantity=quantity,
+        tqqq_entry_price=tqqq_entry_price,
+        metadata=metadata or {},
+    )
+    logger.info(
+        f"[TQQQ CALL ENTRY] Short:{short_call_strike}C / Long:{long_call_strike}C "
+        f"| Credit:${credit:.2f} | Conf:{confidence:.0%} | {expiration}"
+    )
+    return sig
+
+
+def publish_tqqq_call_close_signal(
+    position_id: str,
+    reason: str,
+    pnl: float,
+) -> "TQQQCallSpreadCloseSignal":
+    sig = TQQQCallSpreadCloseSignal(
+        id=str(uuid.uuid4()),
+        symbol="TQQQ",
+        strategy="tqqq_vix_adaptive_call",
+        status="pending",
+        created_at=datetime.utcnow(),
+        expires_at=datetime.utcnow() + timedelta(hours=2),
+        position_id=position_id,
+        reason=reason,
+        pnl=pnl,
+    )
+    logger.info(
+        f"[TQQQ CALL CLOSE] Pos:{position_id[:8]} | P&L:${pnl:.2f} | Reason:{reason}"
+    )
+    return sig
+
+
+def publish_tqqq_diagonal_entry_signal(
+    anchor_strike: float,
+    anchor_expiration: str,
+    hedge_strike: float,
+    hedge_expiration: str,
+    net_credit: float,
+    rsi_2: float,
+    ml_prob: float,
+    regime_score: int,
+    quantity: int = 1,
+    risk_level: str = "Medium",
+    metadata: Optional[Dict[str, Any]] = None,
+) -> "TQQQDiagonalEntrySignal":
+    sig = TQQQDiagonalEntrySignal(
+        id=str(uuid.uuid4()),
+        symbol="TQQQ",
+        strategy="tqqq_hybrid_swing",
+        status="pending",
+        created_at=datetime.utcnow(),
+        expires_at=datetime.utcnow() + timedelta(hours=6),
+        anchor_strike=anchor_strike,
+        anchor_expiration=anchor_expiration,
+        hedge_strike=hedge_strike,
+        hedge_expiration=hedge_expiration,
+        net_credit=net_credit,
+        rsi_2=rsi_2,
+        ml_prob=ml_prob,
+        regime_score=regime_score,
+        quantity=quantity,
+        risk_level=risk_level,
+        metadata=metadata or {},
+    )
+    logger.info(
+        f"[TQQQ DIAGONAL ENTRY] Anchor:{anchor_strike}P / Hedge:{hedge_strike}P "
+        f"| Net Cred:${net_credit:.2f} | RSI:{rsi_2:.1f} | ML:{ml_prob:.0%}"
+    )
+    return sig
+
+def publish_tqqq_diagonal_exit_signal(
+    position_id: str,
+    action: str,
+    reason: str,
+    pnl: float,
+    days_held: int,
+    roll_count: int,
+    risk_level: str = "Medium",
+) -> "TQQQDiagonalExitSignal":
+    sig = TQQQDiagonalExitSignal(
+        id=str(uuid.uuid4()),
+        symbol="TQQQ",
+        strategy="tqqq_hybrid_swing",
+        status="pending",
+        created_at=datetime.utcnow(),
+        expires_at=datetime.utcnow() + timedelta(hours=2),
+        position_id=position_id,
+        action=action,
+        reason=reason,
+        pnl=pnl,
+        days_held=days_held,
+        roll_count=roll_count,
+        risk_level=risk_level,
+    )
+    logger.info(
+        f"[TQQQ DIAGONAL {action}] Pos:{position_id[:8]} | ({risk_level}) P&L:${pnl:.2f} "
+        f"| Days:{days_held} | Rolls:{roll_count} | Reason:{reason}"
+    )
+    return sig
+
+def publish_tqqq_backspread_entry_signal(
+    short_strike: float,
+    long_strike: float,
+    expiration: str,
+    net_cost: float,
+    rsi_2: float,
+    ml_prob: float,
+    regime_score: int,
+    quantity: int = 1,
+    risk_level: str = "Medium",
+    metadata: Optional[Dict[str, Any]] = None,
+) -> "TQQQBackspreadEntrySignal":
+    sig = TQQQBackspreadEntrySignal(
+        id=str(uuid.uuid4()),
+        symbol="TQQQ",
+        strategy="tqqq_hybrid_swing",
+        status="pending",
+        created_at=datetime.utcnow(),
+        expires_at=datetime.utcnow() + timedelta(hours=6),
+        short_strike=short_strike,
+        long_strike=long_strike,
+        expiration=expiration,
+        net_cost=net_cost,
+        rsi_2=rsi_2,
+        ml_prob=ml_prob,
+        regime_score=regime_score,
+        quantity=quantity,
+        risk_level=risk_level,
+        metadata=metadata or {},
+    )
+    logger.info(
+        f"[TQQQ BACKSPREAD ENTRY] ({risk_level}) Short:{short_strike}C / Long:{long_strike}C "
+        f"| Net Cost:${net_cost:.2f} | RSI:{rsi_2:.1f} | ML:{ml_prob:.0%}"
+    )
+    return sig

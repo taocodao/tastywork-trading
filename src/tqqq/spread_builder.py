@@ -50,6 +50,24 @@ class SpreadMetrics:
     reward_to_risk: float
     liquidity_score: float
 
+@dataclass
+class DiagonalSetup:
+    anchor_leg: OptionLeg
+    hedge_leg: OptionLeg
+    net_credit: float
+    max_risk_estimate: float
+    liquidity_score: float
+
+@dataclass
+class BackspreadSetup:
+    short_leg: OptionLeg
+    long_leg: OptionLeg
+    n_short: int = 1
+    n_long: int = 2
+    net_cost: float = 0.0
+    max_risk_estimate: float = 0.0
+    liquidity_score: float = 0.0
+
 class SpreadBuilder:
     """
     Responsible for selecting the optimal option legs for a TQQQ vertical put spread.
@@ -451,3 +469,133 @@ class SpreadBuilder:
                 valid.append(opt)
         return valid
 
+    def select_optimal_diagonal(
+        self,
+        current_price: float,
+        chain_data: List[Dict[str, Any]],
+        anchor_dte: int = 35,
+        anchor_delta: float = -0.40,
+        hedge_dte: int = 10,
+        hedge_delta: float = -0.20,
+        anchor_k_pct: Optional[float] = None,
+        hedge_k_pct: Optional[float] = None,
+    ) -> Optional[DiagonalSetup]:
+        """
+        Finds the optimal put diagonal spread for the TQQQ mean reversion swing strategy.
+        Sells an anchor put (approx 30-45 DTE, -0.40 delta)
+        Buys a hedge put (approx 7-12 DTE, -0.20 delta)
+        """
+        if not chain_data:
+            logger.warning("No options chain data provided for diagonal spread.")
+            return None
+
+        # 1. Find Anchor Leg (Short Put)
+        anchor_options = self._filter_structural(chain_data, target_dte=anchor_dte)
+        anchor_liquid = self._filter_liquidity(anchor_options)
+        
+        if not anchor_liquid:
+            logger.warning("No liquid options found for anchor put.")
+            return None
+            
+        if anchor_k_pct is not None:
+            target_strike = current_price * (1 + anchor_k_pct)
+            anchor_candidates = sorted(anchor_liquid, key=lambda x: abs(x['strike'] - target_strike))
+        else:
+            anchor_candidates = sorted(anchor_liquid, key=lambda x: abs(x.get('delta', 0.0) - anchor_delta))
+            
+        if not anchor_candidates: return None
+        best_anchor_dict = anchor_candidates[0]
+        anchor_leg = self._dict_to_leg(best_anchor_dict, right='P')
+
+        # 2. Find Hedge Leg (Long Put)
+        hedge_options = self._filter_structural(chain_data, target_dte=hedge_dte)
+        hedge_liquid = self._filter_liquidity(hedge_options)
+        
+        if not hedge_liquid:
+            logger.warning("No liquid options found for hedge put.")
+            return None
+
+        if hedge_k_pct is not None:
+            target_strike = current_price * (1 + hedge_k_pct)
+            hedge_candidates = sorted(hedge_liquid, key=lambda x: abs(x['strike'] - target_strike))
+        else:
+            hedge_candidates = sorted(hedge_liquid, key=lambda x: abs(x.get('delta', 0.0) - hedge_delta))
+            
+        if not hedge_candidates: return None
+        best_hedge_dict = hedge_candidates[0]
+        hedge_leg = self._dict_to_leg(best_hedge_dict, right='P')
+
+        # 3. Calculate metrics
+        net_credit = anchor_leg.bid - hedge_leg.ask
+        
+        # Max risk estimate 
+        max_risk = max(0.0, (anchor_leg.strike - hedge_leg.strike) - net_credit)
+        cmb_liquidity = (anchor_leg.volume + hedge_leg.volume) / 10000.0
+
+        logger.info(
+            f"Selected TQQQ Diagonal: Short {anchor_leg.strike}P ({anchor_leg.expiration}) / "
+            f"Long {hedge_leg.strike}P ({hedge_leg.expiration}) "
+            f"(Net Cred: ${net_credit:.2f})"
+        )
+
+        return DiagonalSetup(
+            anchor_leg=anchor_leg,
+            hedge_leg=hedge_leg,
+            net_credit=net_credit,
+            max_risk_estimate=max_risk,
+            liquidity_score=max(0.1, cmb_liquidity)
+        )
+
+    def select_optimal_backspread(
+        self,
+        current_price: float,
+        chain_data: List[Dict[str, Any]],
+        dte: int = 21,
+        short_k_pct: float = 0.0,
+        long_k_pct: float = 0.06,
+    ) -> Optional[BackspreadSetup]:
+        """
+        Finds the optimal 1x2 Call Ratio Backspread.
+        Sells 1 call at short_k_pct offset. Buys 2 calls at long_k_pct offset.
+        """
+        if not chain_data: return None
+        
+        valid_calls = self._filter_structural_calls(chain_data, target_dte=dte)
+        liquid_calls = self._filter_liquidity(valid_calls)
+        if not liquid_calls: return None
+        
+        target_short_strike = current_price * (1 + short_k_pct)
+        target_long_strike = current_price * (1 + long_k_pct)
+        
+        short_candidates = sorted(liquid_calls, key=lambda x: abs(x['strike'] - target_short_strike))
+        if not short_candidates: return None
+        short_leg = self._dict_to_leg(short_candidates[0], right='C')
+        
+        long_candidates = sorted(liquid_calls, key=lambda x: abs(x['strike'] - target_long_strike))
+        if not long_candidates: return None
+        long_leg = self._dict_to_leg(long_candidates[0], right='C')
+        
+        if short_leg.strike == long_leg.strike:
+            long_candidates = [c for c in liquid_calls if c['strike'] > short_leg.strike]
+            if not long_candidates: return None
+            long_candidates = sorted(long_candidates, key=lambda x: x['strike'])
+            long_leg = self._dict_to_leg(long_candidates[0], right='C')
+            
+        net_cost = (long_leg.ask * 2) - short_leg.bid
+        max_risk = max(0.0, (long_leg.strike - short_leg.strike) + net_cost)
+        cmb_liquidity = (short_leg.volume + long_leg.volume) / 10000.0
+        
+        logger.info(
+            f"Selected TQQQ Backspread: -1 {short_leg.strike}C / +2 {long_leg.strike}C ({short_leg.expiration}) "
+            f"(Net Cost: ${net_cost:.2f})"
+        )
+        
+        return BackspreadSetup(
+            short_leg=short_leg,
+            long_leg=long_leg,
+            n_short=1,
+            n_long=2,
+            net_cost=net_cost,
+            max_risk_estimate=max_risk,
+            liquidity_score=max(0.1, cmb_liquidity)
+        )

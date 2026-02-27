@@ -82,6 +82,9 @@ class TQQQDataPipeline:
         # Compute XGBoost / LSTM features
         df = self._add_predictor_features(df)
 
+        # Compute Mean Reversion / Swing Trade features
+        df = self._add_mean_reversion_features(df)
+
         return df.dropna().tail(lookback_days)
 
     def get_live_snapshot(self) -> Dict[str, Any]:
@@ -114,10 +117,14 @@ class TQQQDataPipeline:
         symbol: str = "TQQQ",
         dte_min: int = 21,
         dte_max: int = 45,
+        right: str = "P",
     ) -> List[Dict[str, Any]]:
         """
         Fetches the live options chain for TQQQ from the IB provider.
         Falls back to an empty list if IB is not connected.
+
+        Args:
+            right: "P" for puts (default), "C" for calls.
         """
         if self.ib_provider is None:
             logger.warning("No IB provider — options chain unavailable.")
@@ -127,13 +134,13 @@ class TQQQDataPipeline:
             # Delegates to the existing ib_data_provider infrastructure
             chain = self.ib_provider.get_options_chain(
                 symbol=symbol,
-                right="P",
+                right=right,
                 dte_min=dte_min,
                 dte_max=dte_max,
             )
             return chain or []
         except Exception as exc:
-            logger.error(f"Failed to fetch options chain: {exc}")
+            logger.error(f"Failed to fetch {right} options chain: {exc}")
             return []
 
     # ─────────────────────── Internal Helpers ────────────────────────────
@@ -149,8 +156,34 @@ class TQQQDataPipeline:
         try:
             raw  = yf.download(symbols, start=start, end=end,
                                progress=False, auto_adjust=True)
-            close = raw["Close"].copy()
+            
+            # Determine format of MultiIndex (if multi-index, we need to extract correctly)
+            if isinstance(raw.columns, pd.MultiIndex):
+                if "Close" in raw.columns.levels[0]:
+                    close = raw["Close"].copy()
+                elif "Close" in raw.columns.levels[1]:
+                    close = raw.xs("Close", level=1, axis=1).copy()
+                else:
+                    close = raw["Close"].copy()
+            else:
+                close = raw["Close"].copy()
+
+            # Save old columns mapping
             close.columns = [f"{s.lower()}_close" for s in symbols]
+
+            if "TQQQ" in symbols and isinstance(raw.columns, pd.MultiIndex):
+                try:
+                    close["tqqq_open"] = raw["Open"]["TQQQ"]
+                    close["tqqq_high"] = raw["High"]["TQQQ"]
+                    close["tqqq_low"]  = raw["Low"]["TQQQ"]
+                    close["tqqq_volume"] = raw["Volume"]["TQQQ"]
+                except KeyError:
+                    # Alternate yf format where Ticker is level 0
+                    close["tqqq_open"] = raw["TQQQ"]["Open"]
+                    close["tqqq_high"] = raw["TQQQ"]["High"]
+                    close["tqqq_low"]  = raw["TQQQ"]["Low"]
+                    close["tqqq_volume"] = raw["TQQQ"]["Volume"]
+
             return close
         except Exception as exc:
             logger.error(f"yfinance price fetch failed: {exc}")
@@ -216,3 +249,121 @@ class TQQQDataPipeline:
             df["tqqq_ret1"]   = t.pct_change(1)
             df["tqqq_hv20"]   = t.pct_change().rolling(20).std() * np.sqrt(252)
         return df
+
+    @staticmethod
+    def _add_mean_reversion_features(df: pd.DataFrame) -> pd.DataFrame:
+        """Adds all indicators needed for the hybrid swing diagonal strategy."""
+        try:
+            import ta
+        except ImportError:
+            logger.error("The 'ta' library is missing. Run 'pip install ta'")
+            return df
+            
+        c = df.get("tqqq_close")
+        if c is None:
+            return df
+            
+        h = df.get("tqqq_high", c)
+        l = df.get("tqqq_low", c)
+        v = df.get("tqqq_volume", pd.Series(1.0, index=df.index))
+        
+        # 1. RSI-2
+        df["rsi_2"] = ta.momentum.RSIIndicator(c, window=2).rsi()
+        
+        below_10 = (df["rsi_2"] < 10).astype(int)
+        groups = below_10.ne(below_10.shift()).cumsum()
+        df["rsi2_consec"] = below_10.groupby(groups).cumsum()
+        
+        is_oversold = df["rsi_2"] < 10
+        days_since = pd.Series(np.nan, index=df.index)
+        last_idx = -9999
+        for i, val in enumerate(is_oversold):
+            if pd.isna(val): continue
+            if val: last_idx = i
+            days_since.iloc[i] = i - last_idx if last_idx != -9999 else np.nan
+        df["days_since_oversold"] = days_since
+        
+        # 2. Bollinger %B (20, 2)
+        df["bb_pct_b"] = ta.volatility.BollingerBands(c, window=20, window_dev=2).bollinger_pband()
+        
+        # 3. Volume ratio (current / 20-day avg)
+        df["vol_ratio"] = v / v.rolling(20).mean()
+        
+        # 4. MFI-14 and ADX-14
+        df["mfi_14"] = ta.volume.MFIIndicator(h, l, c, v, window=14).money_flow_index()
+        df["adx_14"] = ta.trend.ADXIndicator(h, l, c, window=14).adx()
+        
+        # 6. SMAs
+        df["sma_200"] = c.rolling(200).mean()
+        df["sma_50"] = c.rolling(50).mean()
+        df["sma_20"] = c.rolling(20).mean()
+        df["sma_10"] = c.rolling(10).mean()
+        df["sma_5"] = c.rolling(5).mean()
+        
+        df["sma20_slope"] = df["sma_20"] - df["sma_20"].shift(5)
+        df["sma20_slope_positive"] = (df["sma_20"].diff() > 0).astype(int)
+        pos_groups = df["sma20_slope_positive"].ne(df["sma20_slope_positive"].shift()).cumsum()
+        df["sma20_slope_positive_days"] = df["sma20_slope_positive"].groupby(pos_groups).cumsum()
+        
+        # 7. ATR %
+        df["atr_pct"] = ta.volatility.AverageTrueRange(h, l, c, window=14).average_true_range() / c
+        
+        # 8. Rolling Hurst Exponent (100d, 60d) & OU Half-life (60d)
+        df["hurst_100"] = TQQQDataPipeline._rolling_hurst(c, window=100)
+        df["hurst_60"] = TQQQDataPipeline._rolling_hurst(c, window=60)
+        df["ou_half_life"] = TQQQDataPipeline._rolling_ou_halflife(c, window=60)
+        
+        # 9. VIX features
+        v_idx = df.get("vix")
+        if v_idx is not None:
+            v_sma_50 = v_idx.rolling(50).mean()
+            df["vix_sma_ratio"] = v_idx / v_sma_50
+            below_sma = (v_idx < v_sma_50).astype(int)
+            vix_groups = below_sma.ne(below_sma.shift()).cumsum()
+            df["vix_below_sma_consecutive"] = below_sma.groupby(vix_groups).cumsum()
+            
+        # 10. Drawdown
+        rolling_high = c.rolling(252, min_periods=1).max()
+        df["drawdown_from_high"] = (c - rolling_high) / rolling_high
+        
+        return df
+
+    @staticmethod
+    def _hurst_exponent(price_series: np.ndarray) -> float:
+        log_returns = np.diff(np.log(price_series))
+        lags = range(2, min(len(log_returns) // 2 + 1, 100))
+        if len(list(lags)) < 3: return 0.5
+        rs_values = []
+        for lag in lags:
+            subseries = [log_returns[i:i+lag] for i in range(0, len(log_returns) - lag, lag) if i+lag <= len(log_returns)]
+            rs_per_lag = []
+            for sub in subseries:
+                if len(sub) < 2: continue
+                R = np.max(np.cumsum(sub - np.mean(sub))) - np.min(np.cumsum(sub - np.mean(sub)))
+                S = np.std(sub, ddof=1)
+                if S > 0: rs_per_lag.append(R / S)
+            if rs_per_lag: rs_values.append((np.log(lag), np.log(np.mean(rs_per_lag))))
+        if len(rs_values) < 3: return 0.5
+        x = np.array([v[0] for v in rs_values])
+        y = np.array([v[1] for v in rs_values])
+        return np.polyfit(x, y, 1)[0]
+
+    @staticmethod
+    def _rolling_hurst(series: pd.Series, window: int = 100) -> pd.Series:
+        return series.rolling(window).apply(lambda x: np.nan if np.isnan(x).any() else TQQQDataPipeline._hurst_exponent(x), raw=True)
+
+    @staticmethod
+    def _ou_half_life(price_series: np.ndarray) -> float:
+        log_prices = np.log(price_series)
+        y = np.diff(log_prices)
+        x = np.column_stack([log_prices[:-1], np.ones(len(log_prices)-1)])
+        try:
+            lam = np.linalg.lstsq(x, y, rcond=None)[0][0]
+            if lam >= 0: return np.inf
+            return -np.log(2) / lam
+        except:
+            return np.inf
+
+    @staticmethod
+    def _rolling_ou_halflife(series: pd.Series, window: int = 60) -> pd.Series:
+        return series.rolling(window).apply(lambda x: np.nan if np.isnan(x).any() else TQQQDataPipeline._ou_half_life(x), raw=True)

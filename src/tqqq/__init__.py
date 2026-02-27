@@ -16,6 +16,7 @@ class TQQQStrategyState(Enum):
     FULL_CALL_SPREAD: A bear call credit spread is active (short call OTM + long call further OTM).
     LONG_CALL_ONLY: Short call was bought back; holding long call defensively.
     CLOSING: The position is in the process of being completely exited.
+    DIAGONAL_OPEN: A put diagonal swing trade is active.
     """
     IDLE            = auto()
     FULL_SPREAD     = auto()
@@ -23,6 +24,7 @@ class TQQQStrategyState(Enum):
     FULL_CALL_SPREAD = auto()   # NEW: bear call credit spread active
     LONG_CALL_ONLY  = auto()    # NEW: legged out of short call, holding long call
     CLOSING         = auto()
+    DIAGONAL_OPEN   = auto()    # Put diagonal swing trade active
 
 class MarketRegime(Enum):
     """

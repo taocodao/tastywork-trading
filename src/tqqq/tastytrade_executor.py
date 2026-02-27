@@ -152,3 +152,304 @@ class TastytradeExecutor:
             'quantity': quantity,
             'dryRun': dry_run,
         }
+
+    @staticmethod
+    def place_diagonal_spread(
+        session: Session,
+        account: Account,
+        symbol: str,              # e.g., "TQQQ"
+        anchor_strike: float,     # e.g., 72.0 (Short)
+        anchor_expiration: str,   # e.g., "2026-03-07"
+        hedge_strike: float,      # e.g., 67.0 (Long)
+        hedge_expiration: str,    # e.g., "2026-02-14"
+        spread_type: str,         # "PUT"
+        credit: float,            # net credit per contract (e.g., 0.85)
+        quantity: int,            # number of contracts
+        dry_run: bool = False,    # True for verifying validity without real trade
+    ) -> dict:
+        """
+        Places a diagonal credit spread order:
+          SELL anchor leg (usually longer expiration)
+          BUY hedge leg (usually shorter expiration)
+        Returns order confirmation dict.
+        """
+        opt_type = spread_type[0].upper()  # "P"
+
+        anchor_occ = TastytradeExecutor.build_occ_symbol(symbol, anchor_expiration, opt_type, anchor_strike)
+        hedge_occ  = TastytradeExecutor.build_occ_symbol(symbol, hedge_expiration, opt_type, hedge_strike)
+
+        logger.info(f'Looking up options: {anchor_occ} / {hedge_occ}')
+
+        anchor_option = _run(Option.get(session, anchor_occ))
+        hedge_option  = _run(Option.get(session, hedge_occ))
+
+        qty_dec = Decimal(str(quantity))
+        anchor_leg = anchor_option.build_leg(qty_dec, OrderAction.SELL_TO_OPEN)
+        hedge_leg  = hedge_option.build_leg(qty_dec, OrderAction.BUY_TO_OPEN)
+
+        order = NewOrder(
+            time_in_force=OrderTimeInForce.DAY,
+            order_type=OrderType.LIMIT,
+            legs=[anchor_leg, hedge_leg],
+            price=Decimal(str(round(credit, 2))),
+        )
+
+        mode = " (DRY RUN)" if dry_run else ""
+        logger.info(f'Placing diagonal: {spread_type} '
+                    f'Short {anchor_strike} ({anchor_expiration}) / Long {hedge_strike} ({hedge_expiration}) '
+                    f'x{quantity} @ ${credit:.2f} credit{mode}')
+
+        response = _run(account.place_order(session, order, dry_run=dry_run))
+
+        order_id = str(response.order.id) if hasattr(response, 'order') and hasattr(response.order, 'id') else (str(response.id) if hasattr(response, 'id') else None)
+
+        return {
+            'orderId': order_id,
+            'status': 'submitted' if not dry_run else 'dry_run',
+            'legs': [
+                {'action': 'SELL_TO_OPEN', 'strike': anchor_strike, 'expiration': anchor_expiration, 'type': spread_type, 'occ': anchor_occ},
+                {'action': 'BUY_TO_OPEN',  'strike': hedge_strike,  'expiration': hedge_expiration, 'type': spread_type, 'occ': hedge_occ},
+            ],
+            'credit': credit,
+            'quantity': quantity,
+            'dryRun': dry_run,
+        }
+
+    @staticmethod
+    def close_diagonal_spread(
+        session: Session,
+        account: Account,
+        symbol: str,
+        anchor_strike: float,
+        anchor_expiration: str,
+        hedge_strike: float,
+        hedge_expiration: str,
+        spread_type: str,
+        debit: float,
+        quantity: int,
+        dry_run: bool = False,
+    ) -> dict:
+        """
+        Closes a diagonal spread:
+          BUY TO CLOSE anchor leg
+          SELL TO CLOSE hedge leg
+        """
+        opt_type = spread_type[0].upper()
+
+        anchor_occ = TastytradeExecutor.build_occ_symbol(symbol, anchor_expiration, opt_type, anchor_strike)
+        hedge_occ  = TastytradeExecutor.build_occ_symbol(symbol, hedge_expiration, opt_type, hedge_strike)
+
+        anchor_option = _run(Option.get(session, anchor_occ))
+        hedge_option  = _run(Option.get(session, hedge_occ))
+
+        qty_dec = Decimal(str(quantity))
+        anchor_leg = anchor_option.build_leg(qty_dec, OrderAction.BUY_TO_CLOSE)
+        hedge_leg  = hedge_option.build_leg(qty_dec, OrderAction.SELL_TO_CLOSE)
+
+        # Debit: represented as negative limit price in Tastytrade SDK
+        order = NewOrder(
+            time_in_force=OrderTimeInForce.DAY,
+            order_type=OrderType.LIMIT,
+            legs=[anchor_leg, hedge_leg],
+            price=Decimal(str(round(-debit, 2))),
+        )
+
+        mode = " (DRY RUN)" if dry_run else ""
+        logger.info(f'Closing diagonal: {spread_type} '
+                    f'Buy {anchor_strike} / Sell {hedge_strike} x{quantity} @ ${debit:.2f} debit{mode}')
+
+        response = _run(account.place_order(session, order, dry_run=dry_run))
+
+        order_id = str(response.order.id) if hasattr(response, 'order') and hasattr(response.order, 'id') else (str(response.id) if hasattr(response, 'id') else None)
+        return {
+            'orderId': order_id,
+            'status': 'submitted' if not dry_run else 'dry_run',
+            'legs': [
+                {'action': 'BUY_TO_CLOSE', 'strike': anchor_strike, 'type': spread_type, 'occ': anchor_occ},
+                {'action': 'SELL_TO_CLOSE', 'strike': hedge_strike, 'type': spread_type, 'occ': hedge_occ},
+            ],
+            'debit': debit,
+            'dryRun': dry_run,
+        }
+
+    @staticmethod
+    def roll_hedge(
+        session: Session,
+        account: Account,
+        symbol: str,
+        current_hedge_strike: float,
+        current_hedge_expiration: str,
+        new_hedge_strike: float,
+        new_hedge_expiration: str,
+        spread_type: str,
+        net_credit: float, # Negative if debit
+        quantity: int,
+        dry_run: bool = False,
+    ) -> dict:
+        """
+        Rolls a hedge by selling to close the active hedge and buying to open a new hedge.
+        """
+        opt_type = spread_type[0].upper()
+
+        old_hedge_occ = TastytradeExecutor.build_occ_symbol(symbol, current_hedge_expiration, opt_type, current_hedge_strike)
+        new_hedge_occ = TastytradeExecutor.build_occ_symbol(symbol, new_hedge_expiration, opt_type, new_hedge_strike)
+
+        old_option = _run(Option.get(session, old_hedge_occ))
+        new_option = _run(Option.get(session, new_hedge_occ))
+
+        qty_dec = Decimal(str(quantity))
+        old_leg = old_option.build_leg(qty_dec, OrderAction.SELL_TO_CLOSE)
+        new_leg = new_option.build_leg(qty_dec, OrderAction.BUY_TO_OPEN)
+
+        order = NewOrder(
+            time_in_force=OrderTimeInForce.DAY,
+            order_type=OrderType.LIMIT,
+            legs=[old_leg, new_leg],
+            price=Decimal(str(round(net_credit, 2))),
+        )
+
+        mode = " (DRY RUN)" if dry_run else ""
+        action_word = "credit" if net_credit >= 0 else "debit"
+        price_val = abs(net_credit)
+        logger.info(f'Rolling hedge: close {current_hedge_strike} ({current_hedge_expiration}) '
+                    f'open {new_hedge_strike} ({new_hedge_expiration}) '
+                    f'x{quantity} @ ${price_val:.2f} {action_word}{mode}')
+
+        response = _run(account.place_order(session, order, dry_run=dry_run))
+
+        order_id = str(response.order.id) if hasattr(response, 'order') and hasattr(response.order, 'id') else (str(response.id) if hasattr(response, 'id') else None)
+        return {
+            'orderId': order_id,
+            'status': 'submitted' if not dry_run else 'dry_run',
+            'legs': [
+                {'action': 'SELL_TO_CLOSE', 'strike': current_hedge_strike, 'expiration': current_hedge_expiration, 'occ': old_hedge_occ},
+                {'action': 'BUY_TO_OPEN', 'strike': new_hedge_strike, 'expiration': new_hedge_expiration, 'occ': new_hedge_occ},
+            ],
+            'net_credit': net_credit,
+            'dryRun': dry_run,
+        }
+
+    @staticmethod
+    def place_backspread(
+        session: Session,
+        account: Account,
+        symbol: str,
+        short_strike: float,
+        long_strike: float,
+        expiration: str,
+        spread_type: str,
+        net_cost: float,
+        quantity: int,
+        dry_run: bool = False,
+    ) -> dict:
+        """
+        Places a 1x2 Ratio Backspread:
+          SELL 1 short leg
+          BUY 2 long legs
+        Returns order confirmation dict.
+        """
+        opt_type = spread_type[0].upper()
+
+        short_occ = TastytradeExecutor.build_occ_symbol(symbol, expiration, opt_type, short_strike)
+        long_occ  = TastytradeExecutor.build_occ_symbol(symbol, expiration, opt_type, long_strike)
+
+        logger.info(f'Looking up options: {short_occ} / {long_occ}')
+
+        short_option = _run(Option.get(session, short_occ))
+        long_option  = _run(Option.get(session, long_occ))
+
+        qty_dec = Decimal(str(quantity))
+        qty2_dec = Decimal(str(quantity * 2))
+        
+        short_leg = short_option.build_leg(qty_dec, OrderAction.SELL_TO_OPEN)
+        long_leg  = long_option.build_leg(qty2_dec, OrderAction.BUY_TO_OPEN)
+
+        # In Tastytrade SDK, debit is represented as a negative limit price
+        order = NewOrder(
+            time_in_force=OrderTimeInForce.DAY,
+            order_type=OrderType.LIMIT,
+            legs=[short_leg, long_leg],
+            price=Decimal(str(round(-net_cost, 2))),
+        )
+
+        mode = " (DRY RUN)" if dry_run else ""
+        cost_str = f"${net_cost:.2f} debit" if net_cost >= 0 else f"${-net_cost:.2f} credit"
+        logger.info(f'Placing backspread: {spread_type} '
+                    f'-1 {short_strike} / +2 {long_strike} ({expiration}) '
+                    f'x{quantity} @ {cost_str}{mode}')
+
+        response = _run(account.place_order(session, order, dry_run=dry_run))
+
+        order_id = str(response.order.id) if hasattr(response, 'order') and hasattr(response.order, 'id') else (str(response.id) if hasattr(response, 'id') else None)
+
+        return {
+            'orderId': order_id,
+            'status': 'submitted' if not dry_run else 'dry_run',
+            'legs': [
+                {'action': 'SELL_TO_OPEN', 'strike': short_strike, 'expiration': expiration, 'type': spread_type, 'occ': short_occ, 'ratio': 1},
+                {'action': 'BUY_TO_OPEN',  'strike': long_strike,  'expiration': expiration, 'type': spread_type, 'occ': long_occ, 'ratio': 2},
+            ],
+            'net_cost': net_cost,
+            'quantity': quantity,
+            'dryRun': dry_run,
+        }
+
+    @staticmethod
+    def close_backspread(
+        session: Session,
+        account: Account,
+        symbol: str,
+        short_strike: float,
+        long_strike: float,
+        expiration: str,
+        spread_type: str,
+        net_credit: float,
+        quantity: int,
+        dry_run: bool = False,
+    ) -> dict:
+        """
+        Closes a 1x2 Ratio Backspread:
+          BUY TO CLOSE 1 short leg
+          SELL TO CLOSE 2 long legs
+        """
+        opt_type = spread_type[0].upper()
+
+        short_occ = TastytradeExecutor.build_occ_symbol(symbol, expiration, opt_type, short_strike)
+        long_occ  = TastytradeExecutor.build_occ_symbol(symbol, expiration, opt_type, long_strike)
+
+        short_option = _run(Option.get(session, short_occ))
+        long_option  = _run(Option.get(session, long_occ))
+
+        qty_dec = Decimal(str(quantity))
+        qty2_dec = Decimal(str(quantity * 2))
+        
+        short_leg = short_option.build_leg(qty_dec, OrderAction.BUY_TO_CLOSE)
+        long_leg  = long_option.build_leg(qty2_dec, OrderAction.SELL_TO_CLOSE)
+
+        order = NewOrder(
+            time_in_force=OrderTimeInForce.DAY,
+            order_type=OrderType.LIMIT,
+            legs=[short_leg, long_leg],
+            price=Decimal(str(round(net_credit, 2))),
+        )
+
+        mode = " (DRY RUN)" if dry_run else ""
+        cost_str = f"${net_credit:.2f} credit" if net_credit >= 0 else f"${-net_credit:.2f} debit"
+        logger.info(f'Closing backspread: {spread_type} '
+                    f'+1 {short_strike} / -2 {long_strike} ({expiration}) '
+                    f'x{quantity} @ {cost_str}{mode}')
+
+        response = _run(account.place_order(session, order, dry_run=dry_run))
+
+        order_id = str(response.order.id) if hasattr(response, 'order') and hasattr(response.order, 'id') else (str(response.id) if hasattr(response, 'id') else None)
+
+        return {
+            'orderId': order_id,
+            'status': 'submitted' if not dry_run else 'dry_run',
+            'legs': [
+                {'action': 'BUY_TO_CLOSE', 'strike': short_strike, 'expiration': expiration, 'type': spread_type, 'occ': short_occ, 'ratio': 1},
+                {'action': 'SELL_TO_CLOSE', 'strike': long_strike, 'expiration': expiration, 'type': spread_type, 'occ': long_occ, 'ratio': 2},
+            ],
+            'net_credit': net_credit,
+            'dryRun': dry_run,
+        }

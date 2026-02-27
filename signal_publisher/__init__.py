@@ -50,9 +50,13 @@ from .tqqq import (
     TQQQSpreadEntrySignal,
     TQQQLegOutSignal,
     TQQQLongPutSellSignal,
+    TQQQDiagonalEntrySignal,
+    TQQQDiagonalExitSignal,
     publish_tqqq_entry_signal,
     publish_tqqq_legout_signal,
     publish_tqqq_long_put_signal,
+    publish_tqqq_diagonal_entry_signal,
+    publish_tqqq_diagonal_exit_signal,
 )
 
 # Diagonal signals
@@ -90,6 +94,12 @@ __all__ = [
     # PMCC
     'publish_pmcc_entry_signal',
     'publish_pmcc_cycle_signal',
+    
+    # TQQQ Diagonal
+    'TQQQDiagonalEntrySignal',
+    'TQQQDiagonalExitSignal',
+    'publish_tqqq_diagonal_entry_signal',
+    'publish_tqqq_diagonal_exit_signal',
     
     # Diagonal
     'DiagonalEntrySignal',

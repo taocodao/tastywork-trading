@@ -1495,14 +1495,30 @@ class TastyHandler(BaseHTTPRequestHandler):
         })
 
     def _handle_tqqq_signals(self):
-        """GET /api/tqqq/signals — Returns pending TQQQ signals."""
+        """GET /api/tqqq/signals — Returns pending TQQQ signals filtered by active risk level."""
         import os, json
+        import sys
+        
+        # Ensure config is importable
+        project_root = os.path.dirname(os.path.abspath(__file__))
+        if project_root not in sys.path:
+            sys.path.insert(0, project_root)
+            
+        try:
+            from config import TQQQ_RISK_LEVEL
+        except ImportError:
+            TQQQ_RISK_LEVEL = "Medium"
+
         SIGNALS_FILE = os.path.expanduser('~/tastywork-trading/tqqq_signals.json')
         try:
             if os.path.exists(SIGNALS_FILE):
                 with open(SIGNALS_FILE) as f:
                     data = json.load(f)
-                signals = [s for s in data if s.get('status') == 'pending']
+                signals = [
+                    s for s in data 
+                    if s.get('status') == 'pending' 
+                    and (s.get('risk_level') == TQQQ_RISK_LEVEL or 'risk_level' not in s)
+                ]
                 self._send_json(signals)
             else:
                 self._send_json([])

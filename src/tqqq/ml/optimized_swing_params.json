@@ -1,0 +1,80 @@
+{
+    "Low": {
+        "Deep": {
+            "anchor_dte": 55,
+            "hedge_dte": 12,
+            "anchor_k_pct": 0.018,
+            "hedge_k_pct": 0.107,
+            "exit_rsi": 78.6,
+            "time_stop": 17
+        },
+        "Mod": {
+            "anchor_dte": 26,
+            "hedge_dte": 9,
+            "anchor_k_pct": 0.032,
+            "hedge_k_pct": 0.025,
+            "exit_rsi": 61.4,
+            "time_stop": 13
+        },
+        "Light": {
+            "anchor_dte": 25,
+            "hedge_dte": 16,
+            "anchor_k_pct": 0.035,
+            "hedge_k_pct": 0.025,
+            "exit_rsi": 78.0,
+            "time_stop": 15
+        }
+    },
+    "Medium": {
+        "Deep": {
+            "anchor_dte": 53,
+            "hedge_dte": 12,
+            "anchor_k_pct": 0.037,
+            "hedge_k_pct": 0.052,
+            "exit_rsi": 71.2,
+            "time_stop": 11
+        },
+        "Mod": {
+            "anchor_dte": 26,
+            "hedge_dte": 9,
+            "anchor_k_pct": 0.024,
+            "hedge_k_pct": 0.022,
+            "exit_rsi": 60.3,
+            "time_stop": 7
+        },
+        "Light": {
+            "anchor_dte": 27,
+            "hedge_dte": 14,
+            "anchor_k_pct": 0.033,
+            "hedge_k_pct": 0.023,
+            "exit_rsi": 67.2,
+            "time_stop": 12
+        }
+    },
+    "High": {
+        "Deep": {
+            "anchor_dte": 55,
+            "hedge_dte": 12,
+            "anchor_k_pct": 0.062,
+            "hedge_k_pct": 0.109,
+            "exit_rsi": 71.1,
+            "time_stop": 15
+        },
+        "Mod": {
+            "anchor_dte": 25,
+            "hedge_dte": 9,
+            "anchor_k_pct": 0.021,
+            "hedge_k_pct": 0.021,
+            "exit_rsi": 61.0,
+            "time_stop": 20
+        },
+        "Light": {
+            "anchor_dte": 25,
+            "hedge_dte": 11,
+            "anchor_k_pct": 0.034,
+            "hedge_k_pct": 0.035,
+            "exit_rsi": 71.6,
+            "time_stop": 17
+        }
+    }
+}
