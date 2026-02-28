@@ -1,0 +1,49 @@
+============================= test session starts =============================
+platform win32 -- Python 3.10.7, pytest-9.0.2, pluggy-1.6.0 -- C:\Python310\python.exe
+cachedir: .pytest_cache
+rootdir: D:\Projects\tastywork-trading-1
+plugins: anyio-4.12.1
+collecting ... collected 40 items
+
+tests/tqqq/test_crash_guard.py::test_crash_guard_all_pass PASSED         [  2%]
+tests/tqqq/test_crash_guard.py::test_crash_guard_layer1_fail PASSED      [  5%]
+tests/tqqq/test_crash_guard.py::test_crash_guard_layer2_fail PASSED      [  7%]
+tests/tqqq/test_crash_guard.py::test_crash_guard_layer4_fail PASSED      [ 10%]
+tests/tqqq/test_crash_guard.py::test_crash_guard_yellow_zone PASSED      [ 12%]
+tests/tqqq/test_mean_reversion_signal.py::test_build_features_shape PASSED [ 15%]
+tests/tqqq/test_mean_reversion_signal.py::test_fallback_probability PASSED [ 17%]
+tests/tqqq/test_mean_reversion_signal.py::test_build_features_empty PASSED [ 20%]
+tests/tqqq/test_position_sizer.py::test_medium_risk PASSED               [ 22%]
+tests/tqqq/test_position_sizer.py::test_low_risk_floor PASSED            [ 25%]
+tests/tqqq/test_position_sizer.py::test_high_risk_ceiling PASSED         [ 27%]
+tests/tqqq/test_position_sizer.py::test_position_limit_reached PASSED    [ 30%]
+tests/tqqq/test_swing_exit.py::test_emergency_exit PASSED                [ 32%]
+tests/tqqq/test_swing_exit.py::test_regime_exit PASSED                   [ 35%]
+tests/tqqq/test_swing_exit.py::test_bounce_exit_sma PASSED               [ 37%]
+tests/tqqq/test_swing_exit.py::test_bounce_exit_rsi PASSED               [ 40%]
+tests/tqqq/test_swing_exit.py::test_theta_kicker_roll PASSED             [ 42%]
+tests/tqqq/test_swing_exit.py::test_theta_kicker_fail_roll_limit PASSED  [ 45%]
+tests/tqqq/test_swing_exit.py::test_time_stop PASSED                     [ 47%]
+tests/tqqq/test_swing_exit.py::test_hold PASSED                          [ 50%]
+tests/tqqq/test_tqqq_ai_modules.py::test_tqqq_params_by_regime_all_regimes_present PASSED [ 52%]
+tests/tqqq/test_tqqq_ai_modules.py::test_tqqq_params_by_regime_keys_complete PASSED [ 55%]
+tests/tqqq/test_tqqq_ai_modules.py::test_tqqq_params_delta_is_negative PASSED [ 57%]
+tests/tqqq/test_tqqq_ai_modules.py::test_tqqq_params_crisis_has_shortest_dte PASSED [ 60%]
+tests/tqqq/test_tqqq_ai_modules.py::test_timing_engine_returns_wait_before_open PASSED [ 62%]
+tests/tqqq/test_tqqq_ai_modules.py::test_timing_engine_returns_skip_near_close PASSED [ 65%]
+tests/tqqq/test_tqqq_ai_modules.py::test_timing_engine_executes_in_prime_window PASSED [ 67%]
+tests/tqqq/test_tqqq_ai_modules.py::test_timing_engine_executes_in_afternoon_window PASSED [ 70%]
+tests/tqqq/test_tqqq_ai_modules.py::test_iv_surface_returns_empty_dict_on_no_data PASSED [ 72%]
+tests/tqqq/test_tqqq_ai_modules.py::test_iv_surface_recommend_adjustments_respects_bounds PASSED [ 75%]
+tests/tqqq/test_tqqq_ai_modules.py::test_iv_surface_steep_skew_adjusts_delta PASSED [ 77%]
+tests/tqqq/test_tqqq_ai_modules.py::test_param_optimizer_fallback_returns_all_regimes PASSED [ 80%]
+tests/tqqq/test_tqqq_ai_modules.py::test_bandit_ranks_candidates_by_heuristic_early PASSED [ 82%]
+tests/tqqq/test_tqqq_ai_modules.py::test_bandit_rank_returns_ranked_contract_objects PASSED [ 85%]
+tests/tqqq/test_tqqq_ai_modules.py::test_bandit_returns_empty_list_for_no_candidates PASSED [ 87%]
+tests/tqqq/test_tqqq_ai_modules.py::test_bandit_update_increments_observation_count PASSED [ 90%]
+tests/tqqq/test_tqqq_ai_modules.py::test_ppo_agent_returns_do_nothing_without_model PASSED [ 92%]
+tests/tqqq/test_tqqq_ai_modules.py::test_ppo_agent_builds_observation_correctly PASSED [ 95%]
+tests/tqqq/test_tqqq_ai_modules.py::test_walk_forward_validator_returns_all_models PASSED [ 97%]
+tests/tqqq/test_tqqq_ai_modules.py::test_walk_forward_validator_has_passed_key PASSED [100%]
+
+============================= 40 passed in 11.91s =============================

@@ -1,0 +1,10 @@
+{
+  "return_pct": 125.56577901670019,
+  "sharpe": 1.837784039596275,
+  "max_drawdown": -7.333580564265173,
+  "final_equity": 56391.44475417504,
+  "theta_trades": 75,
+  "swing_trades": 126,
+  "theta_win_rate": 0.84,
+  "swing_win_rate": 0.7857142857142857
+}

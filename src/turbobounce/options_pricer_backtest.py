@@ -406,7 +406,7 @@ def run_backtest(start_date='2023-01-01', end_date='2024-01-01', initial_capital
     avg_loss       = df_log[df_log['PnL $'] <= 0]['PnL $'].mean() if losses > 0 else 0
     profit_factor  = abs(df_log[df_log['PnL $'] > 0]['PnL $'].sum() /
                          df_log[df_log['PnL $'] <= 0]['PnL $'].sum()) if losses > 0 else float('inf')
-    final_capital  = capital + sum(p['capital_allocated'] for p in open_positions) + total_pnl
+    final_capital  = capital + sum(p['capital_allocated'] for p in open_positions)
 
     tqqq_trades = df_log[df_log['Symbol'] == 'TQQQ']
     multi_trades = df_log[df_log['Symbol'] != 'TQQQ']

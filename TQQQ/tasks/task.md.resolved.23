@@ -1,0 +1,27 @@
+# Unified TQQQ Strategy — 3-Layer Implementation
+
+## Deep Performance Evaluation
+- [x] Review all backup backtest scripts and results
+- [x] Compare TQQQ strategies and identify best approach
+- [x] Perplexity validation of return expectations
+- [x] Write comprehensive strategy evaluation
+
+## Implementation Plan
+- [x] Design 3-layer architecture (Theta + Swing + Dynamic Sizing)
+- [x] Map existing components for reuse
+- [x] Get user approval on unified plan
+
+## Implementation (Phases 4-5 Backend)
+- [x] Step 1: [order_manager.py](file:///d:/Projects/tastywork-trading-1/src/tqqq/order_manager.py) — Add call spread methods
+- [x] Step 2: [signal_publisher/tqqq.py](file:///d:/Projects/tastywork-trading-1/signal_publisher/tqqq.py) — Add call spread signals
+- [x] Step 3: [position_tracker.py](file:///d:/Projects/tastywork-trading-1/src/tqqq/position_tracker.py) — Support all position types + pools
+- [x] Step 4: [tqqq_risk_manager.py](file:///d:/Projects/tastywork-trading-1/src/tqqq/tqqq_risk_manager.py) — Capital pool budgeting
+- [x] Step 5: [data_pipeline.py](file:///d:/Projects/tastywork-trading-1/src/tqqq/data_pipeline.py) — Support call chain fetching
+- [x] Step 6: [config.py](file:///d:/Projects/tastywork-trading-1/config.py) — Unified parameters
+- [/] Step 7: [run_tqqq_scheduler.py](file:///d:/Projects/tastywork-trading-1/run_tqqq_scheduler.py) — Wire all 3 layers
+
+## Verification
+- [ ] Run Scenario B backtest (confirm 98.3% baseline)
+- [ ] Unit tests for call spread order flow
+- [ ] Integration test: scheduler generates theta + swing signals
+- [ ] Paper trading verification

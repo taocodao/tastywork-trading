@@ -1,0 +1,16 @@
+WARNING: Ignoring invalid distribution - (c:\python310\lib\site-packages)
+WARNING: Ignoring invalid distribution -ip (c:\python310\lib\site-packages)
+Collecting ta
+  Using cached ta-0.11.0-py3-none-any.whl
+Requirement already satisfied: numpy in c:\users\erich\appdata\roaming\python\python310\site-packages (from ta) (2.2.6)
+Requirement already satisfied: pandas in c:\python310\lib\site-packages (from ta) (2.3.3)
+Requirement already satisfied: python-dateutil>=2.8.2 in c:\python310\lib\site-packages (from pandas->ta) (2.9.0.post0)
+Requirement already satisfied: pytz>=2020.1 in c:\python310\lib\site-packages (from pandas->ta) (2025.2)
+Requirement already satisfied: tzdata>=2022.7 in c:\python310\lib\site-packages (from pandas->ta) (2025.3)
+Requirement already satisfied: six>=1.5 in c:\python310\lib\site-packages (from python-dateutil>=2.8.2->pandas->ta) (1.17.0)
+WARNING: Ignoring invalid distribution - (c:\python310\lib\site-packages)
+WARNING: Ignoring invalid distribution -ip (c:\python310\lib\site-packages)
+Installing collected packages: ta
+WARNING: Ignoring invalid distribution - (c:\python310\lib\site-packages)
+WARNING: Ignoring invalid distribution -ip (c:\python310\lib\site-packages)
+Successfully installed ta-0.11.0

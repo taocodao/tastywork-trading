@@ -1,0 +1,20 @@
+{
+  "run_params": {
+    "start": "2019-01-01",
+    "end": "2026-02-25",
+    "regime": null,
+    "principal": 25000.0
+  },
+  "baseline": {
+    "total_return": -0.025484125358720047,
+    "max_drawdown": 0.07960497686904021,
+    "sharpe": -0.10753130358874238,
+    "trades": 66
+  },
+  "ml_enhanced": {
+    "total_return": -0.032335907179076896,
+    "max_drawdown": 0.0718989992207538,
+    "sharpe": -0.16158323202555513,
+    "trades": 29
+  }
+}

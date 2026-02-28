@@ -215,6 +215,11 @@ class TastyHandler(BaseHTTPRequestHandler):
                 self._handle_tqqq_status()
             elif self.path == '/api/tqqq/signals':
                 self._handle_tqqq_signals()
+            # =============================================================================
+            # TURBOBOUNCE STRATEGY ROUTES
+            # =============================================================================
+            elif self.path == '/api/turbobounce/signals':
+                self._handle_turbobounce_signals()
             else:
                 self._send_json({'error': 'Not found'}, 404)
         except Exception as e:
@@ -1524,6 +1529,27 @@ class TastyHandler(BaseHTTPRequestHandler):
                 self._send_json([])
         except Exception as e:
             print(f'TQQQ signals read error: {e}')
+            self._send_json([])
+
+    def _handle_turbobounce_signals(self):
+        """GET /api/turbobounce/signals — Read turbobounce_signals.json and return pending."""
+        import os, json
+        SIGNALS_FILE = os.path.expanduser('~/tastywork-trading/turbobounce_signals.json')
+        try:
+            if os.path.exists(SIGNALS_FILE):
+                with open(SIGNALS_FILE) as f:
+                    content = f.read().strip()
+                    if content:
+                        data = json.loads(content)
+                        # Ensure we always deal with a list
+                        if not isinstance(data, list):
+                            data = [data]
+                        signals = [s for s in data if s.get('status') == 'PENDING']
+                        self._send_json(signals)
+                        return
+            self._send_json([])
+        except Exception as e:
+            print(f'TurboBounce signals read error: {e}')
             self._send_json([])
 
     def _tqqq_get_signal(self, signal_id: str):

@@ -11,6 +11,7 @@
 
 | File | Description |
 |------|-------------|
+| [LAST_SESSION.md](./LAST_SESSION.md) | ⚡ Quick "where we left off" — **read first** |
 | [00_INDEX.md](./00_INDEX.md) | This file - table of contents |
 | [01_PRODUCT_VISION.md](./01_PRODUCT_VISION.md) | Product goals, audience, constraints |
 | [02_ARCHITECTURE_OVERVIEW.md](./02_ARCHITECTURE_OVERVIEW.md) | System diagram & components |

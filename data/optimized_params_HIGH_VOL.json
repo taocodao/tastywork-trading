@@ -1,0 +1,14 @@
+{
+  "anchor_dte": 33,
+  "anchor_delta": -0.292,
+  "hedge_dte": 8,
+  "hedge_delta": -0.076,
+  "anchor_profit_target_pct": 0.6,
+  "anchor_stop_loss_mult": 3.11,
+  "hedge_close_decay_pct": 0.44,
+  "max_naked_hours": 52,
+  "_sharpe": 2.619,
+  "_return": 0.607,
+  "_max_drawdown": 0.0026,
+  "_score": 1.814
+}

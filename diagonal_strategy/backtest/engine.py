@@ -67,14 +67,23 @@ class BacktestEngine:
         # We will keep a pointer
         
         for date_idx, (dt, row) in enumerate(subset_df.iterrows()):
-            if date_idx < 50: 
+            if date_idx < 200:  # Need 200 bars for 200 MA
                 continue
                 
             current_date = dt.date()
             tqqq_price = row['close']
             vix = row['vix_level']
             iv = (vix * self.vix_mult) / 100.0
-            
+
+            # Swing mode: compute rolling MAs and VIX SMA
+            close_series = subset_df['close'].iloc[:date_idx+1]
+            vix_series = subset_df['vix_level'].iloc[:date_idx+1]
+            ma_200 = close_series.rolling(200).mean().iloc[-1]
+            ma_5 = close_series.rolling(5).mean().iloc[-1]
+            vix_50sma = vix_series.rolling(50).mean().iloc[-1]
+            prev_close = subset_df['close'].iloc[date_idx - 1] if date_idx > 0 else tqqq_price
+            tqqq_daily_change = (tqqq_price - prev_close) / prev_close if prev_close > 0 else 0.0
+
             # Simple regime logic map
             if vix < 16: regime = 'LOW_VOL'
             elif vix < 24: regime = 'NORMAL'
@@ -90,10 +99,17 @@ class BacktestEngine:
                 'iv_rank': float(row.get('iv_rank', 50)) if not pd.isna(row.get('iv_rank', 50)) else 50.0,
                 'iv_percentile': float(row.get('iv_percentile', 50)) if not pd.isna(row.get('iv_percentile', 50)) else 50.0,
                 'term_slope': float(row.get('term_slope', 0)) if not pd.isna(row.get('term_slope', 0)) else 0.0,
-                'tqqq_bars': subset_df.iloc[date_idx-49:date_idx+1]
+                'tqqq_bars': subset_df.iloc[date_idx-49:date_idx+1],
+                # Swing mode signals
+                'tqqq_price': tqqq_price,
+                'tqqq_200ma': float(ma_200) if not pd.isna(ma_200) else 0.0,
+                'tqqq_5ma': float(ma_5) if not pd.isna(ma_5) else 0.0,
+                'vix_50sma': float(vix_50sma) if not pd.isna(vix_50sma) else vix,
+                'tqqq_daily_change': tqqq_daily_change,
             }
             
             to_remove = []
+            pending_scale_ins = []  # Defer new position creation to avoid dict-size change during iteration
             for pid, pos in self.positions.items():
                 
                 self._check_expirations(pos, current_date, tqqq_price)
@@ -128,9 +144,27 @@ class BacktestEngine:
                     self._buy_hedge(pos, current_date, tqqq_price, iv, mkt_data, regime)
                 elif action == 'EMERGENCY_HEDGE':
                     self._buy_hedge(pos, current_date, tqqq_price, iv, mkt_data, regime, urgent=True)
+                elif action == 'SCALE_IN':
+                    pos.scale_in_used = True
+                    pending_scale_ins.append((tqqq_price, iv, mkt_data.copy(), regime))
 
             for pid in to_remove:
                 del self.positions[pid]
+
+            # Execute deferred scale-in openings (after dict iteration is complete)
+            for si_price, si_iv, si_mkt, si_regime in pending_scale_ins:
+                tier = self.rx_manager._get_tier()
+                if len(self.positions) < tier['max_positions']:
+                    params = self.config.TQQQ_DIAGONAL_PARAMS.get(si_regime, self.config.TQQQ_DIAGONAL_PARAMS['NORMAL'])
+                    a_k = put_strike(si_price, params['anchor_delta'], si_iv, params['anchor_dte'])
+                    h_k = put_strike(si_price, params['hedge_delta'], si_iv, params['hedge_dte'])
+                    spread_width = max(0, a_k - h_k)
+                    contracts = max(1, self.rx_manager.calculate_contracts(spread_width) // 2)
+                    max_loss = spread_width * 100 * contracts
+                    risk_check = self.rx_manager.can_open_new_diagonal(max_loss, self.rx_manager._current_value)
+                    if risk_check:
+                        logger.info(f"  SCALE-IN: Opening second position at ${si_price:.2f} ({contracts}x)")
+                        self._open_diagonal(current_date, si_price, si_iv, si_mkt, si_regime, max_loss, contracts)
 
             if regime_filter and regime != regime_filter:
                 pass # skip initiating in backtest target regime mode

@@ -74,6 +74,9 @@ class DiagonalPosition:
     cycle_profit_target_pct: float = 0.60    # close hedge at 60% decay
     vix_spike_close_threshold: float = 3.0   # close anchor on 3pt VIX spike
 
+    # Scale-in tracking
+    scale_in_used: bool = False              # True after one scale-in (max 1 per position)
+
     @property
     def current_cycle(self) -> Optional[DiagonalCycle]:
         return self.cycles[-1] if self.cycles else None
@@ -110,7 +113,7 @@ class ActiveDiagonalManager:
     def evaluate(self, position: DiagonalPosition, market_data: Dict[str, Any]) -> str:
         """
         Returns one of: 'HOLD', 'OPEN_DIAGONAL', 'CLOSE_HEDGE', 'BUY_NEW_HEDGE',
-        'CLOSE_ANCHOR', 'CLOSE_ALL', 'EMERGENCY_HEDGE'
+        'CLOSE_ANCHOR', 'CLOSE_ALL', 'EMERGENCY_HEDGE', 'SCALE_IN'
         """
         ta_features = self.ta_engine.compute_features(market_data)
         if not ta_features:
@@ -133,59 +136,117 @@ class ActiveDiagonalManager:
         return 'HOLD'
     
     def _evaluate_idle(self, pos, ta, ml, mkt) -> str:
-        dip_score = self.ta_engine.dip_score(ta)
+        """
+        SWING MODE entry: RSI-2 < 10 + price > 200 MA + volume confirmation
+        Research: 72-77% win rate with this signal stack
+        """
         regime = mkt.get('regime', 'UNKNOWN')
-        
         if regime not in ('LOW_VOL', 'NORMAL', 'HIGH_VOL'):
             return 'HOLD'
-        
-        # Core gate: TA dip score 
-        threshold = self.config.TA_DIP_SCORE_THRESHOLD
-        if regime == 'LOW_VOL':
-            threshold *= 0.85  # 15% easier entry in calm markets
-            
-        if dip_score > threshold:
-            # ML is a soft filter: only block if ML actively predicts DOWN with high confidence
-            if ml['direction'] == 'DOWN' and ml['confidence'] > 0.60:
+
+        # === LAYER 1: 200 MA Gate (most important crash guard) ===
+        tqqq_price = mkt.get('tqqq_price', 0)
+        ma_200 = mkt.get('tqqq_200ma', 0)
+        if ma_200 > 0 and tqqq_price < ma_200:
+            logger.debug(f"IDLE: Price {tqqq_price:.2f} < 200MA {ma_200:.2f} — no new trades")
+            return 'HOLD'
+
+        # === LAYER 2: VIX regime gate ===
+        vix = mkt.get('vix_level', 20)
+        vix_50sma = mkt.get('vix_50sma', vix)
+        crisis_mult = getattr(self.config, 'CRASH_GUARD_VIX_CRISIS_MULT', 1.15)
+        if vix_50sma > 0 and vix > vix_50sma * crisis_mult:
+            logger.debug(f"IDLE: VIX crisis regime ({vix:.1f} > {vix_50sma:.1f}x{crisis_mult}) — no new trades")
+            return 'HOLD'
+
+        # === LAYER 3: ML crash guard (SuperTrend HIGH_VOL BEARISH) ===
+        crash_guard_active = False
+        if hasattr(self.ta_engine, 'ml_enhancer') and self.ta_engine.ml_enhancer is not None:
+            crash_guard_active = getattr(self.ta_engine.ml_enhancer, 'is_crash_guard_active', False)
+        if crash_guard_active:
+            logger.debug("IDLE: ML crash guard active — no new trades")
+            return 'HOLD'
+
+        # === PRIMARY ENTRY SIGNAL: RSI-2 < 10 ===
+        rsi2 = ta.get('rsi_2', 50)
+        rsi2_threshold = getattr(self.config, 'SWING_ENTRY_RSI2_THRESHOLD', 10)
+        if rsi2 >= rsi2_threshold:
+            return 'HOLD'
+
+        # === OPTIONAL: Volume capitulation confirmation ===
+        if getattr(self.config, 'SWING_ENTRY_USE_VOLUME_CONFIRM', False):
+            vol_mult = getattr(self.config, 'SWING_ENTRY_VOLUME_MULTIPLIER', 2.0)
+            if ta.get('volume_ratio', 1.0) < vol_mult:
+                logger.debug(f"IDLE: RSI-2={rsi2:.1f} but volume insufficient — waiting for capitulation")
                 return 'HOLD'
-            return 'OPEN_DIAGONAL'
-            
-        return 'HOLD'
+
+        # === ML soft filter: only veto on very high DOWN confidence ===
+        if ml['direction'] == 'DOWN' and ml['confidence'] > 0.70:
+            logger.debug(f"IDLE: RSI-2 signal blocked by ML DOWN confidence {ml['confidence']:.2f}")
+            return 'HOLD'
+
+        logger.debug(f"IDLE: RSI-2={rsi2:.1f} < {rsi2_threshold} + price {tqqq_price:.2f} > 200MA {ma_200:.2f} — OPEN_DIAGONAL")
+        return 'OPEN_DIAGONAL'
 
     def _evaluate_full_diagonal(self, pos, ta, ml, mkt) -> str:
+        """
+        SWING MODE: Close BOTH legs on bounce.
+        Exit signals: price > 5-day MA, RSI-2 > 70, max hold days, stop loss.
+        No hedge cycling — position is closed as a unit.
+        """
         anchor_pnl_pct = self._anchor_pnl_pct(pos, mkt)
-        
+        regime = mkt.get('regime', 'NORMAL')
+        params = self.config.TQQQ_DIAGONAL_PARAMS.get(regime, self.config.TQQQ_DIAGONAL_PARAMS['NORMAL'])
+
         # Priority 1: Stop Loss
         if anchor_pnl_pct <= -pos.anchor_stop_loss_mult:
-            logger.info("FULL_DIAG: Stop loss breached.")
+            logger.info(f"SWING: Stop loss breached ({anchor_pnl_pct:.1%})")
             return 'CLOSE_ALL'
-            
-        # Priority 2: Overall profit target
-        if pos.total_credits > 0 and anchor_pnl_pct >= pos.anchor_profit_target_pct:
-            logger.info("FULL_DIAG: Profit target met.")
-            return 'CLOSE_ALL'
-            
-        # Priority 3: DTE Exit
+
+        # Priority 2: DTE Exit (anchor about to expire)
         anchor_dte = (pos.anchor_expiry - mkt['current_date']).days if pos.anchor_expiry else 0
         if anchor_dte <= 7:
-            logger.info("FULL_DIAG: Anchor DTE <= 7. Closing.")
+            logger.info("SWING: Anchor DTE <= 7. Closing.")
             return 'CLOSE_ALL'
-            
-        # Priority 4: Hedge expiration
+
+        # Priority 3: Layer 4 crash guard — single day crash
+        tqqq_daily_chg = mkt.get('tqqq_daily_change', 0.0)
+        crash_threshold = getattr(self.config, 'CRASH_GUARD_DAILY_DROP_PCT', -0.15)
+        if tqqq_daily_chg <= crash_threshold:
+            logger.info(f"SWING: Single-day crash {tqqq_daily_chg:.1%} — emergency exit")
+            return 'CLOSE_ALL'
+
+        # Priority 4: Max hold days (force close to avoid overstaying)
+        if pos.anchor_entry_date:
+            days_held = (mkt['current_date'] - pos.anchor_entry_date).days
+            max_hold = params.get('swing_max_hold_days',
+                                  getattr(self.config, 'SWING_EXIT_MAX_HOLD_DAYS', 7))
+            if days_held >= max_hold:
+                logger.info(f"SWING: Max hold days ({days_held}d >= {max_hold}d) — closing")
+                return 'CLOSE_ALL'
+
+        # Priority 5: BOUNCE EXIT — primary swing exit
+        rsi2 = ta.get('rsi_2', 50)
+        rsi2_exit = getattr(self.config, 'SWING_EXIT_RSI2_ABOVE', 70)
+        tqqq_price = mkt.get('tqqq_price', 0)
+        ma_5 = mkt.get('tqqq_5ma', 0)
+
+        bounce_rsi = rsi2 > rsi2_exit
+        bounce_5ma = (getattr(self.config, 'SWING_EXIT_ABOVE_5MA', True)
+                      and ma_5 > 0 and tqqq_price > ma_5)
+
+        if bounce_rsi or bounce_5ma:
+            reason = f"RSI-2={rsi2:.1f} > {rsi2_exit}" if bounce_rsi else f"price {tqqq_price:.2f} > 5MA {ma_5:.2f}"
+            logger.info(f"SWING: Bounce detected ({reason}) — CLOSE_ALL")
+            return 'CLOSE_ALL'
+
+        # Priority 6: Hedge expiration (keep hedge protection alive)
         hedge_dte = (pos.current_cycle.hedge_expiry - mkt['current_date']).days if (pos.current_cycle and pos.current_cycle.hedge_expiry) else 0
         if hedge_dte <= 1:
-            logger.info("FULL_DIAG: Hedge about to expire. Closing hedge.")
-            return 'CLOSE_HEDGE'
+            # In swing mode, if hedge expires without bounce, close the whole position
+            logger.info("SWING: Hedge expired without bounce — closing whole position")
+            return 'CLOSE_ALL'
 
-        # Priority 5: Bounce detected -> close hedge cheap
-        bounce_score = self.ta_engine.bounce_score(ta)
-        if bounce_score > self.config.TA_BOUNCE_SCORE_THRESHOLD:
-            
-            hedge_pnl_pct = self._hedge_pnl_pct(pos, mkt)
-            if hedge_pnl_pct > pos.cycle_profit_target_pct:
-                logger.info("FULL_DIAG: Bounce detected + hedge decayed. Closing hedge.")
-                return 'CLOSE_HEDGE'
-                
         return 'HOLD'
 
     def _evaluate_anchor_only(self, pos, ta, ml, mkt) -> str:

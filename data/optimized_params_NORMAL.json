@@ -1,14 +1,14 @@
 {
-  "anchor_dte": 72,
-  "anchor_delta": -0.292,
-  "hedge_dte": 20,
-  "hedge_delta": -0.158,
-  "anchor_profit_target_pct": 0.59,
-  "anchor_stop_loss_mult": 3.27,
-  "hedge_close_decay_pct": 0.55,
-  "max_naked_hours": 51,
-  "_sharpe": 1.956,
-  "_return": 0.7678,
-  "_max_drawdown": 0.0048,
-  "_score": 1.4808
+  "anchor_dte": 61,
+  "anchor_delta": -0.258,
+  "hedge_dte": 7,
+  "hedge_delta": -0.065,
+  "anchor_profit_target_pct": 0.62,
+  "anchor_stop_loss_mult": 1.06,
+  "hedge_close_decay_pct": 0.43,
+  "max_naked_hours": 14,
+  "_sharpe": 2.063,
+  "_return": 0.7768,
+  "_max_drawdown": 0.0026,
+  "_score": 1.5482
 }

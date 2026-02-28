@@ -1,0 +1,20 @@
+TURBOBOUNCE OPTIONS BACKTEST - $5,000.00 INITIAL CAPITAL
+Years: 2019 to 2026 (Compounding (Accumulated))
+Strategy: NAKED_LONG (Deep ITM LEAPS), DIAGONAL (PMCC), CREDIT_SPREAD
+
+ Year  Start Capital $  Total Trades  Wins  Losses  Win Rate %  Avg Win $  Avg Loss $  TQQQ Trades  TQQQ PnL $  Net PnL $  End Capital $  Return %
+ 2019         5,000.00           183    96      87       52.50      68.23      -47.68           31      585.37   2,401.42       7,401.48     48.03
+ 2020         7,401.48           173    81      92       46.80     118.83      -93.89           37     -226.48     987.05       8,388.56     13.34
+ 2021         8,388.56           178    91      87       51.10     178.73     -119.74           37    1,052.22   5,847.28      14,235.79     69.71
+ 2022        14,235.79            87    40      47       46.00     188.88     -267.33            4     -496.91  -5,009.71       9,226.07    -35.19
+ 2023         9,226.07           178    86      92       48.30     181.64     -126.13           31      817.72   4,017.25      13,243.28     43.54
+ 2024        13,243.28           147    76      71       51.70     267.74     -202.79           29     -180.99   5,949.70      19,193.04     44.93
+ 2025        19,193.04           132    75      57       56.80     299.65     -348.35           24      347.99   2,618.13      21,811.20     13.64
+
+--- 6-YEAR AGGREGATE SUMMARY ---
+Starting Capital      : $5,000.00
+Ending Capital        : $21,811.20
+Total Trades (6 yrs)  : 1078
+Average Win Rate      : 50.5%
+Cumulative Net PnL    : $16,811.20
+Total Return on Base  : +336.2%
