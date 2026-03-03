@@ -12,6 +12,10 @@ import logging
 from datetime import datetime, date, timedelta
 import pytz
 import yfinance as yf
+from dotenv import load_dotenv
+
+# Load environment variables (e.g., DATABASE_URL)
+load_dotenv()
 
 from src.turbobounce.data_provider import MultiTickerDataProvider
 from src.turbobounce.scanner import TurboBounceScanner
