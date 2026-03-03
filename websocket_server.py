@@ -42,6 +42,8 @@ async def register(websocket: WebSocketServerProtocol):
         "dvo_entry",
         "dvo_exit",
         "diagonal_spread",
+        # TurboBounce multi-ticker
+        "turbobounce",
     }
     logger.info(f"Client connected. Total: {len(clients)}")
     
@@ -200,6 +202,8 @@ async def send_signal_history(websocket: WebSocketServerProtocol, channels: Set[
             signal_channel = 'iron_condor'
         elif 'vertical' in strategy:
             signal_channel = 'vertical_spread'
+        elif 'turbobounce' in strategy:
+            signal_channel = 'turbobounce'
         else:
             signal_channel = 'calendar_spread'
 
