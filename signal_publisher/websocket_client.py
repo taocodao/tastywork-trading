@@ -43,15 +43,15 @@ def broadcast_to_channel(channel: str, data: Dict[str, Any]) -> bool:
         )
         
         if response.status_code == 200:
-            logger.info(f"✅ Broadcast to '{channel}': {data.get('symbol', 'N/A')}")
+            logger.info(f"Broadcast to '{channel}' successful: {data.get('symbol', 'N/A')}")
             return True
         else:
-            logger.warning(f"⚠️ Broadcast failed ({response.status_code}): {channel}")
+            logger.warning(f"Broadcast failed ({response.status_code}): {channel}")
             return False
             
     except requests.exceptions.ConnectionError:
-        logger.warning(f"⚠️ WebSocket server not available for channel: {channel}")
+        logger.warning(f"WebSocket server not available for channel: {channel}")
         return False
     except Exception as e:
-        logger.error(f"❌ Broadcast error for {channel}: {e}")
+        logger.error(f"Broadcast error for {channel}: {e}")
         return False

@@ -88,7 +88,6 @@ def run_multiyear(start_year, end_year, initial_capital, accumulate=True):
     return report
 
 if __name__ == "__main__":
-    report_5k = run_multiyear(2019, 2026, 5000, accumulate=True)
-    report_20k = run_multiyear(2019, 2026, 20000, accumulate=True)
+    report_25k = run_multiyear(2019, 2026, 25000, accumulate=True)
     
     print("\nALL BACKTESTS COMPLETE.")

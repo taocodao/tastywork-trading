@@ -845,12 +845,21 @@ class TastyHandler(BaseHTTPRequestHandler):
 
             if execute:
                 try:
-                    # Execute using USER's session (not master account!)
-                    result = self._execute_calendar_spread_for_user(
-                        signal_data, 
-                        user_refresh_token, 
-                        account_number
-                    )
+                    strategy_type = signal_data.get('strategy', '').lower()
+                    
+                    if strategy_type == 'turbobounce':
+                        result = self._execute_turbobounce_for_user(
+                            signal_data,
+                            user_refresh_token,
+                            account_number
+                        )
+                    else:
+                        # Default to calendar spread (Theta)
+                        result = self._execute_calendar_spread_for_user(
+                            signal_data, 
+                            user_refresh_token, 
+                            account_number
+                        )
                     
                     # Update user's execution status (NOT the global signal status!)
                     user_repo.create_or_update_execution(
@@ -867,7 +876,7 @@ class TastyHandler(BaseHTTPRequestHandler):
                         'signal': signal_data,
                         'order': result,
                         'executionCount': execution_count,
-                        'message': f"Calendar spread on {signal.symbol} submitted to YOUR account!"
+                        'message': f"{strategy_type.title()} trade on {signal.symbol} submitted to YOUR account!"
                     }
                 except Exception as e:
                     # Update user's execution status to failed
@@ -896,6 +905,44 @@ class TastyHandler(BaseHTTPRequestHandler):
             traceback.print_exc()
             self._send_json({'error': str(e)}, 500)
 
+
+    def _execute_turbobounce_for_user(
+        self,
+        signal: dict,
+        user_refresh_token: str,
+        account_number: str = None
+    ) -> dict:
+        """
+        Execute a TurboBounce options trade using USER's OAuth credentials.
+        """
+        print(f"📈 Executing TurboBounce Trade for USER: {signal['symbol']} - {signal['type']}")
+        
+        # NOTE: Implement actual TurboBounce trade construction and execution here
+        # For now, we will simulate success to unblock the frontend UI test, 
+        # or we need to define the exact options legs TurboBounce requires.
+        # Since TurboBounce signals currently only have target DTEs/Deltas but not
+        # specific strikes/expirations yet, the backend needs a constructor.
+        
+        try:
+            from datetime import datetime
+            import uuid
+            
+            # TODO: Add real Tastytrade order placement here
+            # Since TurboBounce is missing concrete legs in the signal, we either 
+            # 1. Reject it if the backend can't construct it
+            # 2. Return a NotImplemented error
+            
+            error_msg = f"TurboBounce execution requires Option Constructor logic. Signal provides target DTE: {signal.get('target_anchor_dte', 'N/A')} and Delta: {signal.get('target_delta', 'N/A')} but not concrete strikes."
+            print(f"⚠️ {error_msg}")
+            
+            # We raise an error so the frontend knows it failed gracefully instead of a Calendar Spread fail.
+            raise NotImplementedError(error_msg)
+            
+        except Exception as e:
+            print(f"❌ TurboBounce execution failed: {e}")
+            import traceback
+            traceback.print_exc()
+            raise
 
     def _execute_calendar_spread_for_user(
         self, 
@@ -1532,24 +1579,23 @@ class TastyHandler(BaseHTTPRequestHandler):
             self._send_json([])
 
     def _handle_turbobounce_signals(self):
-        """GET /api/turbobounce/signals — Read turbobounce_signals.json and return pending."""
-        import os, json
-        SIGNALS_FILE = os.path.expanduser('~/tastywork-trading/turbobounce_signals.json')
+        """GET /api/turbobounce/signals — Read from PostgreSQL SignalRepository and return pending."""
         try:
-            if os.path.exists(SIGNALS_FILE):
-                with open(SIGNALS_FILE) as f:
-                    content = f.read().strip()
-                    if content:
-                        data = json.loads(content)
-                        # Ensure we always deal with a list
-                        if not isinstance(data, list):
-                            data = [data]
-                        signals = [s for s in data if s.get('status') == 'PENDING']
-                        self._send_json(signals)
-                        return
-            self._send_json([])
+            from src.earnings_intelligence.database import SignalRepository
+            repo = SignalRepository()
+            signals = repo.get_all_signals()
+            
+            pending_turbobounce = []
+            for s in signals:
+                s_dict = s.to_dict()
+                if s_dict.get('strategy') == 'turbobounce' and s_dict.get('status') == 'pending':
+                    pending_turbobounce.append(s_dict)
+                    
+            self._send_json(pending_turbobounce)
         except Exception as e:
             print(f'TurboBounce signals read error: {e}')
+            import traceback
+            traceback.print_exc()
             self._send_json([])
 
     def _tqqq_get_signal(self, signal_id: str):

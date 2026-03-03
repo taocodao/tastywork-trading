@@ -4,6 +4,36 @@ Architecture decisions and important changes, in reverse chronological order.
 
 ---
 
+## 2026-03-02: TurboBounce Signal Pipeline Gap Analysis
+
+**Decision**: Align TurboBounce signal publishing with the Theta strategy's pattern (DB + WebSocket + auto-approve).
+
+**Context**: TurboBounce signals were not appearing on the frontend despite being generated successfully. Investigation revealed TurboBounce's `signal_publisher.py` writes only to a standalone JSON file (`turbobounce_signals.json`) and is completely disconnected from the unified `signal_publisher/` module, `SignalRepository` (PostgreSQL), and WebSocket broadcast infrastructure.
+
+**Resolution**:
+- Documented all 6 gaps in `brain/25_SIGNAL_FRAMEWORK.md`
+- Target architecture: create `signal_publisher/turbobounce.py` with typed `BaseSignal` dataclasses, add `SignalRepository.save_signal()`, and call `broadcast_to_channel('turbobounce', data)` — matching the Theta gold standard.
+- TQQQ has the same gaps (JSON-only persistence, no DB, no WebSocket) but uses proper typed signal classes.
+
+**Affected**: `src/turbobounce/signal_publisher.py`, `signal_publisher/turbobounce.py` (new), `run_turbobounce_scheduler.py`, `tasty_api_server.py`
+
+---
+
+## 2026-03-01: TurboBounce PWA Interactive Simulator & Next.js SSG Refactor
+
+**Decision**: Replaced conventional static web pages with interactive Recharts simulators powered by a global `NarrationContext`, allowing dynamically scalable backtest visualizations (using real ML data) locked to ElevenLabs HTML5 Audio output. 
+
+**Context**: TurboBounce requires a premium, dynamic landing page to convert users by showing them the mathematical reality of compounded trades over time. During construction, the Next.js `npm run build` process failed via SSG timeout loop because `i18next-http-backend` was attempting to fire HTTP network requests while the node build server wasn't live.
+
+**Resolution**:
+- Developed interactive `InteractiveTimeline`, `SynchronizedTradeFeed`, and `CompoundingCalculator` React components driven by an `initialInvestment` state multiplier.
+- Migrated out of `i18next-http-backend` in favor of statically importing the localized `translation.json` files directly into `src/lib/i18n.ts`, resolving all Production Build compile bugs.
+- Deployed Node.js scripts handling automated CSV-to-JSON timeline conversion (`process_turbobounce_trades.js`) and ElevenLabs SDK multi-language generation (`generateNarration.ts`).
+
+**Affected**: `src/app/page.tsx`, `src/components/marketing/*`, `src/lib/i18n.ts`, `scripts/*`
+
+---
+
 ## 2026-02-24: EC2 Deployment via Git Push (Not SCP)
 
 **Decision**: Use `git push` + `git pull` on EC2 for all source code deployment. Avoid SCP.

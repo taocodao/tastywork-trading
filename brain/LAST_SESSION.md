@@ -1,6 +1,6 @@
 # Last Session — Quick Reference
 
-> **Updated**: 2026-02-27
+> **Updated**: 2026-03-01
 
 ## Current State
 
@@ -10,6 +10,9 @@
   - Cooldown 6 days, VIX 5-day entry filter, IV multiplier 2.10
 - **Theta Scheduler** — `theta_monitor_continuous.py` (24/7 continuous monitor)
 - **TradeMind API** — backend serving frontend at trademind.bot
+
+### Recent Work (Mar 2026)
+- **Mar 01**: Built the TurboBounce PWA Landing Page Interactive Simulator (EquityCurveChart, TradeFeed, CompoundingCalculator) with scalable multiplier math. Fixed Next.js build timeouts by statically importing translation dictionaries. Constructed ElevenLabs localized voice integration.
 
 ### Recent Work (Feb 2026)
 - **Feb 27**: Investigated TurboBounce `options_pricer_backtest.py`. Discovered the file is untracked in Git. The +12.31% Mode B result came from `historical_backtest.py`, not the options pricer. The options pricer currently has logic issues with `NAKED_LONG` handling (14 DTE held for 15 days = guaranteed loss).

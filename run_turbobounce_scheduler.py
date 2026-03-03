@@ -16,7 +16,7 @@ import yfinance as yf
 from src.turbobounce.data_provider import MultiTickerDataProvider
 from src.turbobounce.scanner import TurboBounceScanner
 from src.turbobounce.strategy_router import StrategyRouter
-from src.turbobounce.signal_publisher import TurboBouncePublisher
+from signal_publisher.turbobounce import publish_turbobounce_entry_signal
 from src.turbobounce.risk_manager import TurboBounceRiskManager
 def is_market_open() -> bool:
     tz = pytz.timezone('US/Eastern')
@@ -57,7 +57,6 @@ class TurboBounceScheduler:
         self.data_provider = MultiTickerDataProvider()
         self.scanner = TurboBounceScanner(self.data_provider)
         self.router = StrategyRouter()
-        self.publisher = TurboBouncePublisher()
         self.risk_manager = TurboBounceRiskManager(mode=mode)
         
         self.last_scan_date = None
@@ -109,13 +108,33 @@ class TurboBounceScheduler:
             if route:
                 routed_strategies[pick.symbol] = route
 
-        # 3. Publish to JSON
+        # 3. Publish to unified framework
         if routed_strategies:
-            self.publisher.publish_scanned_signals(
-                ranked_picks['top_oversold'],
-                ranked_picks['top_overbought'],
-                routed_strategies
-            )
+            publish_count = 0
+            for rank, pick in enumerate(all_picks):
+                sym = pick.symbol
+                route = routed_strategies.get(sym)
+                if not route:
+                    continue
+                    
+                display_rank = rank + 1 if rank < 3 else (rank - 3) + 1
+                
+                publish_turbobounce_entry_signal(
+                    symbol=sym,
+                    action_type=route.strategy_type,
+                    direction=route.direction,
+                    scanner_rank=display_rank,
+                    total_score=round(pick.total_score, 1),
+                    rsi_2=round(pick.rsi_2, 1),
+                    iv_rank=round(pick.iv_rank, 1),
+                    category=pick.category,
+                    rationale=route.rationale,
+                    target_anchor_dte=route.target_anchor_dte,
+                    target_hedge_dte=route.target_hedge_dte,
+                    target_delta=route.target_delta
+                )
+                publish_count += 1
+            logger.info(f"Published {publish_count} unified TurboBounce Multi-Ticker signals.")
         else:
             logger.info("No candidates passed routing.")
             

@@ -65,6 +65,12 @@ from .diagonal import (
     publish_diagonal_entry_signal
 )
 
+# TurboBounce signals
+from .turbobounce import (
+    TurboBounceEntrySignal,
+    publish_turbobounce_entry_signal
+)
+
 # Base classes
 from .base import BaseSignal
 
@@ -105,8 +111,12 @@ __all__ = [
     'DiagonalEntrySignal',
     'publish_diagonal_entry_signal',
     
+    # TurboBounce
+    'TurboBounceEntrySignal',
+    'publish_turbobounce_entry_signal',
+    
     # Base
     'BaseSignal',
 ]
 
-__version__ = '2.0.0'
+__version__ = '2.1.0'

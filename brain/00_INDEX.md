@@ -19,6 +19,7 @@
 | [10_BACKEND_DESIGN.md](./10_BACKEND_DESIGN.md) | Backend services, data models |
 | [11_FRONTEND_DESIGN.md](./11_FRONTEND_DESIGN.md) | UX flows, pages, components |
 | [20_TRADING_LOGIC.md](./20_TRADING_LOGIC.md) | Strategies, risk logic, pre-trade checks |
+| [25_SIGNAL_FRAMEWORK.md](./25_SIGNAL_FRAMEWORK.md) | Signal publishing pipeline: Theta/TQQQ/TurboBounce comparison |
 | [30_IB_DIAGNOSIS.md](./30_IB_DIAGNOSIS.md) | IB Gateway diagnosis (Feb 2026) |
 | [40_EC2_OPERATIONS.md](./40_EC2_OPERATIONS.md) | EC2 server startup & operations guide |
 | [90_DECISIONS_LOG.md](./90_DECISIONS_LOG.md) | All key decisions with timestamps |
@@ -49,6 +50,11 @@ At end of each session:
 ---
 
 ## Recent Activity
+
+### 2026-03-02
+- Created `25_SIGNAL_FRAMEWORK.md`: comprehensive signal pipeline analysis across Theta, TQQQ and TurboBounce strategies
+- Identified 6 critical gaps preventing TurboBounce signals from appearing in frontend
+- Documented the Theta pattern (DB + WebSocket + Auto-approve) as the gold standard
 
 ### 2026-02-05
 - Created workspace-scoped brain structure per implementation plan
