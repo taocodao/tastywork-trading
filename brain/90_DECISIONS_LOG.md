@@ -4,7 +4,35 @@ Architecture decisions and important changes, in reverse chronological order.
 
 ---
 
+## 2026-03-03: TurboBounce Signal Pipeline — Full Alignment Complete
+
+**Decision**: Complete all 4 phases of TurboBounce signal pipeline alignment to match Theta gold standard (DB + WebSocket + typed signal classes).
+
+**Context**: TurboBounce was writing signals only to a standalone JSON file and had no DB persistence, no WebSocket broadcast, no typed signal class, and no frontend card. Signals were not appearing on the dashboard, and approval was incorrectly routed through the Calendar Spread executor causing `400 Bad Request` crashes.
+
+**Resolution**:
+- Created `signal_publisher/turbobounce.py` with `TurboBounceEntrySignal` (extends `BaseSignal`)
+- Updated `signal_publisher/__init__.py` to export new class and factory
+- Refactored `run_turbobounce_scheduler.py` to call `publish_turbobounce_entry_signal()`
+- Deleted legacy `src/turbobounce/signal_publisher.py`
+- Rerouted `tasty_api_server.py` `/api/turbobounce/signals` to query `SignalRepository` (PostgreSQL)
+- Added strategy-aware approval routing: TurboBounce → `_execute_turbobounce_for_user()` (raises `NotImplementedError` as explicit placeholder for Option Constructor)
+- Fixed `UnicodeEncodeError` in `websocket_client.py` (emoji + Windows cp1252 encoding)
+- Built `TurboBounceSignalCard.tsx` React component; linked into `src/app/signals/page.tsx`
+- **Deep-Dive Pipeline Fixes**:
+    - Fixed `websocket_server.py` history replay logic to correctly map 'turbobounce' strategy to 'turbobounce' channel (previously leaking into `calendar_spread`).
+    - Fixed `SignalProvider.tsx` subscription to include `'turbobounce'` in the `CHANNELS` array.
+    - Fixed `run_turbobounce_scheduler.py` missing `load_dotenv()` which caused RDS connection failures on EC2.
+    - Removed `localhost` WebSocket override in `useSignalSocket.ts` to ensure production connectivity (`wss://ws.trademind.bot`).
+    - Added comprehensive normalization in `useSignalSocket.ts` to preserve ML-specific fields (`rsi_2`, `iv_rank`, `total_score`).
+- **Verified**: Signals now appearing in real-time on dashboard and signals page with correct ML stats.
+
+**Affected**: `signal_publisher/turbobounce.py` (new), `signal_publisher/__init__.py`, `run_turbobounce_scheduler.py`, `src/turbobounce/signal_publisher.py` (deleted), `tasty_api_server.py`, `websocket_client.py`, `TurboBounceSignalCard.tsx`, `src/app/signals/page.tsx`
+
+---
+
 ## 2026-03-02: TurboBounce Signal Pipeline Gap Analysis
+
 
 **Decision**: Align TurboBounce signal publishing with the Theta strategy's pattern (DB + WebSocket + auto-approve).
 

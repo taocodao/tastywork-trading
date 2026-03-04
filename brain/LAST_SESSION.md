@@ -1,6 +1,6 @@
 # Last Session — Quick Reference
 
-> **Updated**: 2026-03-01
+> **Updated**: 2026-03-03
 
 ## Current State
 
@@ -12,6 +12,12 @@
 - **TradeMind API** — backend serving frontend at trademind.bot
 
 ### Recent Work (Mar 2026)
+- **Mar 03**: Deep-dive fixes for the TurboBounce signal pipeline:
+    - **WebSocket**: Fixed routing in `websocket_server.py` (history replay) and added `turbobounce` channel subscription in `SignalProvider.tsx`.
+    - **Connectivity**: Removed `localhost` override in `useSignalSocket.ts` and fixed missing `load_dotenv()` in `run_turbobounce_scheduler.py`.
+    - **Data Integrity**: Preserved ML-specific fields during frontend normalization (`...raw` spread).
+    - **UX**: Added optional chaining to `TurboBounceSignalCard` to prevent `toFixed` crashes on missing data.
+    - **Verified**: TurboBounce signals correctly flow from EC2 (RDS PostgreSQL) → WebSocket Server → React Frontend (Signals & Dashboard).
 - **Mar 01**: Built the TurboBounce PWA Landing Page Interactive Simulator (EquityCurveChart, TradeFeed, CompoundingCalculator) with scalable multiplier math. Fixed Next.js build timeouts by statically importing translation dictionaries. Constructed ElevenLabs localized voice integration.
 
 ### Recent Work (Feb 2026)
@@ -32,7 +38,9 @@
 - **IB Gateway**: Docker container, port 4004, IB_HOST=127.0.0.1 on EC2
 
 ## Pending / Next Steps
-- Rebuild `options_pricer_backtest.py` logic (currently on disk in `src/turbobounce/`) to properly handle `NAKED_LONG` options with realistic DTEs, stop-losses, and profit targets.
+- **TurboBounce Option Constructor**: Implement actual options-leg construction in `_execute_turbobounce_for_user()` — currently raises `NotImplementedError`. Needs to convert ML signal data into a tradeable options order.
+- **TQQQ DB + WebSocket alignment**: TQQQ still uses JSON-only persistence (`tqqq_signals.json`). Apply the same Theta-pattern alignment done for TurboBounce.
+- Rebuild `options_pricer_backtest.py` logic to properly handle `NAKED_LONG` options with realistic DTEs, stop-losses, and profit targets.
 - The original +12.31% result came from `src/turbobounce/historical_backtest.py`. Ensure option-pricing backtest aligns with those stock-price-based returns.
 - Verify unified TQQQ strategy integration with scheduler (Step 7)
 - Continue improving ML signal discovery

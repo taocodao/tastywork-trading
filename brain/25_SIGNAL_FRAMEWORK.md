@@ -1,6 +1,6 @@
 # Signal Publishing Framework — Comprehensive Reference
 
-> Created: 2026-03-02  
+> Created: 2026-03-02 | Updated: 2026-03-03
 > Purpose: Complete documentation of the signal lifecycle across all trading strategies (Theta, TQQQ, TurboBounce) for future alignment and debugging.
 
 ---
@@ -19,17 +19,14 @@ graph TD
         BASE[base.py → BaseSignal]
         SP_T[theta.py]
         SP_Q[tqqq.py]
+        SP_TB[turbobounce.py ✅ NEW]
         WSC[websocket_client.py]
-    end
-
-    subgraph "TurboBounce Standalone"
-        SP_TB[src/turbobounce/signal_publisher.py → TurboBouncePublisher]
     end
 
     subgraph "Persistence"
         DB[(PostgreSQL via SignalRepository)]
         JSON_T[tqqq_signals.json]
-        JSON_TB[turbobounce_signals.json]
+        JSON_TB[turbobounce_signals.json — legacy backup]
     end
 
     subgraph "Delivery"
@@ -51,8 +48,10 @@ graph TD
     TQ -- "_persist_signal()" --> JSON_T
     JSON_T --> API --> FE_TQ
 
-    TB --> SP_TB --> JSON_TB
-    JSON_TB --> API --> FE_TB
+    TB --> SP_TB --> DB
+    SP_TB --> WSC --> WS --> FE_SIG
+    SP_TB -- "legacy backup" --> JSON_TB
+    DB --> API --> FE_TB
 ```
 
 ---
@@ -96,55 +95,45 @@ graph TD
 
 ---
 
-### 3. TurboBounce Strategy ❌ (Most Disconnected)
+### 3. TurboBounce Strategy ✅ (Aligned — Mar 2026)
 
 | Step | Implementation | File |
 |------|---------------|------|
-| **Signal Class** | ❌ No typed class — builds raw `dict` inline | `src/turbobounce/signal_publisher.py:51-74` |
-| **Extends BaseSignal?** | ❌ No | - |
-| **Part of signal_publisher/?** | ❌ No — standalone class in `src/turbobounce/` | `src/turbobounce/signal_publisher.py` |
-| **Factory Function** | `TurboBouncePublisher.publish_scanned_signals()` | `src/turbobounce/signal_publisher.py:30` |
-| **DB Persistence** | ❌ Not saved to database | - |
-| **WebSocket Broadcast** | ❌ Not broadcast | - |
-| **Auto-Approve** | ❌ Not implemented | - |
-| **JSON Persistence** | ✅ `_append_to_file()` writes to `~/tastywork-trading/turbobounce_signals.json` | `src/turbobounce/signal_publisher.py:80-105` |
-| **Frontend Fetch** | `/api/turbobounce/signals` → reads from `turbobounce_signals.json` | `trademind-app/src/app/api/turbobounce/signals/route.ts` |
-| **Real-time Push** | ❌ Polling only (no WebSocket) | - |
-| **Status Field** | Uses `"PENDING"` (uppercase) vs Theta's `"pending"` (lowercase) | ⚠️ Case mismatch |
+| **Signal Class** | ✅ `TurboBounceEntrySignal` typed dataclass extending `BaseSignal` | `signal_publisher/turbobounce.py` |
+| **Extends BaseSignal?** | ✅ Yes | `signal_publisher/turbobounce.py` |
+| **Part of signal_publisher/?** | ✅ Yes — fully integrated | `signal_publisher/turbobounce.py` |
+| **Factory Function** | `publish_turbobounce_entry_signal()` | `signal_publisher/turbobounce.py` |
+| **DB Persistence** | ✅ `SignalRepository.save_signal(data)` | `signal_publisher/turbobounce.py` |
+| **WebSocket Broadcast** | ✅ `broadcast_to_channel('turbobounce', data)` | `signal_publisher/turbobounce.py` |
+| **Auto-Approve** | ❌ Not implemented (future enhancement) | - |
+| **Legacy JSON Backup** | ✅ Still writes to `turbobounce_signals.json` as backward compat | `signal_publisher/turbobounce.py` |
+| **Frontend Fetch** | ✅ `/api/turbobounce/signals` → now queries PostgreSQL `SignalRepository` | `tasty_api_server.py` |
+| **Real-time Push** | ✅ WebSocket broadcast on `turbobounce` channel | `websocket_server.py` |
+| **Status Field** | ✅ Normalized to lowercase `"pending"` | `SignalRepository.save_signal` |
+| **Approval Routing** | ✅ `_execute_turbobounce_for_user()` (NotImplementedError — placeholder) | `tasty_api_server.py` |
+| **Frontend Card** | ✅ `TurboBounceSignalCard.tsx` renders ML stats correctly | `trademind-app/src/components/` |
 
 ---
 
-## Key Gaps to Fix (TurboBounce → Theta Parity)
+## ✅ TurboBounce Alignment — COMPLETED (Mar 3, 2026)
 
-### Gap 1: No `signal_publisher/` Integration
-TurboBounce has its own standalone `TurboBouncePublisher` class in `src/turbobounce/signal_publisher.py` instead of being part of the unified `signal_publisher/` module.
+All 6 gaps were fixed. See `90_DECISIONS_LOG.md` for details and `sessions/2026-03-03-session-01.md` for full implementation log.
 
-**Fix**: Create `signal_publisher/turbobounce.py` with typed signal dataclasses extending `BaseSignal`.
+| Gap | Status | Fix Applied |
+|-----|--------|-------------|
+| No `signal_publisher/` integration | ✅ Fixed | Created `signal_publisher/turbobounce.py` |
+| No DB persistence | ✅ Fixed | `SignalRepository.save_signal()` in publish function |
+| No WebSocket broadcast | ✅ Fixed | `broadcast_to_channel('turbobounce', data)` |
+| No auto-approve | ⏳ Future | Intentional - needs option constructor first |
+| Status case mismatch | ✅ Fixed | Normalized to lowercase `"pending"` |
+| No signal expiration | ✅ Fixed | `expires_at` added matching Theta's pattern |
 
-### Gap 2: No Database Persistence
-Signals are only written to a JSON file and never inserted into the PostgreSQL `signals` table via `SignalRepository`.
+## Remaining Gap: TQQQ → Theta Parity
 
-**Fix**: Add `SignalRepository.save_signal(data)` call inside the publish function (like Theta does).
-
-### Gap 3: No WebSocket Broadcast
-The frontend has no way to receive real-time signal updates. Users must refresh the page to see new signals.
-
-**Fix**: Call `broadcast_to_channel('turbobounce', data)` after saving to DB (like Theta does).
-
-### Gap 4: No Auto-Approve Support
-Unlike Theta, TurboBounce cannot automatically execute trades when criteria are met.
-
-**Fix**: Add `auto_approve_signal(data)` call (future enhancement, not needed for MVP).
-
-### Gap 5: Status Case Mismatch
-TurboBounce uses `"PENDING"` while the rest of the system uses `"pending"`.
-
-**Fix**: Normalize to lowercase `"pending"` to match the `Signal` DB model.
-
-### Gap 6: No Signal Expiration
-TurboBounce signals have no `expires_at` field. The Theta publisher sets `expires_at` to market close (16:00 ET).
-
-**Fix**: Add `expires_at` calculation matching Theta's pattern.
+TQQQ still uses JSON-only persistence. Same alignment work needed:
+- Add `SignalRepository.save_signal()` to `publish_tqqq_*()` functions
+- Add `broadcast_to_channel('tqqq', data)` WebSocket broadcast
+- Reroute `tasty_api_server.py` `/api/tqqq/signals` to query PostgreSQL
 
 ---
 
@@ -155,14 +144,16 @@ TurboBounce signals have no `expires_at` field. The Theta publisher sets `expire
 | `signal_publisher/base.py` | `BaseSignal` dataclass | All |
 | `signal_publisher/theta.py` | Theta signal classes + publish (DB+WS+auto) | Theta |
 | `signal_publisher/tqqq.py` | TQQQ signal classes + publish (return only) | TQQQ |
+| `signal_publisher/turbobounce.py` | ✅ TurboBounce signal classes + publish (DB+WS) | TurboBounce |
 | `signal_publisher/websocket_client.py` | `broadcast_to_channel()` helper | All |
-| `src/turbobounce/signal_publisher.py` | Standalone JSON writer | TurboBounce |
-| `src/earnings_intelligence/database.py` | `SignalRepository` (PostgreSQL CRUD) | Theta |
+| ~~`src/turbobounce/signal_publisher.py`~~ | ~~Standalone JSON writer~~ — **DELETED** | - |
+| `src/earnings_intelligence/database.py` | `SignalRepository` (PostgreSQL CRUD) | Theta + TurboBounce |
 | `run_theta_scheduler.py` | Theta orchestrator | Theta |
 | `run_tqqq_scheduler.py` | TQQQ orchestrator + `_persist_signal()` JSON | TQQQ |
-| `run_turbobounce_scheduler.py` | TurboBounce orchestrator | TurboBounce |
+| `run_turbobounce_scheduler.py` | TurboBounce orchestrator (refactored) | TurboBounce |
 | `tasty_api_server.py` | HTTP API serving all signal endpoints | All |
-| `websocket_server.py` | WebSocket broadcast server (:8004) | Theta |
+| `websocket_server.py` | WebSocket broadcast server (:8004) | Theta + TurboBounce |
+| `trademind-app/.../TurboBounceSignalCard.tsx` | ✅ React component for TB signal display | TurboBounce |
 
 ---
 
@@ -171,8 +162,8 @@ TurboBounce signals have no `expires_at` field. The Theta publisher sets `expire
 | Next.js Route | Python Backend | Source |
 |---------------|---------------|--------|
 | `/api/signals` | `GET /api/signals` | PostgreSQL (`SignalRepository`) |
-| `/api/tqqq/signals` | `GET /api/tqqq/signals` | `tqqq_signals.json` |
-| `/api/turbobounce/signals` | `GET /api/turbobounce/signals` | `turbobounce_signals.json` |
+| `/api/tqqq/signals` | `GET /api/tqqq/signals` | `tqqq_signals.json` ⚠️ JSON only |
+| `/api/turbobounce/signals` | `GET /api/turbobounce/signals` | ✅ PostgreSQL (strategy=turbobounce, status=pending) |
 
 ---
 
