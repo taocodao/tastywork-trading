@@ -1,6 +1,7 @@
 [Unit]
 Description=TradeMind Tastytrade API Server
 After=network.target
+StartLimitIntervalSec=0
 
 [Service]
 Type=simple
