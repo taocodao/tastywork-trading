@@ -413,6 +413,7 @@ class Signal(Base):
         """Return the JSON data with dynamic status updates."""
         signal_data = dict(self.data)
         signal_data['status'] = self.status
+        signal_data['strategy'] = self.strategy
         if self.approved_at:
             signal_data['approvedAt'] = self.approved_at.isoformat()
         if self.executed_at:
