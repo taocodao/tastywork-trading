@@ -124,7 +124,7 @@ All 6 gaps were fixed. See `90_DECISIONS_LOG.md` for details and `sessions/2026-
 | No `signal_publisher/` integration | ✅ Fixed | Created `signal_publisher/turbobounce.py` |
 | No DB persistence | ✅ Fixed | `SignalRepository.save_signal()` in publish function |
 | No WebSocket broadcast | ✅ Fixed | `broadcast_to_channel('turbobounce', data)` |
-| No auto-approve | ⏳ Future | Intentional - needs option constructor first |
+| Timestamp parsing bug | ✅ Fixed | Stripped microseconds from ISO string in frontend (JS NaN fix) |
 | Status case mismatch | ✅ Fixed | Normalized to lowercase `"pending"` |
 | No signal expiration | ✅ Fixed | `expires_at` added matching Theta's pattern |
 

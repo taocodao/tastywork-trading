@@ -12,12 +12,12 @@
 - **TradeMind API** — backend serving frontend at trademind.bot
 
 ### Recent Work (Mar 2026)
-- **Mar 03**: Deep-dive fixes for the TurboBounce signal pipeline:
-    - **WebSocket**: Fixed routing in `websocket_server.py` (history replay) and added `turbobounce` channel subscription in `SignalProvider.tsx`.
-    - **Connectivity**: Removed `localhost` override in `useSignalSocket.ts` and fixed missing `load_dotenv()` in `run_turbobounce_scheduler.py`.
-    - **Data Integrity**: Preserved ML-specific fields during frontend normalization (`...raw` spread).
-    - **UX**: Added optional chaining to `TurboBounceSignalCard` to prevent `toFixed` crashes on missing data.
-    - **Verified**: TurboBounce signals correctly flow from EC2 (RDS PostgreSQL) → WebSocket Server → React Frontend (Signals & Dashboard).
+- **Mar 03**: TurboBounce Signal Pipeline Restoration & Stability
+    - **Critical Fix: Microsecond Date Parsing**: Resolved a major issue where Python's 6-digit microsecond timestamps caused JavaScript's `Date()` to return `NaN`, breaking signal rendering.
+    - **Service Recovery**: Restored `trademind-api` on EC2 and added `StartLimitIntervalSec=0` to the systemd service to prevent burst-limit outages.
+    - **Frontend Focus**: Restricted `SignalProvider.tsx` to the `turbobounce` channel and strategy for better performance.
+    - **UI Unification**: Fully unified the `TurboBounceSignalCard` with consistent "Approve Auto-Trade" actions.
+    - **Verified**: Confirmed 6 pending signals flowing from EC2 RDS → API → Frontend.
 - **Mar 01**: Built the TurboBounce PWA Landing Page Interactive Simulator (EquityCurveChart, TradeFeed, CompoundingCalculator) with scalable multiplier math. Fixed Next.js build timeouts by statically importing translation dictionaries. Constructed ElevenLabs localized voice integration.
 
 ### Recent Work (Feb 2026)

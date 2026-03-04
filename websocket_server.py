@@ -26,29 +26,9 @@ subscriptions: Dict[WebSocketServerProtocol, Set[str]] = {}
 async def register(websocket: WebSocketServerProtocol):
     """Register a new client."""
     clients.add(websocket)
-    # Default subscriptions include calendar, vertical spreads, and theta strategy channels
-    subscriptions[websocket] = {
-        "calendar_spread",
-        "vertical_spread",
-        "vertical_spread.buy",
-        "vertical_spread.sell",
-        "vertical_spread.warning",
-        # Theta strategy channels
-        "theta_puts",
-        "theta_entry",
-        "theta_exit",
-        "zebra",
-        "zebra_entry",
-        "dvo_entry",
-        "dvo_exit",
-        "diagonal_spread",
-        # TurboBounce multi-ticker
-        "turbobounce",
-    }
+    # Start with empty subscriptions — client must explicitly subscribe
+    subscriptions[websocket] = set()
     logger.info(f"Client connected. Total: {len(clients)}")
-    
-    # Send initial history immediately for default subscriptions
-    await send_signal_history(websocket, subscriptions[websocket])
 
 
 async def unregister(websocket: WebSocketServerProtocol):
@@ -66,7 +46,8 @@ async def handle_message(websocket: WebSocketServerProtocol, message: str):
         
         if msg_type == "subscribe":
             channels = set(data.get("channels", []))
-            subscriptions[websocket] = subscriptions.get(websocket, set()) | channels
+            # Replace subscriptions with exactly what client requested
+            subscriptions[websocket] = channels
             await websocket.send(json.dumps({
                 "type": "subscribed",
                 "channels": list(subscriptions[websocket])

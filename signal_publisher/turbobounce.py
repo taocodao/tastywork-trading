@@ -66,6 +66,24 @@ class TurboBounceEntrySignal(BaseSignal):
         return base
 
 
+def _next_market_open() -> datetime:
+    """Calculate next market open (9:30 AM ET on next trading day)."""
+    from zoneinfo import ZoneInfo
+    et = ZoneInfo("America/New_York")
+    now_et = datetime.now(et)
+    
+    # Next market open = 9:30 AM ET on the next trading day
+    tomorrow = now_et + timedelta(days=1)
+    target = tomorrow.replace(hour=9, minute=30, second=0, microsecond=0)
+    
+    # Skip weekends (Sat=5, Sun=6)
+    while target.weekday() >= 5:
+        target += timedelta(days=1)
+    
+    # Return as naive UTC for DB storage
+    return target.astimezone(ZoneInfo("UTC")).replace(tzinfo=None)
+
+
 def publish_turbobounce_entry_signal(
     symbol: str,
     action_type: str,
@@ -84,8 +102,8 @@ def publish_turbobounce_entry_signal(
     Creates the TurboBounce signal, saves to DB, broadcasts via WebSocket, 
     and appends to legacy JSON file.
     """
-    # Calculate expiration: Next market open + 1 day (or simply 24h as a fallback)
-    expires = datetime.utcnow() + timedelta(days=1)
+    # Expire at next market open (9:30 AM ET next trading day)
+    expires = _next_market_open()
     
     sig = TurboBounceEntrySignal(
         id=str(uuid.uuid4()),
