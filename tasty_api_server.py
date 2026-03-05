@@ -102,8 +102,9 @@ def get_account(force_refresh=False):
     global _account
     if _account is None or force_refresh:
         session = get_session(force_refresh)
-        accounts = Account.get(session)
-        _account = accounts[0] if accounts else None
+        # Use version-safe account fetcher (handles async Account.get in newer SDK)
+        from tastytrade_utils import get_user_account
+        _account = get_user_account(session)
         if _account:
             print(f"✅ Using account: {_account.account_number}")
     return _account
@@ -378,19 +379,13 @@ class TastyHandler(BaseHTTPRequestHandler):
 
     def handle_get_signals(self):
         """Return signals from database."""
+        from src.earnings_intelligence.database import SignalRepository
+        repo = SignalRepository()
         try:
-            from src.earnings_intelligence.database import SignalRepository
-            repo = SignalRepository()
             signals = repo.get_all_signals()
             
             # Convert to dicts
             signal_dicts = [s.to_dict() for s in signals]
-            
-            # Filter pending (frontend expects 'pending' in the 'signals' array usually, but let's stick to returning what it asks for)
-            # Actually, the original code returned ALL signals but filtered 'pending' specifically for the 'signals' key
-            # Let's verify what the frontend expects. The previous code did:
-            # pending = [s for s in _signals if s['status'] == 'pending']
-            # self._send_json({'signals': pending, 'total': len(_signals), ...})
             
             now = datetime.utcnow()
             pending = []
@@ -419,12 +414,14 @@ class TastyHandler(BaseHTTPRequestHandler):
         except Exception as e:
             print(f"Signal loading error: {e}")
             self._send_json({'error': str(e)}, 500)
+        finally:
+            repo.session.close()  # CRITICAL: return connection to pool
 
     def _handle_turbobounce_signals(self):
         """Return pending TurboBounce signals."""
+        from src.earnings_intelligence.database import SignalRepository
+        repo = SignalRepository()
         try:
-            from src.earnings_intelligence.database import SignalRepository
-            repo = SignalRepository()
             signals = repo.get_all_signals()
             tb = [s.to_dict() for s in signals if s.strategy and s.strategy.lower() == 'turbobounce']
             self._send_json(tb)
@@ -433,13 +430,14 @@ class TastyHandler(BaseHTTPRequestHandler):
             import traceback
             traceback.print_exc()
             self._send_json({'error': str(e)}, 500)
+        finally:
+            repo.session.close()  # CRITICAL: return connection to pool
 
     def handle_get_tracked_positions(self):
         """Return tracked positions from our database (for risk management)."""
+        from src.earnings_intelligence.database import PositionRepository
+        repo = PositionRepository()
         try:
-            from src.earnings_intelligence.database import PositionRepository
-            repo = PositionRepository()
-            
             # Get open positions
             positions = repo.get_open_positions()
             
@@ -457,6 +455,8 @@ class TastyHandler(BaseHTTPRequestHandler):
             import traceback
             traceback.print_exc()
             self._send_json({'error': str(e)}, 500)
+        finally:
+            repo.session.close()  # CRITICAL: return connection to pool
 
     def handle_get_risk_level(self):
         """Get current risk level and profile details."""
@@ -920,6 +920,16 @@ class TastyHandler(BaseHTTPRequestHandler):
             import traceback
             traceback.print_exc()
             self._send_json({'error': str(e)}, 500)
+        finally:
+            # CRITICAL: Always return connections to pool
+            try:
+                signal_repo.session.close()
+            except Exception:
+                pass
+            try:
+                user_repo.session.close()
+            except Exception:
+                pass
 
 
     def _execute_turbobounce_for_user(
@@ -931,34 +941,20 @@ class TastyHandler(BaseHTTPRequestHandler):
         """
         Execute a TurboBounce options trade using USER's OAuth credentials.
         """
-        print(f"📈 Executing TurboBounce Trade for USER: {signal['symbol']} - {signal['type']}")
+        from src.turbobounce.executor import execute_turbobounce_trade
+        from tastytrade_utils import create_user_session, get_user_account
         
-        # NOTE: Implement actual TurboBounce trade construction and execution here
-        # For now, we will simulate success to unblock the frontend UI test, 
-        # or we need to define the exact options legs TurboBounce requires.
-        # Since TurboBounce signals currently only have target DTEs/Deltas but not
-        # specific strikes/expirations yet, the backend needs a constructor.
+        # Create per-user session
+        session = create_user_session(user_refresh_token)
+        account = get_user_account(session, account_number)
         
-        try:
-            from datetime import datetime
-            import uuid
+        result = execute_turbobounce_trade(signal, session, account, account_number)
+        
+        # Translate keys for server response compatibility (order_id -> orderId)
+        if 'order_id' in result:
+            result['orderId'] = result['order_id']
             
-            # TODO: Add real Tastytrade order placement here
-            # Since TurboBounce is missing concrete legs in the signal, we either 
-            # 1. Reject it if the backend can't construct it
-            # 2. Return a NotImplemented error
-            
-            error_msg = f"TurboBounce execution requires Option Constructor logic. Signal provides target DTE: {signal.get('target_anchor_dte', 'N/A')} and Delta: {signal.get('target_delta', 'N/A')} but not concrete strikes."
-            print(f"⚠️ {error_msg}")
-            
-            # We raise an error so the frontend knows it failed gracefully instead of a Calendar Spread fail.
-            raise NotImplementedError(error_msg)
-            
-        except Exception as e:
-            print(f"❌ TurboBounce execution failed: {e}")
-            import traceback
-            traceback.print_exc()
-            raise
+        return result
 
     def _execute_calendar_spread_for_user(
         self, 

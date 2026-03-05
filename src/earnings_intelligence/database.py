@@ -21,9 +21,18 @@ DATABASE_URL = os.getenv(
     os.getenv("DB_URL", "sqlite:///./earnings_intelligence.db")
 )
 
-# Create engine and session
-engine = create_engine(DATABASE_URL, echo=False)
+
+# Create engine and session — pool sized for multi-threaded HTTP server
+engine = create_engine(
+    DATABASE_URL,
+    echo=False,
+    pool_size=10,        # Base connections kept alive
+    max_overflow=20,     # Extra connections allowed under load (total cap: 30)
+    pool_pre_ping=True,  # Discard stale connections before use
+    pool_recycle=1800,   # Recycle connections every 30min to avoid backend timeouts
+)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+
 Base = declarative_base()
 
 
