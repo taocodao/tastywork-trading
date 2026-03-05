@@ -32,6 +32,7 @@ class TurboBounceEntrySignal(BaseSignal):
     direction: str = ""
     scanner_rank: int = 0
     total_score: float = 0.0
+    confidence: float = 0.0  # 0-100 quality score; maps from total_score
     rsi_2: float = 0.0
     iv_rank: float = 0.0
     category: str = ""
@@ -55,6 +56,10 @@ class TurboBounceEntrySignal(BaseSignal):
             "direction": self.direction,
             "scanner_rank": self.scanner_rank,
             "total_score": self.total_score,
+            # Confidence aliases — all three needed for frontend normalizeSignal() compat
+            "confidence": self.confidence,
+            "win_rate": self.confidence,
+            "winRate": self.confidence,
             "rsi_2": self.rsi_2,
             "iv_rank": self.iv_rank,
             "category": self.category,
@@ -116,6 +121,7 @@ def publish_turbobounce_entry_signal(
         direction=direction,
         scanner_rank=scanner_rank,
         total_score=total_score,
+        confidence=round(total_score, 1),  # Map total_score → confidence for frontend auto-approve
         rsi_2=rsi_2,
         iv_rank=iv_rank,
         category=category,
