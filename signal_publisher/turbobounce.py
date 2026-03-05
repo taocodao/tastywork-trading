@@ -142,39 +142,4 @@ def publish_turbobounce_entry_signal(
     except Exception as e:
         logger.error(f"DB Save failed for {symbol}: {e}")
 
-    # 2. Broadcast via WebSocket
-    broadcast_to_channel('turbobounce', data)
-    
-    # 3. Save to Legacy JSON (for safety/backward compat during transition)
-    _append_to_legacy_json(data)
-    
     return sig
-
-
-def _append_to_legacy_json(signal_data: Dict[str, Any]):
-    """Appends the single signal to the turbobounce_signals.json file."""
-    home_dir = os.path.expanduser("~")
-    filepath = os.path.join(home_dir, "tastywork-trading", "turbobounce_signals.json")
-    
-    existing = []
-    try:
-        if os.path.exists(filepath):
-            with open(filepath, "r") as f:
-                content = f.read().strip()
-                if content:
-                    existing = json.loads(content)
-                    if not isinstance(existing, list):
-                        existing = [existing]
-    except Exception as e:
-        logger.warning(f"Error reading {filepath}: {e}")
-        
-    existing.append(signal_data)
-    
-    if len(existing) > 50:
-        existing = existing[-50:]
-        
-    try:
-        with open(filepath, "w") as f:
-            json.dump(existing, f, indent=2)
-    except Exception as e:
-        logger.warning(f"Failed to write legacy JSON to {filepath}: {e}")

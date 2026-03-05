@@ -18,7 +18,9 @@ print("DEBUG: HTTP Server imported", flush=True)
 import json
 import os
 import uuid
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
+from decimal import Decimal
+import logging
 from dotenv import load_dotenv
 print("DEBUG: Standard libs imported", flush=True)
 from tastytrade import Session, Account
@@ -401,7 +403,7 @@ class TastyHandler(BaseHTTPRequestHandler):
                         # Parse ISO format and remove tzinfo if any for naive comparison
                         exp_dt = datetime.fromisoformat(expires_at_str.replace('Z', '+00:00'))
                         if exp_dt.tzinfo:
-                            exp_dt = exp_dt.astimezone(pytz.UTC).replace(tzinfo=None)
+                            exp_dt = exp_dt.astimezone(timezone.utc).replace(tzinfo=None)
                         if exp_dt <= now:
                             continue # Expired
                     except Exception:
@@ -416,6 +418,20 @@ class TastyHandler(BaseHTTPRequestHandler):
             
         except Exception as e:
             print(f"Signal loading error: {e}")
+            self._send_json({'error': str(e)}, 500)
+
+    def _handle_turbobounce_signals(self):
+        """Return pending TurboBounce signals."""
+        try:
+            from src.earnings_intelligence.database import SignalRepository
+            repo = SignalRepository()
+            signals = repo.get_all_signals()
+            tb = [s.to_dict() for s in signals if s.strategy and s.strategy.lower() == 'turbobounce']
+            self._send_json(tb)
+        except Exception as e:
+            print(f"TurboBounce signals error: {e}")
+            import traceback
+            traceback.print_exc()
             self._send_json({'error': str(e)}, 500)
 
     def handle_get_tracked_positions(self):

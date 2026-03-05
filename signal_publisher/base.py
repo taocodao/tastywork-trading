@@ -25,12 +25,18 @@ class BaseSignal:
     
     def to_dict(self) -> Dict[str, Any]:
         """Convert signal to dictionary for JSON serialization."""
+        def _format_date(dt):
+            if not isinstance(dt, datetime):
+                return dt
+            # If naive, assume UTC and append Z. If aware, isoformat() already includes offset.
+            return dt.isoformat() + ('Z' if dt.tzinfo is None else '')
+
         return {
             'id': self.id,
             'symbol': self.symbol,
             'strategy': self.strategy,
             'status': self.status,
-            'created_at': self.created_at.isoformat() if isinstance(self.created_at, datetime) else self.created_at,
-            'expires_at': self.expires_at.isoformat() if isinstance(self.expires_at, datetime) else self.expires_at,
+            'created_at': _format_date(self.created_at),
+            'expires_at': _format_date(self.expires_at),
             'metadata': self.metadata or {}
         }

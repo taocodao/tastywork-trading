@@ -1,6 +1,6 @@
 # Last Session — Quick Reference
 
-> **Updated**: 2026-03-03
+> **Updated**: 2026-03-04
 
 ## Current State
 
@@ -12,6 +12,12 @@
 - **TradeMind API** — backend serving frontend at trademind.bot
 
 ### Recent Work (Mar 2026)
+- **Mar 04**: TurboBounce Signal Pipeline Deep Fixes & Position Sizing
+    - **WebSocket Server Fix**: Removed 14 hardcoded default channels and premature signal history delivery. Clients now start empty and explicitly subscribe, preventing signal timing issues.
+    - **Next-Market-Open Expiry**: Signals now expire at 9:30 AM ET on the next trading day instead of a flat 24h, ensuring visibility until the next market open.
+    - **Principal-Based Position Sizing**: Integrated `investmentPrincipal` from settings into the Dashboard UI. Implemented 6-slot allocation logic (`Principal / 6`) in the approval handler, aligning with backtesting patterns.
+    - **Frontend Defaults**: Aligned `SignalProvider` and `useSignalSocket` to default to the `turbobounce` channel.
+    - **Investigating**: Currently debugging why signals received via WebSocket (logged in console) are not rendering in the UI's "Trade Signals" list.
 - **Mar 03**: TurboBounce Signal Pipeline Restoration & Stability
     - **Critical Fix: Microsecond Date Parsing**: Resolved a major issue where Python's 6-digit microsecond timestamps caused JavaScript's `Date()` to return `NaN`, breaking signal rendering.
     - **Service Recovery**: Restored `trademind-api` on EC2 and added `StartLimitIntervalSec=0` to the systemd service to prevent burst-limit outages.

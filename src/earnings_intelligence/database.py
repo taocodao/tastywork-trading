@@ -744,6 +744,16 @@ class SignalRepository:
             self.session.commit()
             return existing
         else:
+            # Parse expires_at string to datetime for the DateTime column
+            raw_expires = signal_data.get('expires_at')
+            if isinstance(raw_expires, str):
+                try:
+                    raw_expires = datetime.fromisoformat(
+                        raw_expires.replace('Z', '+00:00')
+                    ).replace(tzinfo=None)
+                except Exception:
+                    raw_expires = None
+                    
             # Create new
             signal = Signal(
                 id=signal_id,
@@ -751,7 +761,7 @@ class SignalRepository:
                 strategy=signal_data.get('strategy'),
                 status=signal_data.get('status', 'pending'),
                 data=json_safe_data,
-                expires_at=signal_data.get('expires_at'),  # Store signal expiration
+                expires_at=raw_expires,  # Store signal expiration as datetime
                 created_at=datetime.utcnow()
             )
             self.session.add(signal)

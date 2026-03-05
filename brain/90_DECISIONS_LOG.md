@@ -4,6 +4,22 @@ Architecture decisions and important changes, in reverse chronological order.
 
 ---
 
+## 2026-03-04: Principal-Based Position Sizing (6-Slot Allocation)
+
+**Decision**: Implement user-level position management using a fixed 6-slot capital allocation model, mirroring the `options_pricer_backtest.py` logic.
+
+**Context**: Users needed a way to manage position sizes based on their configured `investmentPrincipal`. The backtest uses `initial_capital / MAX_SLOTS` (where MAX_SLOTS = 6). This provides a conservative but effective equal-weight allocation.
+
+**Resolution**:
+- Exposed `investmentPrincipal` from `SettingsProvider` on the Dashboard.
+- Displayed "Slot Size" (`Principal / 6`) in the Balance Card.
+- Modified `handleTurboApprove` in `dashboard/page.tsx` to send positioning metadata (`investmentPrincipal`, `maxSlots`, `slotCapital`, `riskLevel`) with the approval request.
+- This allows the backend execution engine to calculate exact contract quantities based on the user's current settings.
+
+**Affected**: `src/app/dashboard/page.tsx`, `src/components/providers/SettingsProvider.tsx`
+
+---
+
 ## 2026-03-03: TurboBounce Signal Pipeline — Full Alignment Complete
 
 **Decision**: Complete all 4 phases of TurboBounce signal pipeline alignment to match Theta gold standard (DB + WebSocket + typed signal classes).
