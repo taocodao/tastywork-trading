@@ -45,6 +45,12 @@ class TurboBounceEntrySignal(BaseSignal):
     cost: float = 1.0  # Estimated debit/credit per spread
     capital_required: float = 500.0  # Estimated capital block per contract
 
+    # Actual executable Option Legs derived from StrategyBuilder
+    legs: Optional[List[Dict[str, Any]]] = None
+    frontExpiry: Optional[str] = None
+    backExpiry: Optional[str] = None
+    strike: Optional[float] = None
+    
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary for JSON/DB serialization. Matches prior schema."""
         base = super().to_dict()
@@ -72,6 +78,10 @@ class TurboBounceEntrySignal(BaseSignal):
             "cost": self.cost,
             "capital_required": self.capital_required,
             "capitalRequired": self.capital_required,  # Frontend camelCase compat
+            "legs": self.legs,
+            "frontExpiry": self.frontExpiry,
+            "backExpiry": self.backExpiry,
+            "strike": self.strike,
         })
         return base
 
@@ -106,7 +116,8 @@ def publish_turbobounce_entry_signal(
     rationale: str,
     target_anchor_dte: Optional[int],
     target_hedge_dte: Optional[int],
-    target_delta: Optional[float]
+    target_delta: Optional[float],
+    leg_data: Optional[Dict[str, Any]] = None
 ) -> "TurboBounceEntrySignal":
     """
     Creates the TurboBounce signal, saves to DB, broadcasts via WebSocket, 
@@ -137,6 +148,13 @@ def publish_turbobounce_entry_signal(
         cost=1.50 if action_type == 'DIAGONAL' else 1.0,  # Realistic defaults
         capital_required=1000.0 if action_type == 'DIAGONAL' else 500.0,
     )
+    
+    if leg_data:
+        sig.legs = leg_data.get("legs")
+        sig.cost = round(leg_data.get("cost", sig.cost), 2)
+        sig.frontExpiry = leg_data.get("frontExpiry")
+        sig.backExpiry = leg_data.get("backExpiry")
+        sig.strike = leg_data.get("strike")
     
     data = sig.to_dict()
     

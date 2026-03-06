@@ -262,3 +262,127 @@ class StrategyBuilder:
             volume=opt_dict.get('volume', 0),
             open_interest=opt_dict.get('open_interest', 0)
         )
+
+def build_turbobounce_spread_legs(
+    symbol: str, current_price: float, direction: str, strategy_type: str,
+    target_anchor_dte: int, target_hedge_dte: Optional[int] = None,
+    target_delta: Optional[float] = None
+) -> Optional[Dict[str, Any]]:
+    """
+    Uses IBDataProvider to fetch near-real-time options for the target DTEs
+    and builds explicit OCC strings + cost estimates.
+    """
+    try:
+        from ib_data_provider import IBDataProvider
+        from datetime import datetime, date, timedelta
+        import sys
+
+        ib = IBDataProvider()
+        
+        anchor_date = date.today() + timedelta(days=target_anchor_dte)
+        right = 'P' if direction == "BULLISH" else 'C'
+        
+        # 1. Fetch anchor chain
+        anchor_chain = ib.get_options(symbol, anchor_date, option_type="call" if right == 'C' else "put")
+        if not anchor_chain:
+            logger.warning(f"No {symbol} anchor chain found near {anchor_date}")
+            return None
+            
+        anchor_options = []
+        for opt in anchor_chain:
+            delta = abs(opt.delta) if hasattr(opt, 'delta') and opt.delta else 0.40 # Proxy if missing
+            anchor_options.append({
+                'strike': opt.strike,
+                'expiration_date': opt.expiry,
+                'delta': delta,
+                'bid': opt.bid,
+                'ask': opt.ask,
+                'volume': opt.volume,
+                'open_interest': getattr(opt, 'open_interest', 0)
+            })
+            
+        builder = StrategyBuilder(ib)
+        liquid_anchors = builder._filter_liquidity(anchor_options)
+        
+        anchor_leg = None
+        if liquid_anchors:
+            # Anchor is usually ~0.40
+            anchor_candidates = sorted(liquid_anchors, key=lambda x: abs(x.get('delta', 0.4)-0.40))
+            a_dict = anchor_candidates[0]
+            anchor_leg = OptionLeg(symbol, a_dict['strike'], a_dict['expiration_date'], right, a_dict['delta'], a_dict['bid'], a_dict['ask'], a_dict['volume'], getattr(a_dict, 'open_interest', 0))
+
+        if not anchor_leg:
+            logger.warning(f"No liquid anchor option for {symbol}")
+            return None
+
+        # Build OCC strings
+        def format_occ(sym: str, dt: date, right: str, strike: float) -> str:
+            d_str = dt.strftime('%y%m%d')
+            s_str = f"{int(strike * 1000):08d}"
+            # Left align symbol to 6 chars
+            padded_sym = sym.ljust(6, ' ')
+            return f"{padded_sym}{d_str}{right}{s_str}"
+
+        anchor_occ = format_occ(symbol, anchor_leg.expiration, right, anchor_leg.strike)
+
+        if strategy_type == "DIAGONAL" and target_hedge_dte:
+            hedge_date = date.today() + timedelta(days=target_hedge_dte)
+            hedge_chain = ib.get_options(symbol, hedge_date, option_type="call" if right == 'C' else "put")
+            
+            hedge_options = []
+            for opt in hedge_chain:
+                delta = abs(opt.delta) if hasattr(opt, 'delta') and opt.delta else 0.20
+                hedge_options.append({
+                    'strike': opt.strike,
+                    'expiration_date': opt.expiry,
+                    'delta': delta,
+                    'bid': opt.bid,
+                    'ask': opt.ask,
+                    'volume': opt.volume,
+                    'open_interest': getattr(opt, 'open_interest', 0)
+                })
+                
+            liquid_hedges = builder._filter_liquidity(hedge_options)
+            hedge_leg = None
+            if liquid_hedges:
+                hedge_candidates = sorted(liquid_hedges, key=lambda x: abs(x.get('delta', 0.2)-0.20))
+                h_dict = hedge_candidates[0]
+                hedge_leg = OptionLeg(symbol, h_dict['strike'], h_dict['expiration_date'], right, h_dict['delta'], h_dict['bid'], h_dict['ask'], h_dict['volume'], getattr(h_dict, 'open_interest', 0))
+
+            if not hedge_leg:
+                logger.warning(f"No liquid hedge option for {symbol}")
+                return None
+
+            hedge_occ = format_occ(symbol, hedge_leg.expiration, right, hedge_leg.strike)
+            
+            # For a put diagonal, we SELL the long-dated (anchor), BUY the short-dated (hedge)
+            # Or vice-versa, depending on standard structure. Turbobounce "bounces", so we SELL near term?
+            # Actually, standard PMCC/Diagonal is BUY long-dated (anchor), SELL short-dated (hedge) against it.
+            # Wait, 45 DTE is anchor (long leg). 10 DTE is hedge (short leg).
+            # So BUY anchor, SELL hedge. This is a debit spread natively.
+            net_cost = abs(anchor_leg.ask - hedge_leg.bid)
+            
+            return {
+                "legs": [
+                    {"symbol": anchor_occ, "action": "BUY", "quantity": 1},
+                    {"symbol": hedge_occ, "action": "SELL", "quantity": 1}
+                ],
+                "cost": net_cost,
+                "frontExpiry": hedge_leg.expiration.isoformat(),
+                "backExpiry": anchor_leg.expiration.isoformat(),
+                "strike": anchor_leg.strike  # Track anchor strike visually
+            }
+
+        # Otherwise NAKED_LONG
+        return {
+            "legs": [
+                {"symbol": anchor_occ, "action": "BUY", "quantity": 1}
+            ],
+            "cost": anchor_leg.ask,
+            "frontExpiry": anchor_leg.expiration.isoformat(),
+            "strike": anchor_leg.strike
+        }
+
+    except Exception as e:
+        logger.error(f"Failed forming precise option legs for {symbol}: {e}")
+        return None

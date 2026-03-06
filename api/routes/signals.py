@@ -63,6 +63,12 @@ class SignalResponse(BaseModel):
     expires_at: Optional[datetime] = None
     autoApproved: Optional[bool] = None
     orderId: Optional[str] = None
+    
+    # Exact option legs built by StrategyBuilder
+    legs: Optional[list] = None
+    frontExpiry: Optional[str] = None
+    backExpiry: Optional[str] = None
+    strike: Optional[float] = None
 
 
 class SignalApproveRequest(BaseModel):
@@ -125,6 +131,13 @@ async def list_signals(
                     
             # Set top level properties from DB record if present
             signal_dict['expires_at'] = getattr(sig, 'expires_at', signal_dict.get('expires_at'))
+                
+            # Map optional fields for TypedDict assignment
+            for key in ['frontExpiry', 'backExpiry', 'strike', 'legs']:
+                if hasattr(sig, key):
+                    signal_dict[key] = getattr(sig, key)
+                elif key not in signal_dict:
+                    signal_dict[key] = None
                 
             results.append(SignalResponse(**signal_dict))
         

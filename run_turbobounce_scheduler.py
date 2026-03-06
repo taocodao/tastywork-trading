@@ -22,6 +22,7 @@ from src.turbobounce.scanner import TurboBounceScanner
 from src.turbobounce.strategy_router import StrategyRouter
 from signal_publisher.turbobounce import publish_turbobounce_entry_signal
 from src.turbobounce.risk_manager import TurboBounceRiskManager
+from src.turbobounce.spread_builder import build_turbobounce_spread_legs
 def is_market_open() -> bool:
     tz = pytz.timezone('US/Eastern')
     now = datetime.now(tz)
@@ -123,6 +124,18 @@ class TurboBounceScheduler:
                     
                 display_rank = rank + 1 if rank < 3 else (rank - 3) + 1
                 
+                # Fetch live optimal legs 
+                from src.turbobounce.spread_builder import build_turbobounce_spread_legs
+                leg_data = build_turbobounce_spread_legs(
+                    symbol=sym,
+                    current_price=pick.recent_price if hasattr(pick, 'recent_price') else 100.0,
+                    direction=route.direction,
+                    strategy_type=route.strategy_type,
+                    target_anchor_dte=route.target_anchor_dte or 45,
+                    target_hedge_dte=route.target_hedge_dte,
+                    target_delta=route.target_delta
+                )
+                
                 publish_turbobounce_entry_signal(
                     symbol=sym,
                     action_type=route.strategy_type,
@@ -135,7 +148,8 @@ class TurboBounceScheduler:
                     rationale=route.rationale,
                     target_anchor_dte=route.target_anchor_dte,
                     target_hedge_dte=route.target_hedge_dte,
-                    target_delta=route.target_delta
+                    target_delta=route.target_delta,
+                    leg_data=leg_data
                 )
                 publish_count += 1
             logger.info(f"Published {publish_count} unified TurboBounce Multi-Ticker signals.")
