@@ -41,10 +41,28 @@ class SignalResponse(BaseModel):
     potential_return: float
     return_percent: float
     win_rate: float
+    confidence: float = 0.0
+    total_score: float = 0.0
+    rsi_2: float = 0.0
+    iv_rank: float = 0.0
     risk_level: str
     expiry: str
+    pool: str = "TQQQ"  # Default pool
     status: str  # pending/approved/rejected/executed
     created_at: datetime
+    # Added Turbobounce Specific / UI Fields
+    type: Optional[str] = None
+    strategy_name: Optional[str] = None
+    scanner_rank: Optional[int] = None
+    category: Optional[str] = None
+    rationale: Optional[str] = None
+    target_anchor_dte: Optional[int] = None
+    target_hedge_dte: Optional[int] = None
+    target_delta: Optional[float] = None
+    capital_required: Optional[float] = None
+    expires_at: Optional[datetime] = None
+    autoApproved: Optional[bool] = None
+    orderId: Optional[str] = None
 
 
 class SignalApproveRequest(BaseModel):
@@ -81,9 +99,11 @@ async def list_signals(
                 'created_at': sig.created_at
             })
             
-            # Ensure all required fields have defaults
+            # Ensure required fields have defaults for Pydantic
             if 'direction' not in signal_dict:
                 signal_dict['direction'] = 'neutral'
+            if 'confidence' not in signal_dict:
+                signal_dict['confidence'] = signal_dict.get('total_score', signal_dict.get('win_rate', 0.0))
             if 'cost' not in signal_dict:
                 signal_dict['cost'] = 0.0
             if 'potential_return' not in signal_dict:
@@ -91,11 +111,20 @@ async def list_signals(
             if 'return_percent' not in signal_dict:
                 signal_dict['return_percent'] = 0.0
             if 'win_rate' not in signal_dict:
-                signal_dict['win_rate'] = 0.0
+                signal_dict['win_rate'] = signal_dict.get('confidence', 0.0)
             if 'risk_level' not in signal_dict:
-                signal_dict['risk_level'] = 'Medium'
+                signal_dict['risk_level'] = 'MEDIUM'
             if 'expiry' not in signal_dict:
-                signal_dict['expiry'] = ''
+                signal_dict['expiry'] = 'N/A'
+            if 'pool' not in signal_dict:
+                # Backend grouping logic
+                if sig.strategy == 'turbobounce':
+                    signal_dict['pool'] = 'MULTI_TICKER'
+                else:
+                    signal_dict['pool'] = 'TQQQ'
+                    
+            # Set top level properties from DB record if present
+            signal_dict['expires_at'] = getattr(sig, 'expires_at', signal_dict.get('expires_at'))
                 
             results.append(SignalResponse(**signal_dict))
         
@@ -103,9 +132,7 @@ async def list_signals(
         
     except Exception as e:
         logger.error(f"Failed to fetch signals from database: {e}")
-        # Fallback to in-memory store
-        filtered = [s for s in _signals_store if s["status"] == status or status is None]
-        return filtered[:limit]
+        raise HTTPException(status_code=500, detail="Database connection error")
 
 
 @router.post("", response_model=SignalResponse)
@@ -153,26 +180,83 @@ async def approve_signal(signal_id: str, request: SignalApproveRequest):
     """
     Approve a signal for execution.
     
-    If execute_immediately is True, the trade will be placed immediately.
+    If execute_immediately is True, the trade will be placed immediately via auto_approve logic.
     """
-    for signal in _signals_store:
-        if signal["id"] == signal_id:
-            if signal["status"] != "pending":
-                raise HTTPException(
-                    status_code=400, 
-                    detail=f"Signal already {signal['status']}"
-                )
+    try:
+        from src.earnings_intelligence.database import SignalRepository
+        repo = SignalRepository()
+        
+        # 1. Fetch signal from PostgreSQL
+        db_signals = repo.get_all_signals(include_expired=True)
+        sig_record = next((s for s in db_signals if s.id == signal_id), None)
+        
+        if not sig_record:
+            raise HTTPException(status_code=404, detail="Signal not found in database")
             
-            signal["status"] = "approved"
+        if sig_record.status != "pending":
+            return {"status": sig_record.status, "message": f"Signal is already {sig_record.status}"}
             
-            if request.execute_immediately:
-                # TODO: Call trade execution service
-                signal["status"] = "executed"
-                logger.info(f"Executed signal: {signal_id}")
+        # 2. Update status to approved
+        signal_data = sig_record.data if sig_record.data else {}
+        signal_data.update({
+            'id': sig_record.id,
+            'symbol': sig_record.symbol,
+            'strategy': sig_record.strategy,
+            'status': 'approved'
+        })
+        repo.update_signal_status(signal_id, "approved")
             
-            return {"status": signal["status"], "message": "Signal approved"}
+        # 3. Execute immediately if requested (using the auto_approve path)
+        if request.execute_immediately:
+            try:
+                from auto_approve import auto_approve_signal
+                # Explicitly override the should_auto_approve check inside auto_approve_signal
+                # by mocking it, or we bypass should_auto_approve. Since user requested execution manually,
+                # we will bypass internal checks and route directly.
+                import os
+                from auto_approve import _execute_theta_auto_approve, _execute_zebra_auto_approve, _execute_dvo_auto_approve, _execute_pmcc_auto_approve, _execute_calendar_auto_approve
+                
+                user_token = os.getenv("TASTYTRADE_REFRESH_TOKEN")
+                if user_token:
+                    from tastytrade_utils import create_user_session, get_user_account
+                    session = create_user_session(user_token)
+                    account = get_user_account(session)
+                    
+                    strategy = signal_data.get("strategy", "").lower()
+                    if "theta" in strategy or "put" in strategy:
+                        result = _execute_theta_auto_approve(signal_data, session, account)
+                    elif "zebra" in strategy:
+                        result = _execute_zebra_auto_approve(signal_data, session, account)
+                    elif "dvo" in strategy:
+                        result = _execute_dvo_auto_approve(signal_data, session, account)
+                    elif "pmcc" in strategy:
+                        result = _execute_pmcc_auto_approve(signal_data, session, account)
+                    elif "turbobounce" in strategy:
+                        from src.turbobounce.executor import execute_turbobounce_trade
+                        result = execute_turbobounce_trade(signal_data, session, account)
+                    else:
+                        result = _execute_calendar_auto_approve(signal_data, session, account)
+                    
+                    if result:
+                        repo.update_signal_status(signal_id, "executed")
+                        return {"status": "executed", "message": "Signal approved and executed", "result": result}
+                    else:
+                        return {"status": "approved", "message": "Signal approved but execution failed or timed out"}
+                else:
+                    return {"status": "approved", "message": "Signal approved but no TASTYTRADE_REFRESH_TOKEN found for execution"}
+            except Exception as e:
+                logger.error(f"Manual execution trigger failed: {e}")
+                import traceback
+                logger.error(traceback.format_exc())
+                return {"status": "approved", "message": f"Signal approved but execution encountered error: {str(e)}"}
+        
+        return {"status": "approved", "message": "Signal approved"}
     
-    raise HTTPException(status_code=404, detail="Signal not found")
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error approving signal {signal_id}: {e}")
+        raise HTTPException(status_code=500, detail="Database connection error")
 
 
 @router.post("/{signal_id}/reject")
