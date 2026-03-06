@@ -137,9 +137,34 @@ def publish_turbobounce_entry_signal(
     try:
         from src.earnings_intelligence.database import SignalRepository
         repo = SignalRepository()
-        repo.save_signal(data)
-        logger.info(f"DB Save success: TurboBounce {symbol} ({action_type})")
+        try:
+            repo.save_signal(data)
+            logger.info(f"DB Save success: TurboBounce {symbol} ({action_type})")
+        finally:
+            repo.session.close()  # CRITICAL: return connection to pool
     except Exception as e:
         logger.error(f"DB Save failed for {symbol}: {e}")
+
+    # 2. Auto-approve if criteria met
+    try:
+        from auto_approve import auto_approve_signal
+        result = auto_approve_signal(data)
+        if result:
+            logger.info(f"🤖 Auto-approved TurboBounce signal: {symbol} → Order {result.get('order_id')}")
+            # Update status to executed
+            data['status'] = 'executed'
+            data['autoApproved'] = True
+            data['orderId'] = result.get('order_id')
+            try:
+                from src.earnings_intelligence.database import SignalRepository
+                repo2 = SignalRepository()
+                try:
+                    repo2.save_signal(data)
+                finally:
+                    repo2.session.close()
+            except Exception:
+                pass
+    except Exception as auto_err:
+        logger.debug(f"Auto-approve skipped for {symbol}: {auto_err}")
 
     return sig
