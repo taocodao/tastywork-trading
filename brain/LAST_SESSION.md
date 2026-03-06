@@ -1,56 +1,33 @@
-# Last Session — Quick Reference
+# Session Summary - 2026-03-05
 
-> **Updated**: 2026-03-04
+## Objective: Debugging Auto-Approve Failure & Execution Errors
 
-## Current State
+I successfully restored the TurboBounce execution pipeline, enabling both manual and automatic approval for complex "Bull Put Spread" signals (like NUGT).
 
-### Active Systems on EC2
-- **TQQQ Scheduler** — running `run_tqqq_scheduler.py` with DE-optimized parameters
-  - Put Credit strategy (Scenario A), principal-based concurrent position gating
-  - Cooldown 6 days, VIX 5-day entry filter, IV multiplier 2.10
-- **Theta Scheduler** — `theta_monitor_continuous.py` (24/7 continuous monitor)
-- **TradeMind API** — backend serving frontend at trademind.bot
+## Key Achievements
 
-### Recent Work (Mar 2026)
-- **Mar 04**: TurboBounce Signal Pipeline Deep Fixes & Position Sizing
-    - **WebSocket Server Fix**: Removed 14 hardcoded default channels and premature signal history delivery. Clients now start empty and explicitly subscribe, preventing signal timing issues.
-    - **Next-Market-Open Expiry**: Signals now expire at 9:30 AM ET on the next trading day instead of a flat 24h, ensuring visibility until the next market open.
-    - **Principal-Based Position Sizing**: Integrated `investmentPrincipal` from settings into the Dashboard UI. Implemented 6-slot allocation logic (`Principal / 6`) in the approval handler, aligning with backtesting patterns.
-    - **Frontend Defaults**: Aligned `SignalProvider` and `useSignalSocket` to default to the `turbobounce` channel.
-    - **Investigating**: Currently debugging why signals received via WebSocket (logged in console) are not rendering in the UI's "Trade Signals" list.
-- **Mar 03**: TurboBounce Signal Pipeline Restoration & Stability
-    - **Critical Fix: Microsecond Date Parsing**: Resolved a major issue where Python's 6-digit microsecond timestamps caused JavaScript's `Date()` to return `NaN`, breaking signal rendering.
-    - **Service Recovery**: Restored `trademind-api` on EC2 and added `StartLimitIntervalSec=0` to the systemd service to prevent burst-limit outages.
-    - **Frontend Focus**: Restricted `SignalProvider.tsx` to the `turbobounce` channel and strategy for better performance.
-    - **UI Unification**: Fully unified the `TurboBounceSignalCard` with consistent "Approve Auto-Trade" actions.
-    - **Verified**: Confirmed 6 pending signals flowing from EC2 RDS → API → Frontend.
-- **Mar 01**: Built the TurboBounce PWA Landing Page Interactive Simulator (EquityCurveChart, TradeFeed, CompoundingCalculator) with scalable multiplier math. Fixed Next.js build timeouts by statically importing translation dictionaries. Constructed ElevenLabs localized voice integration.
+### 1. Unified Execution Architecture
+- Created `src/turbobounce/executor.py`: A shared module for fetching live IB pricing, constructing multi-leg orders, and executing via Tastytrade.
+- Consolidated logic for both the API server (manual approval) and the `auto_approve.py` script.
 
-### Recent Work (Feb 2026)
-- **Feb 27**: Investigated TurboBounce `options_pricer_backtest.py`. Discovered the file is untracked in Git. The +12.31% Mode B result came from `historical_backtest.py`, not the options pricer. The options pricer currently has logic issues with `NAKED_LONG` handling (14 DTE held for 15 days = guaranteed loss).
-- **Feb 27**: Set up permanent brain directories across all workspaces (LAST_SESSION.md, brain-bootstrap.md)
-- **Feb 26**: Backtested TurboBounce strategy with StrategyRouter (IV-driven routing)
-- **Feb 26**: Implemented unified 3-layer TQQQ strategy (order manager, signal publisher, position tracker, risk manager, data pipeline)
-- **Feb 25**: Deep analysis of `src/tqqq` — ML components (vix_predictor, contract_ranker)
-- **Feb 24**: Deployed DE-optimized TQQQ parameters to EC2
-- **Feb 24**: Established Git push deploy workflow (no more SCP)
-- **Feb 23**: TQQQ signal execution and monitoring finalized
-- **Feb 20**: SFX strategy exit logic improvements (tiered profit targets)
-- **Feb 18**: Fixed SFX strategy exits
+### 2. Manual Approval (Vercel-to-EC2 Proxy)
+- **Problem**: Vercel failed to execute spreads due to lack of live IB market data.
+- **Fix**: Implemented a proxy in the Vercel approval route. Requests for `turbobounce` and `zebra` strategies are now routed to the EC2 backend, which has the necessary IB connection.
 
-### Key Config
-- **EC2 project dir**: `~/tastywork-trading` (NO `-1` suffix)
-- **Deploy**: `git push` → EC2 `git pull` → `systemctl restart trademind-api`
-- **IB Gateway**: Docker container, port 4004, IB_HOST=127.0.0.1 on EC2
+### 3. Backend Auto-Approval Hooks
+- **Problem**: `auto_approve.py` was missing TurboBounce logic; signals weren't triggering approval checks.
+- **Fix**: Added a strategy handler to `auto_approve.py` and an automated trigger to `signal_publisher/turbobounce.py`.
 
-## Pending / Next Steps
-- **TurboBounce Option Constructor**: Implement actual options-leg construction in `_execute_turbobounce_for_user()` — currently raises `NotImplementedError`. Needs to convert ML signal data into a tradeable options order.
-- **TQQQ DB + WebSocket alignment**: TQQQ still uses JSON-only persistence (`tqqq_signals.json`). Apply the same Theta-pattern alignment done for TurboBounce.
-- Rebuild `options_pricer_backtest.py` logic to properly handle `NAKED_LONG` options with realistic DTEs, stop-losses, and profit targets.
-- The original +12.31% result came from `src/turbobounce/historical_backtest.py`. Ensure option-pricing backtest aligns with those stock-price-based returns.
-- Verify unified TQQQ strategy integration with scheduler (Step 7)
-- Continue improving ML signal discovery
+### 4. Signal Persistence & Quality
+- **Confidence Fix**: Mapped ML `total_score` to a standard `confidence` field (0-100%).
+- **Parsing Fix**: Resolved database parsing errors for `expires_at` causing NULL values.
+- **Filtering Fix**: Added missing strategy filtering in `tasty_api_server.py`.
+- **Dashboard Stability**: Switched frontend to a robust polling model for database truth.
+- **Connectivity Resolution**: Identified and resolved the Port 8002 AWS Security Group block, allowing Vercel to fetch signals from the EC2 backend.
 
----
+## Technical Details
 
-> ⚠️ **This file should be updated at the end of every session.** Run `/end-session` or manually update before switching accounts.
+- **Backend Repo**: `tastywork-trading-1`
+- **Frontend Repo**: `trademind-app`
+- **New Files**: `src/turbobounce/executor.py`
+- **EC2 Update**: Pulling latest code and restarting `trademind-api.service`.

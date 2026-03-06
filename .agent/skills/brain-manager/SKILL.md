@@ -69,3 +69,15 @@ When a brain file exceeds 500 lines:
 | 30-39 | Operations & Debugging |
 | 40-49 | Guides & How-Tos |
 | 90-99 | Logs & History |
+
+## Artifact Naming Convention (Conversation Artifacts)
+
+Implementation plans, walkthroughs, and other conversation-scoped artifacts (in `<appDataDir>/brain/<conversation-id>/`) should **never overwrite** previous versions. Use timestamped filenames:
+
+| Artifact | Naming Pattern | Example |
+|----------|---------------|---------|
+| Implementation Plan | `implementation_plan_YYYYMMDD_HHMM_<topic>.md` | `implementation_plan_20260305_1504_signal_pipeline_analysis.md` |
+| Walkthrough | `walkthrough_YYYYMMDD_HHMM_<topic>.md` | `walkthrough_20260305_1330_turbobounce_execution.md` |
+| Task | `task.md` (single file, always updated in place) | `task.md` |
+
+This ensures a full audit trail of plans and walkthroughs across the conversation.

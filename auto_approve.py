@@ -247,6 +247,8 @@ def should_auto_approve(signal: Dict[str, Any], user_refresh_token: str = None) 
         strategy_key = "zebra"
     elif "dvo" in strategy or "value" in strategy:
         strategy_key = "dvo"
+    elif "turbobounce" in strategy:
+        strategy_key = "theta"  # Group with theta for risk limits, or we could add a new key
     else:
         logger.debug(f"Auto-approve: Unknown strategy '{strategy}'")
         return False
@@ -328,6 +330,9 @@ def auto_approve_signal(
             result = _execute_dvo_auto_approve(signal, session, account)
         elif "pmcc" in strategy.lower():
             result = _execute_pmcc_auto_approve(signal, session, account)
+        elif "turbobounce" in strategy.lower():
+            from src.turbobounce.executor import execute_turbobounce_trade
+            result = execute_turbobounce_trade(signal, session, account)
         else:
             result = _execute_calendar_auto_approve(signal, session, account)
         

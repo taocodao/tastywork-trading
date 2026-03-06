@@ -102,15 +102,15 @@ graph TD
 | **Signal Class** | ✅ `TurboBounceEntrySignal` typed dataclass extending `BaseSignal` | `signal_publisher/turbobounce.py` |
 | **Extends BaseSignal?** | ✅ Yes | `signal_publisher/turbobounce.py` |
 | **Part of signal_publisher/?** | ✅ Yes — fully integrated | `signal_publisher/turbobounce.py` |
+| **Metadata Support** | ✅ `confidence`, `cost`, `capital_required` explicitly handled | `signal_publisher/turbobounce.py` |
 | **Factory Function** | `publish_turbobounce_entry_signal()` | `signal_publisher/turbobounce.py` |
 | **DB Persistence** | ✅ `SignalRepository.save_signal(data)` | `signal_publisher/turbobounce.py` |
 | **WebSocket Broadcast** | ✅ `broadcast_to_channel('turbobounce', data)` | `signal_publisher/turbobounce.py` |
-| **Auto-Approve** | ❌ Not implemented (future enhancement) | - |
+| **Auto-Approve** | ✅ `auto_approve_signal(data)` via `executor.py` | `auto_approve.py` |
 | **Legacy JSON Backup** | ✅ Still writes to `turbobounce_signals.json` as backward compat | `signal_publisher/turbobounce.py` |
-| **Frontend Fetch** | ✅ `/api/turbobounce/signals` → now queries PostgreSQL `SignalRepository` | `tasty_api_server.py` |
-| **Real-time Push** | ✅ WebSocket broadcast on `turbobounce` channel | `websocket_server.py` |
+| **Frontend Fetch** | ✅ `/api/signals` (REST Polling) | `SignalProvider.tsx` |
 | **Status Field** | ✅ Normalized to lowercase `"pending"` | `SignalRepository.save_signal` |
-| **Approval Routing** | ✅ `_execute_turbobounce_for_user()` (NotImplementedError — placeholder) | `tasty_api_server.py` |
+| **Approval Routing** | ✅ Unified `execute_turbobounce_trade` via `executor.py` | `src/turbobounce/executor.py` |
 | **Frontend Card** | ✅ `TurboBounceSignalCard.tsx` renders ML stats correctly | `trademind-app/src/components/` |
 
 ---
@@ -127,6 +127,7 @@ All 6 gaps were fixed. See `90_DECISIONS_LOG.md` for details and `sessions/2026-
 | Timestamp parsing bug | ✅ Fixed | Stripped microseconds from ISO string in frontend (JS NaN fix) |
 | Status case mismatch | ✅ Fixed | Normalized to lowercase `"pending"` |
 | No signal expiration | ✅ Fixed | `expires_at` added matching Theta's pattern |
+| Missing metadata sync | ✅ Fixed | Updated `SignalResponse` Pydantic model for `confidence` & `cost` |
 
 ## Remaining Gap: TQQQ → Theta Parity
 
@@ -174,7 +175,7 @@ All strategies should follow the Theta pattern:
 ```
 Scheduler → publish_*() function
   ├── 1. SignalRepository.save_signal()     → PostgreSQL
-  ├── 2. auto_approve_signal() [optional]   → Trade execution
+  ├── 2. auto_approve_signal()              → Unified Executor (`executor.py`)
   └── 3. broadcast_to_channel()             → WebSocket → Frontend
 ```
 

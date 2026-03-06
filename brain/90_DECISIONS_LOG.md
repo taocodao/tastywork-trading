@@ -1,6 +1,46 @@
-# Decisions Log
+---
 
-Architecture decisions and important changes, in reverse chronological order.
+## 2026-03-06: Signal Metadata Synchronization (`confidence`, `cost`, `pool`)
+
+**Decision**: Ensure all critical trading metadata is explicitly passed from the backend Signal Publisher (EC2) to the Frontend (Vercel) by updating Pydantic models and publisher classes.
+
+**Context**: 
+- Turbobounce signals were appearing on the dashboard with **0% confidence** and missing cost estimates.
+- **Pydantic Stripping**: The `SignalResponse` model in `tasty_api_server.py` was stripping new fields (`confidence`, `rsi_2`, `iv_rank`) because they weren't defined in the Pydantic schema.
+- **Auto-Approval Failure**: The frontend was skipping signals because 0% confidence failed the user's minimum threshold.
+- **Position Sizing**: Missing `cost` and `capital_required` fields prevented the frontend from calculating contract quantities accurately.
+
+**Resolution**:
+- **API Model**: Updated `SignalResponse` in `api/routes/signals.py` to include `confidence`, `total_score`, `rsi_2`, `iv_rank`, and `pool`.
+- **Publisher**: Updated `TurboBounceEntrySignal` in `signal_publisher/turbobounce.py` to explicitly include and serialize `cost` ($1.50 default) and `capital_required` ($1000 default).
+- **Backward Compatibility**: Added mapping in the `list_signals` endpoint to preserve `confidence` for old signals by falling back to `total_score` or `win_rate`.
+- **Frontend Retention**: Updated `SignalProvider.tsx` to keep "Pending" signals visible even if they fail confidence checks, allowing manual override.
+- **Deployment**: Manually deployed fixes to EC2 using `scp` and restarted services via `ssh`.
+
+**Affected**: `api/routes/signals.py`, `signal_publisher/turbobounce.py`, `trademind-app/src/components/providers/SignalProvider.tsx`
+
+---
+
+**Affected**: `src/turbobounce/executor.py` (new), `auto_approve.py`, `tasty_api_server.py`, `signal_publisher/turbobounce.py`, `trademind-app/src/app/api/signals/[id]/approve/route.ts`, `trademind-app/src/lib/strategy-executor.ts`
+
+---
+
+## 2026-03-05: Signal Pipeline Connectivity & Port 8002 Resolution
+
+**Decision**: Shift the TurboBounce signal pipeline from flaky WebSockets to robust REST polling via a Vercel-EC2 proxy on Port 8002 and open the firewall.
+
+**Context**: TurboBounce signals were sporadically appearing/disappearing or not showing at all. Investigation revealed:
+1.  **WebSocket Flakiness**: The `websocket_server.py` and its integration with the frontend were unreliable under current networking conditions.
+2.  **Firewall Block**: The EC2 API running on Port 8002 was blocked by the AWS Security Group, preventing Vercel from successfully proxying signal requests.
+3.  **Confidence Gap**: Older signals had 0% confidence because the mapping logic was missing during their creation.
+
+**Resolution**:
+- **REST Polling**: Replaced the WebSocket subscription in `SignalProvider.tsx` with a reliable REST polling mechanism (10-60s intervals) that queries the Vercel `/api/signals` proxy.
+- **Port 8002 Open**: Identified Port 8002 as the bottleneck and guided the user to open it in the AWS Security Group settings.
+- **Confidence Backfill**: Confirmed that new signals generated via `run_turbobounce_scheduler.py` or the `generate_live_signal.py` test script correctly include confidence scores.
+- **Result**: Signals now appear consistently on the dashboard with full metadata, ready for manual or automatic approval.
+
+**Affected**: `trademind-app/src/components/providers/SignalProvider.tsx`, `trademind-app/src/app/api/signals/route.ts`, EC2 Security Group configurations.
 
 ---
 

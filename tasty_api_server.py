@@ -382,7 +382,7 @@ class TastyHandler(BaseHTTPRequestHandler):
         from src.earnings_intelligence.database import SignalRepository
         repo = SignalRepository()
         try:
-            signals = repo.get_all_signals()
+            signals = repo.get_all_signals(status='pending')
             
             # Convert to dicts
             signal_dicts = [s.to_dict() for s in signals]

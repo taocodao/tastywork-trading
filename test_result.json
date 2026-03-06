@@ -1,0 +1,30 @@
+{
+  "status": "failed",
+  "signal": {
+    "id": "test-nugt-1772727985",
+    "symbol": "NUGT",
+    "strategy": "turbobounce",
+    "direction": "BULLISH",
+    "signalType": "Bull Put Spread",
+    "status": "pending",
+    "confidence": 95.0,
+    "cost": -1.5,
+    "capital_required": 850.0,
+    "expiresAt": "2026-03-05T20:26:25.968155Z",
+    "rationale": "Test Bull Put Spread from user request.",
+    "legs": [
+      {
+        "action": "SELL_TO_OPEN",
+        "symbol": "NUGT  260417P00230000",
+        "quantity": 1
+      },
+      {
+        "action": "BUY_TO_OPEN",
+        "symbol": "NUGT  260417P00220000",
+        "quantity": 1
+      }
+    ]
+  },
+  "error": "'type'",
+  "message": "Trade failed: 'type'"
+}

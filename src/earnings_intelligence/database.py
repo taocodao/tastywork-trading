@@ -407,7 +407,7 @@ class Signal(Base):
     expires_at = Column(DateTime, nullable=True, index=True)  # When signal becomes invalid
     front_expiry = Column(DateTime, nullable=True)  # Short leg expiration (for calendar spreads)
     
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=datetime.utcnow, index=True)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     approved_at = Column(DateTime, nullable=True)
     executed_at = Column(DateTime, nullable=True)
@@ -450,7 +450,7 @@ class UserSignalExecution(Base):
     order_id = Column(String(64), nullable=True)  # Tastytrade order ID
     error_message = Column(Text, nullable=True)  # Error details if failed
     
-    created_at = Column(DateTime, default=datetime.utcnow)  # When user first interacted
+    created_at = Column(DateTime, default=datetime.utcnow, index=True)  # When user first interacted
     approved_at = Column(DateTime, nullable=True)
     executed_at = Column(DateTime, nullable=True)
     
@@ -518,7 +518,7 @@ class Position(Base):
     exit_pnl = Column(Float, nullable=True)
     exit_order_id = Column(String(64), nullable=True)
     
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=datetime.utcnow, index=True)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     def __repr__(self):

@@ -1,37 +1,56 @@
-import sys
 import os
-import time
+import sys
+from datetime import datetime, timedelta
+import json
+from dotenv import load_dotenv
 
-# Add src to path
-sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+# Load env before importing DB
+load_dotenv()
 
-from signal_publisher.turbobounce import publish_turbobounce_entry_signal
+from src.earnings_intelligence.database import SignalRepository
 
-def create_test_signal():
-    print("Publishing fresh test TurboBounce signal...")
+def main():
+    repo = SignalRepository()
     
-    # Create a fresh signal with tomorrow's expiration
+    signal_id = f"test-nugt-{int(datetime.now().timestamp())}"
+    
+    # User's request:
+    # Action 1: Sell to Open (STO) 1 Apr 17 $230 Put (NUGT)
+    # Action 2: Buy to Open (BTO) 1 Apr 17 $220 Put (NUGT)
+    # OCC Symbol format: NUGT  YYMMDD T Strike(x1000)
+    # April 17, 2026 -> 260417
+    # 230 Put -> P00230000
+    # 220 Put -> P00220000
+    
+    short_leg = 'NUGT  260417P00230000'
+    long_leg = 'NUGT  260417P00220000'
+    
+    signal_data = {
+        'id': signal_id,
+        'symbol': 'NUGT',
+        'strategy': 'turbobounce',
+        'direction': 'BULLISH',
+        'signalType': 'Bull Put Spread',
+        'status': 'pending',
+        'confidence': 95.0,
+        'cost': -1.50, # Net credit of $1.50
+        'capital_required': 850.0, # (230-220)*100 - 150 = $850 max loss
+        'expiresAt': (datetime.utcnow() + timedelta(hours=4)).isoformat() + 'Z',
+        'rationale': 'Test Bull Put Spread from user request.',
+        
+        # New explicit legs format for the execute handler
+        'legs': [
+            {'action': 'SELL_TO_OPEN', 'symbol': short_leg, 'quantity': 1},
+            {'action': 'BUY_TO_OPEN', 'symbol': long_leg, 'quantity': 1}
+        ]
+    }
+    
     try:
-        sig = publish_turbobounce_entry_signal(
-            symbol="TEST_CIEN",
-            action_type="BUY",
-            direction="bullish",
-            scanner_rank=1,
-            total_score=85.5,
-            rsi_2=15.2,
-            iv_rank=30.4,
-            category="TECH",
-            rationale="Test signal to verify frontend rendering",
-            target_anchor_dte=45,
-            target_hedge_dte=14,
-            target_delta=0.7
-        )
-        print(f"✅ Successfully published test signal: {sig.id}")
-        print("Please check the TradeMind dashboard and signals page.")
+        repo.save_signal(signal_data)
+        print(f"✅ Successfully injected test signal: {signal_id}")
+        print(json.dumps(signal_data, indent=2))
     except Exception as e:
-        print(f"❌ Failed to publish signal: {e}")
+        print(f"❌ Failed to inject test signal: {e}")
 
 if __name__ == "__main__":
-    from dotenv import load_dotenv
-    load_dotenv()
-    create_test_signal()
+    main()

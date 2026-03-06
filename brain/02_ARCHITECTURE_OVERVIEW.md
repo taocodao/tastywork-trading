@@ -56,11 +56,17 @@
 
 ### Order Execution
 ```
-1. User sees signal in frontend
+1. User sees signal in frontend (Real-time WS or Polling)
 2. User clicks "Approve"
-3. Frontend calls /api/signals/approve
-4. Backend executes via Tastytrade API
-5. Position tracked in database
+3. Frontend calls Vercel /api/signals/[id]/approve
+4. Routing Decision:
+   - Theta/Diagonal/DVO: Executed directly on Vercel via Tastytrade API
+   - TurboBounce/ZEBRA: Proxied to EC2 Backend (:8002) for Live IB Pricing
+5. Unified Executor (EC2):
+   - Fetches Live Mid-Price from IB Gateway
+   - Constructs Multi-Leg Order
+   - Executes via Tastytrade SDK
+6. Position tracked in RDS Database
 ```
 
 ## Key Components

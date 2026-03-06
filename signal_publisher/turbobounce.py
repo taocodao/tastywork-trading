@@ -42,6 +42,8 @@ class TurboBounceEntrySignal(BaseSignal):
     target_anchor_dte: Optional[int] = None
     target_hedge_dte: Optional[int] = None
     target_delta: Optional[float] = None
+    cost: float = 1.0  # Estimated debit/credit per spread
+    capital_required: float = 500.0  # Estimated capital block per contract
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary for JSON/DB serialization. Matches prior schema."""
@@ -67,6 +69,9 @@ class TurboBounceEntrySignal(BaseSignal):
             "target_anchor_dte": self.target_anchor_dte,
             "target_hedge_dte": self.target_hedge_dte,
             "target_delta": self.target_delta,
+            "cost": self.cost,
+            "capital_required": self.capital_required,
+            "capitalRequired": self.capital_required,  # Frontend camelCase compat
         })
         return base
 
@@ -129,6 +134,8 @@ def publish_turbobounce_entry_signal(
         target_anchor_dte=target_anchor_dte,
         target_hedge_dte=target_hedge_dte,
         target_delta=target_delta,
+        cost=1.50 if action_type == 'DIAGONAL' else 1.0,  # Realistic defaults
+        capital_required=1000.0 if action_type == 'DIAGONAL' else 500.0,
     )
     
     data = sig.to_dict()

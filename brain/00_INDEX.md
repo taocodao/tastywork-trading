@@ -51,10 +51,14 @@ At end of each session:
 
 ## Recent Activity
 
+### 2026-03-05
+- Completed TurboBounce execution fix: Unified Executor on EC2 + Vercel Execution Proxy.
+- Enabled Backend Auto-Approval for Bull Put Spreads (NUGT, etc.) using live IB pricing.
+- Fixed database persistence for `expires_at` and mapped `total_score` to `confidence`.
+- Resolved Signal Pipeline connectivity: Opened Port 8002 in AWS Security Group and shifted to REST polling.
+- Established artifact naming convention: `implementation_plan_YYYYMMDD_HHMM_<topic>.md`.
+
 ### 2026-03-02
-- Created `25_SIGNAL_FRAMEWORK.md`: comprehensive signal pipeline analysis across Theta, TQQQ and TurboBounce strategies
-- Identified 6 critical gaps preventing TurboBounce signals from appearing in frontend
-- Documented the Theta pattern (DB + WebSocket + Auto-approve) as the gold standard
 
 ### 2026-02-05
 - Created workspace-scoped brain structure per implementation plan
