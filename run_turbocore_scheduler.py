@@ -15,6 +15,24 @@ from datetime import datetime, date, timedelta
 import pytz
 from dotenv import load_dotenv
 
+def is_market_open() -> bool:
+    tz = pytz.timezone('US/Eastern')
+    now = datetime.now(tz)
+    if now.weekday() >= 5: return False
+    market_open = now.replace(hour=9, minute=30, second=0, microsecond=0)
+    market_close = now.replace(hour=16, minute=0, second=0, microsecond=0)
+    return market_open <= now <= market_close
+
+def time_until_market_open() -> float:
+    tz = pytz.timezone('US/Eastern')
+    now = datetime.now(tz)
+    market_open = now.replace(hour=9, minute=30, second=0, microsecond=0)
+    if now > market_open:
+        market_open += timedelta(days=1)
+    while market_open.weekday() >= 5:
+        market_open += timedelta(days=1)
+    return (market_open - now).total_seconds()
+
 # Load environment variables
 load_dotenv()
 
@@ -47,6 +65,7 @@ class TurboCoreScheduler:
         self.scorer = TurboCoreSignalScorer()
         self.allocator = AllocationOptimizer()
         self.tz = pytz.timezone('US/Eastern')
+        self.last_scan_date = None
         
     def run_daily_scan(self):
         logger.info("--- Starting TurboCore ML Daily Scan ---")
@@ -97,6 +116,44 @@ class TurboCoreScheduler:
         
         logger.info("--- TurboCore Scan Complete ---")
 
+    def run_loop(self):
+        """Main execution loop for continuous running."""
+        logger.info("Starting TurboCore Background Daemon loop...")
+        
+        while True:
+            try:
+                now = datetime.now(self.tz)
+                is_open = is_market_open()
+                
+                time_to_scan = False
+                if now.hour >= 8 and now.hour < 16 and now.weekday() < 5:
+                    if self.last_scan_date != now.date():
+                        time_to_scan = True
+                
+                if time_to_scan:
+                    self.run_daily_scan()
+                    self.last_scan_date = now.date()
+                    
+                if is_open:
+                    # Check periodically just in case (e.g. 10m)
+                    time.sleep(600)
+                else:
+                    sleep_time = time_until_market_open()
+                    logger.info(f"Market closed. Sleeping for {sleep_time/3600:.1f} hours.")
+                    for _ in range(int(sleep_time / 300)):
+                        time.sleep(300)
+            except Exception as e:
+                logger.error(f"Fatal error in scheduler loop: {e}", exc_info=True)
+                time.sleep(60)
+
 if __name__ == "__main__":
+    import argparse
+    parser = argparse.ArgumentParser(description="TurboCore ML Scheduler")
+    parser.add_argument("--once", action="store_true", help="Run a single scan and exit")
+    args = parser.parse_args()
+    
     scheduler = TurboCoreScheduler()
-    scheduler.run_daily_scan()
+    if args.once:
+        scheduler.run_daily_scan()
+    else:
+        scheduler.run_loop()
