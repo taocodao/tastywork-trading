@@ -873,6 +873,12 @@ class TastyHandler(BaseHTTPRequestHandler):
                             user_refresh_token,
                             account_number
                         )
+                    elif strategy_type in ['tqqq_turbocore', 'turbocore', 'rebalance']:
+                        result = self._execute_turbocore_for_user(
+                            signal_data,
+                            user_refresh_token,
+                            account_number
+                        )
                     else:
                         # Default to calendar spread (Theta)
                         result = self._execute_calendar_spread_for_user(
@@ -959,6 +965,72 @@ class TastyHandler(BaseHTTPRequestHandler):
             result['orderId'] = result['order_id']
             
         return result
+
+    def _execute_turbocore_for_user(
+        self,
+        signal: dict,
+        user_refresh_token: str,
+        account_number: str = None
+    ) -> dict:
+        """Execute a TurboCore target allocation sync using USER's OAuth."""
+        target_matrix = {}
+        for leg in signal.get('legs', []):
+            target_matrix[leg['symbol']] = leg['target_pct']
+            
+        from src.tqqq_turbocore.executor import calculate_delta_orders
+        from tastytrade_utils import create_user_session, get_user_account
+        from tastytrade_client import TastytradeClient
+        
+        user_session = create_user_session(user_refresh_token)
+        account = get_user_account(user_session, account_number)
+        
+        client = TastytradeClient()
+        client._session = user_session
+        client._account = account
+        
+        balances = client.get_account_balance()
+        net_liq = float(balances['net_liquidating_value'])
+        current_positions = client.get_equity_positions()
+        
+        live_prices = {}
+        for symbol in target_matrix.keys():
+            price = client.get_stock_price(symbol)
+            live_prices[symbol] = price if price > 0 else 0.0
+            
+        for pos_symbol in current_positions.keys():
+            if pos_symbol not in live_prices:
+                price = client.get_stock_price(pos_symbol)
+                live_prices[pos_symbol] = price if price > 0 else 0.0
+                
+        orders = calculate_delta_orders(
+            target_matrix=target_matrix,
+            current_net_liq=net_liq,
+            current_positions=current_positions,
+            live_prices=live_prices
+        )
+        
+        executed_orders = []
+        for order_leg in orders:
+            sym = order_leg['symbol']
+            qty = order_leg['quantity']
+            action = order_leg['action']
+            if qty > 0:
+                tt_order = client.build_equity_order(sym, qty, action, limit_price=None)
+                resp = client.place_order(tt_order, dry_run=False)
+                order_id = str(resp.order.id) if hasattr(resp, 'order') else "Submitted"
+                executed_orders.append({
+                    "symbol": sym,
+                    "action": action,
+                    "quantity": qty,
+                    "orderId": order_id
+                })
+                
+        # Return summary dict
+        return {
+            "orderId": executed_orders[0]['orderId'] if executed_orders else "No_Trades",
+            "executedOrders": executed_orders,
+            "netLiqUsed": net_liq
+        }
 
     def _execute_calendar_spread_for_user(
         self, 
