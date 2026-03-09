@@ -126,7 +126,8 @@ class TurboCoreScheduler:
                 is_open = is_market_open()
                 
                 time_to_scan = False
-                if now.hour >= 8 and now.hour < 16 and now.weekday() < 5:
+                # Trigger scan at 15:00 ET (1 hour before market close)
+                if now.hour == 15 and now.weekday() < 5:
                     if self.last_scan_date != now.date():
                         time_to_scan = True
                 
