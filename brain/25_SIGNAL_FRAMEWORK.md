@@ -184,3 +184,35 @@ This ensures:
 - **Unified API**: All signals available via `/api/signals`
 - **Real-time**: Frontend receives instant updates via WebSocket
 - **History**: All signals are queryable for analytics/reporting
+
+---
+
+## Client-Side Portfolio Sizing (Two-Tier Model) - Mar 2026
+
+To handle scaling across multiple users with different capital levels, start dates, and brokerage types, the system adopts a decoupled sizing architecture.
+
+### 1. Tier 1: General Signals (Backend)
+The backend ML engine calculates the **theoretical optimal state** of the portfolio and broadcasts a universal "Target Percentage" payload.
+*   **Source**: `signal_publisher/turbocore.py`
+*   **Payload Example**: `{"TQQQ": 0.80, "SGOV": 0.20}`
+*   **Benefit**: Infinite backend scalability.
+
+### 2. Tier 2: Personalized Execution (Client/Adapter)
+The execution engine (linked to the user's specific account) interprets the general signal and calculates the absolute delta required to synchronize.
+
+#### Mode A: Direct Broker Sync (Live)
+For users with linked Tastytrade accounts, the engine:
+1.  Queries real-time `Net_Liq` via API.
+2.  Calculates `Target_Value = Net_Liq * Target_%`.
+3.  Determines `Delta_Shares = (Target_Value - Current_Value) / Market_Price`.
+4.  Submits limit orders directly to the broker.
+
+#### Mode B: Virtual Shadow Ledger (Manual)
+For users without linked accounts, the engine:
+1.  Tracks a virtual balance (updated manually by the user).
+2.  Calculates the same Delta math.
+3.  Triggers an SMS/App Notification with the specific "Buy/Sell" instructions for the user's external brokerage.
+
+### Summary of Benefits
+*   **Start-Time Agnostic**: A user starting on Day 100 simply buys into the correct Day 100 percentages immediately.
+*   **Self-Correcting**: If a user's balance changes due to external factors (deposits/fees), the next signal rebalance naturally accounts for the new total capital.

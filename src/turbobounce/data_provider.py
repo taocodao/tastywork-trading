@@ -19,7 +19,8 @@ class MultiTickerDataProvider:
     """Fetches end-of-day/pre-market technicals + options info for the universe."""
 
     def __init__(self, ib_client=None):
-        self.ib_client = ib_client  # Optional: For live options data if connected
+        # Expects an active IBMarketDataHub instance
+        self.ib_client = ib_client  
         
         # Cache to prevent hammering Yahoo Finance during the scan loop
         self._tech_cache: Dict[str, Dict[str, Any]] = {}
@@ -45,13 +46,7 @@ class MultiTickerDataProvider:
                         logger.warning(f"Insufficient history for {sym}")
                         continue
                         
-                    metrics = self._calculate_technicals(df)
-                    
-                    # Add mock IV info (if IB client not available, or outside market hours)
-                    # In a full live environment, IV Rank comes from Tastytrade or IB APIs
-                    metrics['iv_rank'] = np.random.uniform(20.0, 80.0) # Placeholder
-                    metrics['bid_ask_spread'] = 0.05 if metrics['avg_volume'] > 5000000 else 0.15
-                    
+                    metrics = self._calculate_technicals(sym, df)
                     results[sym] = metrics
                     self._tech_cache[sym] = metrics
                     
@@ -64,11 +59,30 @@ class MultiTickerDataProvider:
             
         return results
 
-    def _calculate_technicals(self, df: pd.DataFrame) -> Dict[str, Any]:
-        """Calculates RSI-2, Bollinger Bands, Moving Averages, etc."""
+    def _calculate_technicals(self, sym: str, df: pd.DataFrame) -> Dict[str, Any]:
+        """Calculates RSI-2, Bollinger Bands, Moving Averages, incorporating Live IB Data."""
         close = df['Close']
         volume = df['Volume']
         
+        # Live override if connected
+        live_price = None
+        bid_ask_spread = 0.10
+        if self.ib_client:
+            try:
+                # Expects IBMarketDataHub instance
+                quote = self.ib_client.get_quote(sym)
+                if quote and quote.price > 0:
+                    live_price = quote.price
+                    if quote.bid > 0 and quote.ask > 0:
+                        bid_ask_spread = quote.ask - quote.bid
+            except Exception as e:
+                logger.error(f"Error fetching live IB quote for {sym}: {e}")
+                
+        # Inject live price into pandas series calculation if available
+        if live_price is not None:
+            # Drop the delayed EoD row and replace it with the precise live snapshot
+            close.iloc[-1] = live_price
+            
         # 3-Day Return
         ret_3d = (close.iloc[-1] / close.iloc[-4] - 1.0) if len(close) >= 4 else 0.0
         
@@ -127,5 +141,5 @@ class MultiTickerDataProvider:
             "avg_volume": float(avg_vol),
             "vol_ratio": float(vol_ratio),
             "iv_rank": float(proxy_iv_rank),  # Using HV Rank as proxy for live
-            "bid_ask_spread": 0.05 if float(avg_vol) > 5000000 else 0.15
+            "bid_ask_spread": float(bid_ask_spread)
         }

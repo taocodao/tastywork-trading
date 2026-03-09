@@ -43,6 +43,8 @@ class TurboBounceEntrySignal(BaseSignal):
     target_hedge_dte: Optional[int] = None
     target_delta: Optional[float] = None
     cost: float = 1.0  # Estimated debit/credit per spread
+    mid_price: Optional[float] = None # Natural mid-point of the spread
+    price_range: Optional[float] = None # Acceptable +5% slippage ceiling
     capital_required: float = 500.0  # Estimated capital block per contract
 
     # Actual executable Option Legs derived from StrategyBuilder
@@ -76,6 +78,8 @@ class TurboBounceEntrySignal(BaseSignal):
             "target_hedge_dte": self.target_hedge_dte,
             "target_delta": self.target_delta,
             "cost": self.cost,
+            "mid_price": self.mid_price,
+            "price_range": self.price_range,
             "capital_required": self.capital_required,
             "capitalRequired": self.capital_required,  # Frontend camelCase compat
             "legs": self.legs,
@@ -152,6 +156,8 @@ def publish_turbobounce_entry_signal(
     if leg_data:
         sig.legs = leg_data.get("legs")
         sig.cost = round(leg_data.get("cost", sig.cost), 2)
+        sig.mid_price = round(leg_data.get("mid_price", sig.cost), 2)
+        sig.price_range = round(leg_data.get("price_range", sig.cost * 1.05), 2)
         sig.frontExpiry = leg_data.get("frontExpiry")
         sig.backExpiry = leg_data.get("backExpiry")
         sig.strike = leg_data.get("strike")

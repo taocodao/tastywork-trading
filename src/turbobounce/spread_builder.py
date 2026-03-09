@@ -215,8 +215,13 @@ class StrategyBuilder:
     def _filter_structural(self, chain_data: List[Dict[str, Any]], right: str, target_dte: int) -> List[Dict[str, Any]]:
         valid = []
         today = date.today()
-        min_dte, max_dte = target_dte - 5, target_dte + 5
         
+        # LEAPS (180 DTE) only have monthly expirations, so a +/- 5 day window will miss them. Widen to +/- 30 days.
+        if target_dte > 90:
+            min_dte, max_dte = target_dte - 30, target_dte + 30
+        else:
+            min_dte, max_dte = target_dte - 5, target_dte + 5
+            
         for opt in chain_data:
             if opt.get('right', '').upper()[0] != right: continue
                 
@@ -273,19 +278,28 @@ def build_turbobounce_spread_legs(
     and builds explicit OCC strings + cost estimates.
     """
     try:
+        from ib_market_data_hub import get_hub
+        hub = get_hub()
+        
         from ib_data_provider import IBDataProvider
-        from datetime import datetime, date, timedelta
-        import sys
-
-        ib = IBDataProvider()
+        ib = IBDataProvider() # will use hub internally
         
         anchor_date = date.today() + timedelta(days=target_anchor_dte)
         right = 'P' if direction == "BULLISH" else 'C'
         
-        # 1. Fetch anchor chain
-        anchor_chain = ib.get_options(symbol, anchor_date, option_type="call" if right == 'C' else "put")
+        anchor_chain = None
+        for attempt in range(3):
+            try:
+                anchor_chain = ib.get_options(symbol, anchor_date, option_type="call" if right == 'C' else "put")
+                if anchor_chain:
+                    break
+            except Exception as e:
+                logger.warning(f"IB Gateway error on anchor chain fetch for {symbol} (attempt {attempt+1}): {e}")
+            import time
+            time.sleep(1.5)
+            
         if not anchor_chain:
-            logger.warning(f"No {symbol} anchor chain found near {anchor_date}")
+            logger.warning(f"No {symbol} anchor chain found near {anchor_date} after 3 retries")
             return None
             
         anchor_options = []
@@ -327,7 +341,20 @@ def build_turbobounce_spread_legs(
 
         if strategy_type == "DIAGONAL" and target_hedge_dte:
             hedge_date = date.today() + timedelta(days=target_hedge_dte)
-            hedge_chain = ib.get_options(symbol, hedge_date, option_type="call" if right == 'C' else "put")
+            hedge_chain = None
+            for attempt in range(3):
+                try:
+                    hedge_chain = ib.get_options(symbol, hedge_date, option_type="call" if right == 'C' else "put")
+                    if hedge_chain:
+                        break
+                except Exception as e:
+                    logger.warning(f"IB Gateway error on hedge chain fetch for {symbol} (attempt {attempt+1}): {e}")
+                import time
+                time.sleep(1.5)
+                
+            if not hedge_chain:
+                logger.warning(f"No {symbol} hedge chain found near {hedge_date} after 3 retries")
+                return None
             
             hedge_options = []
             for opt in hedge_chain:
@@ -355,33 +382,58 @@ def build_turbobounce_spread_legs(
 
             hedge_occ = format_occ(symbol, hedge_leg.expiration, right, hedge_leg.strike)
             
-            # For a put diagonal, we SELL the long-dated (anchor), BUY the short-dated (hedge)
-            # Or vice-versa, depending on standard structure. Turbobounce "bounces", so we SELL near term?
-            # Actually, standard PMCC/Diagonal is BUY long-dated (anchor), SELL short-dated (hedge) against it.
-            # Wait, 45 DTE is anchor (long leg). 10 DTE is hedge (short leg).
-            # So BUY anchor, SELL hedge. This is a debit spread natively.
-            net_cost = abs(anchor_leg.ask - hedge_leg.bid)
+            anchor_mid = (anchor_leg.bid + anchor_leg.ask) / 2.0
+            hedge_mid = (hedge_leg.bid + hedge_leg.ask) / 2.0
+            
+            # Diagonal: Buy Anchor (long), Sell Hedge (short)
+            net_ask_cost = anchor_leg.ask - hedge_leg.bid
+            net_mid_cost = anchor_mid - hedge_mid
+            
+            # Prevent Division by Zero on Free Spreads
+            if net_mid_cost <= 0:
+                logger.warning(f"Rejected {symbol} Diagonal: Mid cost <= 0")
+                return None
+                
+            # Slippage Check (Reject > 20% deviation from mid)
+            if net_ask_cost > (net_mid_cost * 1.20):
+                logger.warning(f"Rejected {symbol} Diagonal: Wide spread {net_ask_cost:.2f} > 20% of mid {net_mid_cost:.2f}")
+                return None
             
             return {
                 "legs": [
                     {"symbol": anchor_occ, "action": "BUY", "quantity": 1},
                     {"symbol": hedge_occ, "action": "SELL", "quantity": 1}
                 ],
-                "cost": net_cost,
+                "cost": net_ask_cost,
+                "mid_price": net_mid_cost,
+                "price_range": net_mid_cost * 1.05, # Acceptable up to +5% slippage on AutoApprove
                 "frontExpiry": hedge_leg.expiration.isoformat(),
                 "backExpiry": anchor_leg.expiration.isoformat(),
-                "strike": anchor_leg.strike  # Track anchor strike visually
+                "strike": anchor_leg.strike
             }
 
-        # Otherwise NAKED_LONG
-        return {
-            "legs": [
-                {"symbol": anchor_occ, "action": "BUY", "quantity": 1}
-            ],
-            "cost": anchor_leg.ask,
-            "frontExpiry": anchor_leg.expiration.isoformat(),
-            "strike": anchor_leg.strike
-        }
+        else: # NAKED_LONG
+            anchor_mid = (anchor_leg.bid + anchor_leg.ask) / 2.0
+            net_ask_cost = anchor_leg.ask
+            
+            if anchor_mid <= 0:
+                logger.warning(f"Rejected {symbol} Naked Long: Mid cost <= 0")
+                return None
+
+            if net_ask_cost > (anchor_mid * 1.20):
+                logger.warning(f"Rejected {symbol} Naked Long: Wide spread {net_ask_cost:.2f} > 20% of mid {anchor_mid:.2f}")
+                return None
+                
+            return {
+                "legs": [
+                    {"symbol": anchor_occ, "action": "BUY", "quantity": 1}
+                ],
+                "cost": net_ask_cost,
+                "mid_price": anchor_mid,
+                "price_range": anchor_mid * 1.05,
+                "frontExpiry": anchor_leg.expiration.isoformat(),
+                "strike": anchor_leg.strike
+            }
 
     except Exception as e:
         logger.error(f"Failed forming precise option legs for {symbol}: {e}")

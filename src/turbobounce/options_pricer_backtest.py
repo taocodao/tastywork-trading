@@ -25,6 +25,7 @@ from tqdm import tqdm
 from src.turbobounce.universe import get_turbobounce_symbols, get_category_for_symbol
 from src.turbobounce.risk_manager import TurboBounceRiskManager
 from src.turbobounce.strategy_router import StrategyRouter
+from src.turbobounce.swing_exit_engine import SwingExitEngine, ExitDecisionType
 
 # ─── Black-Scholes Engine ─────────────────────────────────────────────────────
 
@@ -263,14 +264,35 @@ def run_backtest(start_date='2023-01-01', end_date='2024-01-01', initial_capital
 
             # Determine exit trigger
             should_exit, exit_reason = False, ''
-            if days_held >= strategy_hold:
-                should_exit, exit_reason = True, 'TIME'
-            elif pnl_pct <= STOP_LOSS_PCT:
-                should_exit, exit_reason = True, 'STOP'
-            elif pos['strategy_type'] == 'CREDIT_SPREAD' and pnl_pct >= PROFIT_TARGET_CRED:
-                should_exit, exit_reason = True, 'PROFIT'
-            elif pos['strategy_type'] in ('DIAGONAL', 'NAKED_LONG') and pnl_pct >= PROFIT_TARGET_LONG:
-                should_exit, exit_reason = True, 'PROFIT'
+            
+            # --- Swing Exit Engine Integration ---
+            engine = SwingExitEngine()
+            rsi_2 = calc_rsi(exit_sub['Close'], 2)
+            regime_score = 50 # Base default for historical scan if unused
+            ml_prob = 0.55 # Base default
+            
+            # Backwards compatibility: calculate current spread mark vs entry
+            current_spread_mark = exit_val
+            
+            # Reconstruct trailing sma_5
+            sma_5 = float(exit_sub['Close'].rolling(5).mean().iloc[-1]) if len(exit_sub) >= 5 else exit_S
+            
+            decision = engine.evaluate(
+                position=pos,
+                current_price=exit_S,
+                rsi_2=rsi_2,
+                sma_5=sma_5,
+                regime_score=regime_score,
+                ml_prob=ml_prob,
+                days_held=days_held,
+                bp_consumed=pos['capital_allocated'],
+                current_spread_mark=current_spread_mark,
+                pnl_pct=pnl_pct
+            )
+            
+            if decision.decision in [ExitDecisionType.CLOSE_ALL, ExitDecisionType.ROLL_HEDGE]:
+                should_exit = True
+                exit_reason = decision.reason
 
             if should_exit:
                 capital += pos['capital_allocated'] + pnl
@@ -339,8 +361,9 @@ def run_backtest(start_date='2023-01-01', end_date='2024-01-01', initial_capital
             # Evaluate Option Cost
             option_cost = bp * 100
             
-            # Target 1/6th of starting capital
-            target_slot = initial_capital / MAX_SLOTS
+            # Target 1/6th of CURRENT EQUITY for True Compounding
+            current_equity = capital + sum(p['entry_val'] * p['contracts'] * 100 for p in open_positions)
+            target_slot = current_equity / MAX_SLOTS
             
             # If the option is more expensive than our target slot size (common for LEAPS on $5k accounts),
             # we must allocate enough capital to buy exactly 1 contract.
@@ -364,6 +387,9 @@ def run_backtest(start_date='2023-01-01', end_date='2024-01-01', initial_capital
                 'strategy_type':     strategy_type,
                 'entry_date':        current_date,
                 'entry_val':         val,
+                'entry_price':       S,
+                'entry_mark':        val,
+                'roll_count':        0,
                 'contracts':         contracts,
                 'capital_allocated': slot_capital,
                 'anchor_dte':        anchor_dte,
@@ -450,4 +476,4 @@ def run_backtest(start_date='2023-01-01', end_date='2024-01-01', initial_capital
     return summary_data, df_log
 
 if __name__ == "__main__":
-    run_backtest(start_date='2023-01-01', end_date='2024-01-01', initial_capital=50_000)
+    run_backtest(start_date='2019-01-01', end_date='2026-01-01', initial_capital=5000)

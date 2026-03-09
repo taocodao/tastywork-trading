@@ -136,6 +136,10 @@ class TurboBounceScheduler:
                     target_delta=route.target_delta
                 )
                 
+                # Throttle IB Gateway connection pacing
+                import time
+                time.sleep(1.0)
+                
                 publish_turbobounce_entry_signal(
                     symbol=sym,
                     action_type=route.strategy_type,

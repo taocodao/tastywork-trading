@@ -922,6 +922,83 @@ class TastytradeClient:
         positions = self.get_positions()
         return [p for p in positions if p.instrument_type == InstrumentType.EQUITY_OPTION]
     
+    def get_equity_positions(self) -> Dict[str, int]:
+        """
+        Get only equity/ETF positions mapped to their symbol and integer share count.
+        Used by the Target Allocation Sizer Engine.
+        
+        Returns:
+            Dict mapping symbol string to integer share quantity. e.g. {"TQQQ": 100, "SGOV": 50}
+        """
+        from tastytrade import InstrumentType
+        
+        positions = self.get_positions()
+        equity_dict = {}
+        
+        for p in positions:
+            if p.instrument_type == InstrumentType.EQUITY:
+                # Tastytrade tracks quantity as a string representation of a Decimal
+                qty_val = float(p.quantity) if hasattr(p, 'quantity') else 0
+                
+                # Check directional bias (Long vs Short)
+                if hasattr(p, 'quantity_direction') and p.quantity_direction.value == 'Short':
+                    qty_val = -qty_val
+                    
+                equity_dict[p.symbol] = int(qty_val)
+                
+        return equity_dict
+
+    def build_equity_order(
+        self,
+        symbol: str,
+        quantity: int,
+        action: str,
+        limit_price: Optional[float] = None
+    ):
+        """
+        Build an equity (stock/ETF) limit or market order.
+        
+        Args:
+            symbol: Ticker symbol (e.g. 'TQQQ')
+            quantity: Number of shares (integer)
+            action: 'BUY' or 'SELL'
+            limit_price: Optional limit price. If None, sends a Market order.
+            
+        Returns:
+            NewOrder object ready for submission
+        """
+        from tastytrade.order import NewOrder, OrderAction, OrderTimeInForce, OrderType
+        from tastytrade.instruments import Equity
+        
+        if not self.is_connected:
+            raise RuntimeError("Not connected. Call connect() first.")
+        
+        instrument = Equity.get(self._session, symbol)
+        
+        order_action = OrderAction.BUY if action.upper() == 'BUY' else OrderAction.SELL
+        
+        leg = instrument.build_leg(
+            Decimal(str(quantity)),
+            order_action
+        )
+        
+        order_params = {
+            'time_in_force': OrderTimeInForce.DAY,
+            'legs': [leg]
+        }
+        
+        if limit_price is not None:
+            order_params['order_type'] = OrderType.LIMIT
+            order_params['price'] = Decimal(str(round(limit_price, 2)))
+        else:
+            order_params['order_type'] = OrderType.MARKET
+            
+        order = NewOrder(**order_params)
+        logger.info(f"Built equity order: {action} {quantity} {symbol} @ {'Market' if limit_price is None else f'${limit_price:.2f}'}")
+        
+        return order
+
+    
     def get_orders(self, status: str = None) -> List:
         """
         Get orders.

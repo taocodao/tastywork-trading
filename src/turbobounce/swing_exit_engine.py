@@ -27,6 +27,11 @@ class SwingExitEngine:
     Evaluates exit conditions for the TQQQ Put Diagonal Swing Trade.
     """
     
+    def _get_val(self, obj, key, default):
+        if isinstance(obj, dict):
+            return obj.get(key, default)
+        return getattr(obj, key, default)
+
     def evaluate(self, 
                  position, 
                  current_price: float, 
@@ -38,55 +43,60 @@ class SwingExitEngine:
                  ou_half_life: float = np.inf,
                  current_spread_mark: float = 0.0,
                  bp_consumed: float = 0.0,
-                 bp_stop_loss_pct: float = 0.15,
+                 bp_stop_loss_pct: float = 0.50,
                  exit_rsi: float = 65.0,
-                 time_stop_days: int = 15) -> ExitDecision:
+                 time_stop_days: int = 15,
+                 pnl_pct: float = None) -> ExitDecision:
 
-        # Extract option DTEs
-        hedge_dte = getattr(position, "hedge_dte", 14) 
-        anchor_dte = getattr(position, "anchor_dte", 30)
+        # Extract position metadata
+        hedge_dte = self._get_val(position, "hedge_dte", 14) 
+        anchor_dte = self._get_val(position, "anchor_dte", 30)
+        direction = self._get_val(position, "direction", "BULLISH").upper()
+        strategy = self._get_val(position, "strategy_type", "DIAGONAL").upper()
 
-        # Priority 0: BP-Based Stop Loss (15% of BP consumed)
-        entry_mark = getattr(position, "entry_mark", 0.0)
-        # For credit spreads, mark increases mean loss. For backspreads, mark decreases mean loss.
-        # Assuming current_spread_mark is the cost to close (positive means we pay to close).
-        if bp_consumed > 0 and current_spread_mark > 0 and entry_mark != 0:
-            unrealized_loss = current_spread_mark - entry_mark
-            if unrealized_loss > (bp_consumed * bp_stop_loss_pct):
-                return ExitDecision(ExitDecisionType.CLOSE_ALL, f"BP_STOP_LOSS: Loss ${unrealized_loss:.2f} > {bp_stop_loss_pct*100}% of BP", 0)
+        # Priority 0 / 3: Options PnL (Stop Loss & Profit Target)
+        if pnl_pct is None:
+            # Calculate live PnL dynamically if not passed from backtester
+            entry_mark = self._get_val(position, "entry_mark", 0.0)
+            if entry_mark > 0 and current_spread_mark > 0:
+                if strategy == "CREDIT_SPREAD":
+                    unrealized_pnl = entry_mark - current_spread_mark 
+                else:
+                    unrealized_pnl = current_spread_mark - entry_mark
+                
+                # bp_consumed acts as the denominator. If 0, fallback to entry_mark
+                denominator = bp_consumed if bp_consumed > 0 else entry_mark
+                pnl_pct = unrealized_pnl / denominator
+            else:
+                pnl_pct = 0.0
 
-        # Priority 1: EMERGENCY
-        entry_price = getattr(position, "entry_price", current_price)
-        pct_change = (current_price - entry_price) / entry_price if entry_price > 0 else 0
-        if pct_change <= -0.10:
-            return ExitDecision(ExitDecisionType.CLOSE_ALL, "EMERGENCY: Underlying price drop >= 10%", 1)
+        if pnl_pct <= -bp_stop_loss_pct:
+            return ExitDecision(ExitDecisionType.CLOSE_ALL, f"BP_STOP_LOSS: PnL {pnl_pct*100:.1f}% <= -{bp_stop_loss_pct*100}%", 0)
+
+        # Aligning with historical Option PnL targets (+40% Longs, +60% Credit Spreads)
+        if strategy == "CREDIT_SPREAD":
+            profit_target = 0.60
+            time_limit = 15
+        elif strategy == "NAKED_LONG":
+            profit_target = 0.40
+            time_limit = 5
+        else: # DIAGONAL
+            profit_target = 0.40
+            time_limit = 15
+
+        if pnl_pct >= profit_target:
+            return ExitDecision(ExitDecisionType.CLOSE_ALL, f"PROFIT_TARGET: Option PnL +{pnl_pct*100:.1f}% >= +{profit_target*100}%", 3)
             
-        # Priority 2: REGIME
-        if regime_score < 30:
-            return ExitDecision(ExitDecisionType.CLOSE_ALL, "REGIME: Crash guard score plummeted < 30", 2)
-            
-        # Priority 3: PROFIT TARGET / BOUNCE
-        if pct_change >= 0.05:
-            return ExitDecision(ExitDecisionType.CLOSE_ALL, f"PROFIT_TARGET: +{pct_change:.1%} >= +5%", 3)
-            
-        if rsi_2 > exit_rsi:
-            return ExitDecision(ExitDecisionType.CLOSE_ALL, f"BOUNCE: RSI-2 {rsi_2:.1f} > DE-Target {exit_rsi:.1f}", 3)
-            
-        # Priority 4: HEDGE ROLL (Theta Kicker)
-        roll_count = getattr(position, "roll_count", 0)
-        if hedge_dte <= 1:
+        # Priority 4: HEDGE ROLL (Theta Kicker - optional safety for diagonals)
+        roll_count = self._get_val(position, "roll_count", 0)
+        if hedge_dte <= 1 and strategy == "DIAGONAL":
             if regime_score >= 50 and days_held < 10 and anchor_dte > 15 and ml_prob > 0.50 and roll_count < 2:
                 return ExitDecision(ExitDecisionType.ROLL_HEDGE, "THETA_KICKER: Roll expiring hedge", 4)
             else:
                 return ExitDecision(ExitDecisionType.CLOSE_ALL, "HEDGE_EXPIRING: Cannot roll hedge safely", 4)
                 
-        # Priority 5: ADAPTIVE TIME STOP
-        # Use dynamic DE parameter if passed, otherwise fallback to OU half-life bounds
-        if days_held >= time_stop_days:
-            return ExitDecision(ExitDecisionType.CLOSE_ALL, f"TIME_STOP: Held {days_held} days >= DE-Target {time_stop_days}", 5)
-            
-        time_limit = min(max(ou_half_life * 2, 3), 15)
+        # Priority 5: TIME STOP (Aligning to backtest standard duration)
         if days_held >= time_limit:
-            return ExitDecision(ExitDecisionType.CLOSE_ALL, f"TIME_STOP_OU: Held {days_held} days >= {time_limit:.1f} (2x OU half-life)", 5)
+            return ExitDecision(ExitDecisionType.CLOSE_ALL, f"TIME_STOP_STRATEGY: Held {days_held} days >= {time_limit}", 5)
             
         return ExitDecision(ExitDecisionType.HOLD, "HOLD", 99)

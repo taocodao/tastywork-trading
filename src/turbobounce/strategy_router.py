@@ -47,7 +47,7 @@ class StrategyRouter:
                     direction=direction,
                     strategy_type="DIAGONAL",
                     rationale=f"High IV Rank ({iv_rank:.1f}) + VIX above SMA -> Put Diagonal Spread",
-                    target_anchor_dte=45,
+                    target_anchor_dte=180,
                     target_hedge_dte=10
                 )
             elif iv_rank > self.iv_high_thresh:
@@ -67,7 +67,7 @@ class StrategyRouter:
                     direction=direction,
                     strategy_type="NAKED_LONG",
                     rationale=f"Low IV Rank ({iv_rank:.1f}) + Low VIX -> Naked Long Call",
-                    target_anchor_dte=14,
+                    target_anchor_dte=180,
                     target_delta=0.30
                 )
             else:
@@ -77,7 +77,7 @@ class StrategyRouter:
                     direction=direction,
                     strategy_type="DIAGONAL",
                     rationale=f"Mid-range IV ({iv_rank:.1f}) -> Standard Put Diagonal",
-                    target_anchor_dte=30,
+                    target_anchor_dte=180,
                     target_hedge_dte=10
                 )
                 
@@ -90,7 +90,7 @@ class StrategyRouter:
                     direction=direction,
                     strategy_type="DIAGONAL",
                     rationale=f"High IV Rank ({iv_rank:.1f}) -> Call Diagonal (Bearish)",
-                    target_anchor_dte=45,
+                    target_anchor_dte=180,
                     target_hedge_dte=10
                 )
             else:
@@ -100,6 +100,6 @@ class StrategyRouter:
                     direction=direction,
                     strategy_type="NAKED_LONG",
                     rationale=f"Low IV Rank ({iv_rank:.1f}) -> Naked Long Put",
-                    target_anchor_dte=14,
+                    target_anchor_dte=180,
                     target_delta=0.30
                 )

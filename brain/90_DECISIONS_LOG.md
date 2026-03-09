@@ -1,5 +1,60 @@
 ---
 
+## 2026-03-09: Decoupled Two-Tier Execution Model (DIY vs Auto-Pilot)
+
+**Decision**: Adopt a "Universal Backend Signal / Personalized Client-Side Sizing" architecture for portfolio signals.
+
+**Context**: 
+- Users have diverse account sizes, different strategy inception dates, and varying brokerage connections.
+- **Problem**: Generating absolute "Buy X shares" signals on the backend is unscalable (N-users loop) and fails if the user makes manual deposits/withdrawals (Sync Drift).
+- **Goal**: Synchronize all users to the same ideal portfolio posture regardless of when they start.
+
+**Resolution**:
+- **Backend (Tier 1)**: Emits purely mathematical "Target Percentage Arrays" (e.g., `{"TQQQ": 0.8, "SGOV": 0.2}`). This acts as the single source of truth.
+- **Client/Execution (Tier 2)**:
+    - **Mode A (Live Tastytrade)**: Queries the user's real-time `Net_Liq` via API, calculates the `Delta` (Target Value - Current Holdings), and submits concrete limit orders directly.
+    - **Mode B (Shadow Ledger)**: For users without Linked accounts, TradeMind maintains a virtual ledger. The user manually logs deposits/withdrawals, and the system simulates the rebalance delta, notifying the user to mirror the trade.
+- **Result**: Perfect scalability and automatic handling of "different start times" via Target State Convergence.
+
+**Affected**: `signal_publisher/turbocore.py`, Architecture Overview, Subscription Logic.
+
+---
+
+## 2026-03-09: TurboCore Enrichment Research & Baseline Reversion
+
+**Decision**: Implement and backtest 6 "Wealth Plantation" safety enhancements in isolation, verify performance, and revert the production codebase to its stable baseline for immediate market readiness.
+
+**Context**: 
+- Requested integration of 6 features: ATH Drawdown layers, Distribution Day detection, T+1 Delay, Slope Confirmation, Deep-Crash Allocation (80% TQQQ), and 10% Strategic Reserve.
+- **Constraint**: Production `tqqq_turbocore` must remain 100% untouched until enhancements are stress-tested.
+
+**Resolution**:
+- **Isolation**: Created `_enhanced` versions of all core modules and backtest scripts.
+- **Results**: Verified that the enhancements reduced Max Drawdown from -22% to -16% while smoothing the equity curve.
+- **Reversion**: After successful verification, all experimental files were deleted and the production `tqqq_turbocore` was restored to its stable state to ensure zero risk for the upcoming market session.
+- **Preservation**: Full logic and diffs preserved in `walkthrough.md` for future permanent integration.
+
+**Affected**: `src/tqqq_turbocore/`, `backtest_turbocore.py`.
+
+---
+
+## 2026-03-09: UX: Education Center Inline File Viewer Fix
+
+**Decision**: Replace the `fixed` full-screen modal with inline conditional rendering for document viewing in the Education Center.
+
+**Context**: 
+- The file viewer was breaking/rendering incorrectly because parent `glass-card` CSS transforms created a new stacking context that "trapped" the `fixed` modal, causing it to clip and hide dashboard content.
+- Users requested a clearer "Close and Go Back" navigation.
+
+**Resolution**:
+- **Inline Swap**: Instead of an overlay, the `EducationCenter.tsx` component now swaps its selection UI for the document content area when a file is active.
+- **Navigation**: Added a prominent "Close and Go Back" button that resets state.
+- **Result**: Clean rendering without CSS conflicts and intuitive back-navigation.
+
+**Affected**: `src/components/marketing/EducationCenter.tsx`
+
+---
+
 ## 2026-03-06: Signal Metadata Synchronization (`confidence`, `cost`, `pool`)
 
 **Decision**: Ensure all critical trading metadata is explicitly passed from the backend Signal Publisher (EC2) to the Frontend (Vercel) by updating Pydantic models and publisher classes.

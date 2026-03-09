@@ -69,4 +69,24 @@ Both execution paths run automatically on every signal.
 | CancelledError | IB connection dropped | Retry with backoff |
 | TimeoutError | IB Gateway slow | Increase timeout |
 | Error 201 | Order rejected | Check buying power |
-| Error 10147 | Symbol not found | Verify contract details |
+
+## TQQQ TurboCore Strategy
+
+### Core Logic
+TurboCore is a dynamic asset allocation strategy that rebalances daily between **TQQQ (3x), QLD (2x), QQQ (1x), and SGOV (Cash)** based on a combination of technical gates and Machine Learning regimes.
+
+- **Primary Trend Gate**: SMA200 (Risk-On if Price > SMA200).
+- **ML Regimes**: BULL, BEAR, SIDEWAYS (calculated via HMM and XGBoost signal scoring).
+
+### Strategic Enhancements (Researched Mar 2026)
+The following safety and performance enhancements were implemented in the `_enhanced` laboratory branch and verified via backtesting:
+
+1.  **ATH Drawdown Context**: Uses drawdown from All-Time High (ATH) as a feature to distinguish between "temporary pullbacks" and "deep crashes."
+2.  **High-Volume Reversal (Distribution Days)**: Spots institutional selling near ATH (Price near ATH + High Volume + Bearish Candle) as an early warning signal.
+3.  **T+1 Execution Delay**: Enforces a 1-day cooling-off period after a "sell" or "reduce risk" signal before allowing a new "buy," preventing choppy whipsaws.
+4.  **Momentum Slope Confirmation**: Require the 20-day SMA slope to be positive before transitioning from a Bearish to a Bullish state.
+5.  **Deep-Crash Aggressive Allocation**: Threshold-based buying (e.g., QQQ Drawdown > 30% from ATH) triggers aggressive TQQQ exposure (up to 80%) regardless of standard trend gates, provided ML confidence is high.
+6.  **10% Strategic Reserve**: Maintains a permanent 10% SGOV allocation that is only deployed during extreme "Deep-Crash" scenarios.
+
+### Reversion Status (Mar 09, 2026)
+The production codebase currently uses the **Stable Baseline** version. The enhancements are documented and preserved in the research branch but are not currently live-trading to minimize variance before market open.

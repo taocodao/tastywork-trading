@@ -54,19 +54,21 @@
 6. Publish to WebSocket (users) + Execute on IB Paper
 ```
 
-### Order Execution
+### Order Execution (Target Allocation Sync)
 ```
-1. User sees signal in frontend (Real-time WS or Polling)
-2. User clicks "Approve"
-3. Frontend calls Vercel /api/signals/[id]/approve
-4. Routing Decision:
-   - Theta/Diagonal/DVO: Executed directly on Vercel via Tastytrade API
-   - TurboBounce/ZEBRA: Proxied to EC2 Backend (:8002) for Live IB Pricing
-5. Unified Executor (EC2):
-   - Fetches Live Mid-Price from IB Gateway
-   - Constructs Multi-Leg Order
-   - Executes via Tastytrade SDK
-6. Position tracked in RDS Database
+1. User sees Signal Card (General Tier) showing Target % Allocations.
+2. User clicks "Approve" (Advanced Tier) or Auto-Sync triggers.
+3. Execution Engine Queries Account State:
+   - Live Tastytrade API → Net Liquidating Value & Current Positions.
+   - OR Shadow Ledger → User-managed Virtual Balance.
+4. Delta Calculation:
+   - Target Value = Net_Liq * Target_% (from Signal).
+   - Delta Gap = Target Value - Current Holdings.
+5. Order Composition: 
+   - Converts Delta $ into integer Shares using live market quotes.
+6. Execution:
+   - Submits Limit Orders to Tastytrade API.
+   - Notification sent to user with trade details.
 ```
 
 ## Key Components

@@ -245,6 +245,10 @@ class TastyHandler(BaseHTTPRequestHandler):
                 self.handle_close_position(position_id, data)
             elif self.path == '/api/trade':
                 self.handle_execute_trade(data)
+            elif self.path == '/api/execute_delta_trade':
+                self.handle_execute_delta_trade(data)
+            elif self.path == '/api/calculate_delta_trade':
+                self.handle_calculate_delta_trade(data)
             # ============================================
             # ZEBRA STRATEGY ROUTES
             # ============================================
@@ -1183,6 +1187,145 @@ class TastyHandler(BaseHTTPRequestHandler):
                 'message': f"Calendar spread on {symbol} submitted!"
             })
         except Exception as e:
+            self._send_json({'error': str(e)}, 500)
+
+    def handle_execute_delta_trade(self, data: dict):
+        """Execute a target allocation sync via the Delta Sizer Engine (Tier 2a)."""
+        try:
+            target_matrix = data.get('targetMatrix')
+            user_refresh_token = data.get('refreshToken')
+            account_number = data.get('accountNumber')
+            
+            if not target_matrix:
+                return self._send_json({'error': 'Missing targetMatrix'}, 400)
+            if not user_refresh_token or not account_number:
+                return self._send_json({'error': 'Missing user credentials for Tier 2 Auto-Execution'}, 401)
+                
+            from src.tqqq_turbocore.executor import calculate_delta_orders
+            from tastytrade_client import TastytradeClient
+            
+            # Authenticate User
+            try:
+                user_session = create_user_session(user_refresh_token)
+                account = get_user_account(user_session, account_number)
+            except Exception as e:
+                return self._send_json({'error': f'Auth failed: {e}', 'status': 'auth_error'}, 401)
+                
+            # Initialize Client
+            client = TastytradeClient()
+            client._session = user_session
+            client._account = account
+            
+            # 1. State Capture
+            balances = client.get_account_balance()
+            net_liq = float(balances['net_liquidating_value'])
+            current_positions = client.get_equity_positions()
+            
+            # 2. Live Prices
+            live_prices = {}
+            for symbol in target_matrix.keys():
+                price = client.get_stock_price(symbol)
+                if price <= 0:
+                    return self._send_json({'error': f'Failed to get live price for {symbol}'}, 500)
+                live_prices[symbol] = price
+            
+            # Liquidate logic: also need prices for anything we currently hold that isn't in target
+            for pos_symbol in current_positions.keys():
+                if pos_symbol not in live_prices:
+                    price = client.get_stock_price(pos_symbol)
+                    live_prices[pos_symbol] = price if price > 0 else 0.0
+                    
+            # 3. Delta Calculation
+            orders = calculate_delta_orders(
+                target_matrix=target_matrix,
+                current_net_liq=net_liq,
+                current_positions=current_positions,
+                live_prices=live_prices
+            )
+            
+            # 4. Execution
+            executed_orders = []
+            for order_leg in orders:
+                sym = order_leg['symbol']
+                qty = order_leg['quantity']
+                action = order_leg['action']
+                est_price = order_leg['estimated_price']
+                
+                # Build market order
+                tt_order = client.build_equity_order(sym, qty, action, limit_price=None)
+                
+                print(f"Submitting Delta Order: {action} {qty} {sym} to account {account_number}")
+                resp = client.place_order(tt_order, dry_run=False)
+                
+                order_id = str(resp.order.id) if hasattr(resp, 'order') else "Submitted"
+                executed_orders.append({
+                    "symbol": sym,
+                    "action": action,
+                    "quantity": qty,
+                    "orderId": order_id,
+                    "estimatedPrice": est_price
+                })
+                
+            self._send_json({
+                'status': 'success',
+                'orders': executed_orders,
+                'net_liq_used': net_liq,
+                'message': f"Delta sync complete. Executed {len(executed_orders)} orders."
+            })
+            
+        except Exception as e:
+            print(f"❌ Delta Execution failed: {e}")
+            import traceback
+            traceback.print_exc()
+            self._send_json({'error': str(e)}, 500)
+
+    def handle_calculate_delta_trade(self, data: dict):
+        """Calculate target allocation orders for Shadow Ledger (Tier 2b) without executing."""
+        try:
+            target_matrix = data.get('targetMatrix')
+            shadow_balance = data.get('shadowBalance', 0)
+            shadow_positions = data.get('shadowPositions', {})
+            
+            if not target_matrix:
+                return self._send_json({'error': 'Missing targetMatrix'}, 400)
+                
+            from src.tqqq_turbocore.executor import calculate_delta_orders
+            from tastytrade_client import TastytradeClient
+            
+            # Use global bot session for market data only
+            client = TastytradeClient()
+            client.connect() # Uses bot .env credentials
+            
+            # 1. Live Prices
+            live_prices = {}
+            for symbol in target_matrix.keys():
+                price = client.get_stock_price(symbol)
+                live_prices[symbol] = price if price > 0 else 0.0
+                
+            for pos_symbol in shadow_positions.keys():
+                if pos_symbol not in live_prices:
+                    price = client.get_stock_price(pos_symbol)
+                    live_prices[pos_symbol] = price if price > 0 else 0.0
+                    
+            # 2. Delta Calculation
+            orders = calculate_delta_orders(
+                target_matrix=target_matrix,
+                current_net_liq=float(shadow_balance),
+                current_positions=shadow_positions,
+                live_prices=live_prices
+            )
+            
+            self._send_json({
+                'status': 'success',
+                'orders': orders,
+                'net_liq_used': float(shadow_balance),
+                'message': "Shadow orders calculated successfully."
+            })
+            
+        except Exception as e:
+            print(f"❌ Shadow Calculation failed: {e}")
+            import traceback
+            traceback.print_exc()
             self._send_json({'error': str(e)}, 500)
 
     # ========================================================================
