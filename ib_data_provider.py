@@ -122,6 +122,48 @@ class IBDataProvider:
             logger.error(f"Error getting price for {symbol}: {e}")
             return 0.0
 
+    def get_equity_quote(self, symbol: str) -> Optional[Tuple[float, float, float]]:
+        """Get current market quote (bid, ask, mid) for an equity symbol."""
+        if not self._connected and not self.connect():
+            return None
+            
+        try:
+            contract = Stock(symbol, 'SMART', 'USD')
+            self.ib.qualifyContracts(contract)
+            
+            # Request market data
+            ticker = self.ib.reqMktData(contract, '', False, False)
+            
+            # Wait for data (up to 2 seconds)
+            start_time = datetime.now()
+            while (ticker.bid <= 0 or ticker.ask <= 0) and (ticker.last != ticker.last or ticker.last is None):
+                self.ib.sleep(0.1)
+                if (datetime.now() - start_time).total_seconds() > 2:
+                    break
+            
+            bid = ticker.bid if (ticker.bid and ticker.bid > 0) else (ticker.last if ticker.last else 0.0)
+            ask = ticker.ask if (ticker.ask and ticker.ask > 0) else (ticker.last if ticker.last else 0.0)
+            
+            if bid <= 0 and ask <= 0:
+                # Try close price if market is closed
+                if ticker.close and ticker.close > 0:
+                    bid = ask = ticker.close
+                else:
+                    logger.warning(f"No valid bid/ask or last price for {symbol}")
+                    self.ib.cancelMktData(contract)
+                    return None
+                    
+            mid = (bid + ask) / 2.0
+            
+            self.ib.cancelMktData(contract)
+            return (bid, ask, mid)
+            
+        except Exception as e:
+            logger.error(f"Error getting equity quote for {symbol}: {e}")
+            import traceback
+            traceback.print_exc()
+            return None
+
     def get_options(self, symbol: str, expiry: date, option_type: str = "call") -> List[OptionQuote]:
         """
         Get option chain for a specific expiry.
