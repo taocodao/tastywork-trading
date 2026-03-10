@@ -40,8 +40,12 @@ def _get_accounts_safe(session) -> list:
         if not token:
             raise ValueError("Could not extract session token for HTTP fallback")
         headers = {'Authorization': token}
+        
+        # Use environment variable to support paper trading (cert) vs production
+        base_url = os.getenv('TASTYTRADE_API_URL', 'https://api.tastyworks.com').rstrip('/')
+        
         resp = httpx.get(
-            'https://api.tastyworks.com/customers/me/accounts',
+            f'{base_url}/customers/me/accounts',
             headers=headers,
             timeout=10
         )
