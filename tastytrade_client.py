@@ -589,6 +589,59 @@ class TastytradeClient:
         
         return self.place_order(order, dry_run=dry_run)
     
+    def build_equity_order(
+        self,
+        symbol: str,
+        quantity: int,
+        action: str,
+        limit_price: Optional[float] = None
+    ):
+        """
+        Build a standard equity (stock/ETF) order.
+        
+        Args:
+            symbol: Ticker symbol (e.g. 'TQQQ')
+            quantity: Number of shares
+            action: 'BUY' or 'SELL'
+            limit_price: Optional limit price. If None, places a MARKET order.
+            
+        Returns:
+            NewOrder object ready for submission
+        """
+        from tastytrade.order import NewOrder, OrderAction, OrderTimeInForce, OrderType
+        from tastytrade.instruments import Equity
+        
+        # Get equity instrument
+        instrument = Equity.get(self._session, symbol)
+        
+        # Parse action
+        action_upper = action.upper()
+        if action_upper == 'BUY':
+            order_action = OrderAction.BUY
+        elif action_upper == 'SELL':
+            order_action = OrderAction.SELL
+        else:
+            raise ValueError(f"Invalid equity action: {action}")
+            
+        # Build leg
+        leg = instrument.build_leg(
+            Decimal(str(quantity)),
+            order_action
+        )
+        
+        order_params = {
+            'time_in_force': OrderTimeInForce.DAY,
+            'order_type': OrderType.LIMIT if limit_price else OrderType.MARKET,
+            'legs': [leg],
+        }
+        
+        if limit_price:
+            order_params['price'] = Decimal(str(limit_price))
+            
+        order = NewOrder(**order_params)
+        
+        return order
+        
     def build_vertical_spread_order(
         self,
         symbol: str,
