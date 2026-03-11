@@ -124,6 +124,13 @@ class IBDataProvider:
 
     def get_equity_quote(self, symbol: str) -> Optional[Tuple[float, float, float]]:
         """Get current market quote (bid, ask, mid) for an equity symbol."""
+        import asyncio
+        try:
+            loop = asyncio.get_event_loop()
+        except RuntimeError:
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+
         if not self._connected and not self.connect():
             return None
             
