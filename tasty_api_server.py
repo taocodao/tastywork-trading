@@ -1952,7 +1952,11 @@ class TastyHandler(BaseHTTPRequestHandler):
         self._send_json({'status': 'updated', 'signalId': signal_id})
 
     def _handle_equity_quote(self):
-        """GET /api/quote/equity?symbol=QQQ — Proxy to IB Gateway for live equity bid/ask quotes."""
+        """GET /api/quote/equity?symbol=QQQ — Returns live equity bid/ask quotes via yfinance.
+        
+        Uses yfinance as the primary source (thread-safe, no asyncio required).
+        Falls back to IB Gateway only if yfinance returns no data.
+        """
         from urllib.parse import urlparse, parse_qs
         parsed_path = urlparse(self.path)
         qs = parse_qs(parsed_path.query)
@@ -1962,49 +1966,60 @@ class TastyHandler(BaseHTTPRequestHandler):
             self._send_json({'error': 'symbol parameter required'}, 400)
             return
 
+        # ── Primary: yfinance (thread-safe, works everywhere) ─────────────────
         try:
-            # We already have an IB data provider that can fetch live quotes for the dashboard
-            from ib_data_provider import IBDataProvider
-            ib_data = IBDataProvider()
-            
-            print(f"📡 Fetching live IB Gateway quote for: {symbol}")
-            
-            try:
-                # Use the new equity-specific method that returns standard bid/ask/mid floats
-                quote = ib_data.get_equity_quote(symbol)
-                
-                if quote and quote[0] > 0:
-                    bid, ask, mid = quote
-                    self._send_json({
-                        'symbol': symbol,
-                        'bid': bid,
-                        'ask': ask,
-                        'mid': mid,
-                        'last': mid,
-                    })
-                    return
-            except Exception as e:
-                print(f"⚠️ IB Gateway lookup failed for {symbol}: {e}")
-                
-            # If it fails, fallback to yahoo finance via yfinance directly in python since vercel gets blocked
             import yfinance as yf
             ticker = yf.Ticker(symbol)
             info = ticker.fast_info
+
+            price = getattr(info, 'last_price', None) or getattr(info, 'previous_close', None)
             
-            price = info.last_price
-            print(f"✅ Fallback YFinance quote for {symbol}: ${price}")
-            
-            self._send_json({
-                'symbol': symbol,
-                'bid': price - 0.01,
-                'ask': price + 0.01,
-                'mid': price,
-                'last': price,
-            })
-            
+            if price and price > 0:
+                print(f"✅ YFinance quote for {symbol}: ${price:.2f}")
+                self._send_json({
+                    'symbol': symbol,
+                    'bid': round(price - 0.01, 2),
+                    'ask': round(price + 0.01, 2),
+                    'mid': round(price, 2),
+                    'last': round(price, 2),
+                    'source': 'yfinance',
+                })
+                return
+            else:
+                print(f"⚠️ YFinance returned no price for {symbol}, trying IB Gateway...")
         except Exception as e:
-            print(f"❌ Failed to fetch quote for {symbol}: {e}")
-            self._send_json({'error': str(e)}, 500)
+            print(f"⚠️ YFinance failed for {symbol}: {e}, trying IB Gateway...")
+
+        # ── Fallback: IB Gateway (needs asyncio event loop in this thread) ────
+        try:
+            import asyncio
+            try:
+                asyncio.get_event_loop()
+            except RuntimeError:
+                asyncio.set_event_loop(asyncio.new_event_loop())
+
+            from ib_data_provider import IBDataProvider
+            ib_data = IBDataProvider()
+            quote = ib_data.get_equity_quote(symbol)
+
+            if quote and quote[0] > 0:
+                bid, ask, mid = quote
+                print(f"✅ IB Gateway quote for {symbol}: Bid {bid} / Ask {ask}")
+                self._send_json({
+                    'symbol': symbol,
+                    'bid': bid,
+                    'ask': ask,
+                    'mid': mid,
+                    'last': mid,
+                    'source': 'ib_gateway',
+                })
+                return
+        except Exception as e:
+            print(f"⚠️ IB Gateway fallback also failed for {symbol}: {e}")
+
+        # ── Both sources failed ───────────────────────────────────────────────
+        print(f"❌ All quote sources failed for {symbol}")
+        self._send_json({'error': f'Could not fetch live quote for {symbol}'}, 500)
 
 
 def run_server(port=8002):
