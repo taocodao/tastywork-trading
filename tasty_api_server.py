@@ -223,6 +223,8 @@ class TastyHandler(BaseHTTPRequestHandler):
             # =============================================================================
             elif self.path == '/api/turbobounce/signals':
                 self._handle_turbobounce_signals()
+            elif self.path.startswith('/api/quote/equity'):
+                self._handle_equity_quote()
             else:
                 self._send_json({'error': 'Not found'}, 404)
         except Exception as e:
@@ -265,8 +267,6 @@ class TastyHandler(BaseHTTPRequestHandler):
                 self._handle_tqqq_track(data)
             elif self.path == '/api/tqqq/signals/update_status':
                 self._handle_tqqq_update_status(data)
-            elif self.path.startswith('/api/quote/equity'):
-                self._handle_equity_quote()
             else:
                 self._send_json({'error': 'Not found'}, 404)
         except Exception as e:
