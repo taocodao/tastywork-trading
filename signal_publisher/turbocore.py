@@ -1,6 +1,7 @@
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Optional, Dict
+import pytz
 
 @dataclass
 class TurboCoreEntrySignal:
@@ -28,6 +29,18 @@ class TurboCoreEntrySignal:
     
     def to_dict(self) -> dict:
         import uuid
+
+        # TurboCore signals expire at 3:00 PM ET the next trading day
+        # (the scheduler runs at 3PM, so the next scan replaces this signal)
+        et = pytz.timezone('US/Eastern')
+        now_et = datetime.now(et)
+        next_day = now_et + timedelta(days=1)
+        # Skip to Monday if next day is a weekend
+        while next_day.weekday() >= 5:
+            next_day += timedelta(days=1)
+        expires_at_et = next_day.replace(hour=15, minute=0, second=0, microsecond=0)
+        expires_at_utc = expires_at_et.astimezone(pytz.utc)
+
         return {
             "id": str(uuid.uuid4()),
             "timestamp": self.timestamp,
@@ -38,7 +51,8 @@ class TurboCoreEntrySignal:
             "direction": "LONG",  # We are always long something
             "confidence": self.ml_confidence,
             "rationale": self.rationale,
-            
+            "expires_at": expires_at_utc.strftime('%Y-%m-%dT%H:%M:%SZ'),
+
             # Pack custom TurboCore fields into JSON structure
             # (Matches DB schema 'legs' or dynamic 'cost' fields on Vercel)
             "legs": [
