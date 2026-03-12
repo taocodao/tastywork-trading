@@ -1,5 +1,23 @@
 ---
 
+## 2026-03-09: Migration of Equity Execution to Vercel (Next.js)
+
+**Decision**: Move the TurboCore (Equity/ETF Rebalancing) delta calculation and order submission logic from the EC2 Python backend directly into the Vercel (Next.js) frontend client.
+
+**Context**:
+- The EC2 proxy approach for server-managed strategies introduced unnecessary latency, authentication complexity, and potential points of failure (like the port 8002 firewall blockage).
+- Frontend securely holds user OAuth tokens and can interact directly with the Tastytrade API.
+
+**Resolution**:
+- Removed the EC2 proxy route for `TQQQ_TURBOCORE` and `REBALANCE` signals in `trademind-app/src/app/api/signals/[id]/approve/route.ts`.
+- Implemented `getEquityQuote`, `getAccountPositions`, and `executeEquityOrder` in `trademind-app/src/lib/tastytrade-api.ts`.
+- Implemented `executeTurboCoreStrategy` (the Delta Sizing engine) natively in TypeScript within `trademind-app/src/lib/strategy-executor.ts`.
+- Fixed Tastytrade strict string validation for equity orders (requring exactly "Buy to Open" or "Sell to Close").
+
+**Affected**: `trademind-app/src/app/api/signals/[id]/approve/route.ts`, `trademind-app/src/lib/tastytrade-api.ts`, `trademind-app/src/lib/strategy-executor.ts`.
+
+---
+
 ## 2026-03-09: Decoupled Two-Tier Execution Model (DIY vs Auto-Pilot)
 
 **Decision**: Adopt a "Universal Backend Signal / Personalized Client-Side Sizing" architecture for portfolio signals.
