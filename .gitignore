@@ -27,3 +27,6 @@ Thumbs.db
 logs/
 
 implementation_notes/
+
+stripe_setup.py
+.env.stripe.out

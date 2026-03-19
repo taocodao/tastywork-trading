@@ -17,6 +17,7 @@ class DiagonalState(Enum):
     FULL_DIAGONAL = auto()     # Both anchor (long-dated put) + hedge active
     ANCHOR_ONLY = auto()       # Hedge closed, only anchor remaining
     RE_HEDGED = auto()         # New hedge bought (cycle N+1)
+    SHORT_CLOSED_LONG_RUNNING = auto() # Short closed for profit, long put trailing
     CLOSING = auto()           # Winding down, no new cycles
 
 @dataclass
@@ -37,8 +38,9 @@ class DiagonalCycle:
 
     @property
     def cycle_pnl(self) -> float:
-        if self.hedge_close_price is not None:
-            return self.hedge_close_price - self.hedge_entry_price
+        close_price = self.hedge_close_price
+        if close_price is not None:
+            return close_price - self.hedge_entry_price
         return 0.0
 
 @dataclass
@@ -76,6 +78,10 @@ class DiagonalPosition:
 
     # Scale-in tracking
     scale_in_used: bool = False              # True after one scale-in (max 1 per position)
+    
+    # V3 properties
+    roll_count: int = 0
+    trail_stop_limit: float = 0.0
 
     @property
     def current_cycle(self) -> Optional[DiagonalCycle]:
@@ -94,7 +100,7 @@ class DiagonalPosition:
         """True if cumulative credits exceed spread max possible loss."""
         if not self.cycles:
             return False
-        w = max(0, self.anchor_strike - self.cycles[0].hedge_strike)
+        w = max(0.0, float(self.anchor_strike - self.cycles[0].hedge_strike))
         return self.total_credits >= w
 
     @property
@@ -113,7 +119,8 @@ class ActiveDiagonalManager:
     def evaluate(self, position: DiagonalPosition, market_data: Dict[str, Any]) -> str:
         """
         Returns one of: 'HOLD', 'OPEN_DIAGONAL', 'CLOSE_HEDGE', 'BUY_NEW_HEDGE',
-        'CLOSE_ANCHOR', 'CLOSE_ALL', 'EMERGENCY_HEDGE', 'SCALE_IN'
+        'CLOSE_ANCHOR', 'CLOSE_ALL', 'EMERGENCY_HEDGE', 'SCALE_IN', 
+        'REPLACE_LONG_PUT', 'CLOSE_SHORT_LEG_ONLY', 'CLOSE_AND_ROLL_DOWN'
         """
         ta_features = self.ta_engine.compute_features(market_data)
         if not ta_features:
@@ -130,33 +137,64 @@ class ActiveDiagonalManager:
         elif position.state == DiagonalState.ANCHOR_ONLY:
             return self._evaluate_anchor_only(position, ta_features, ml_pred, market_data)
             
+        elif position.state == DiagonalState.SHORT_CLOSED_LONG_RUNNING:
+            return self._evaluate_short_closed(position, ta_features, ml_pred, market_data)
+            
         elif position.state == DiagonalState.CLOSING:
             return 'CLOSE_ALL'
             
         return 'HOLD'
     
+    def _evaluate_short_closed(self, pos, ta, ml, mkt) -> str:
+        """Law 3 trailing stop on long put"""
+        current_long_val = mkt.get('hedge_mid_price', 0.0)
+        days_to_expiry = (pos.current_cycle.hedge_expiry - mkt['current_date']).days if pos.current_cycle and pos.current_cycle.hedge_expiry else 0
+        
+        if days_to_expiry <= getattr(self.config, 'V3_LAW1_HEDGE_REPLACE_DTE', 7):
+            return 'CLOSE_ALL'
+            
+        if current_long_val <= pos.trail_stop_limit:
+            return 'CLOSE_ALL'
+            
+        return 'HOLD'
+
     def _evaluate_idle(self, pos, ta, ml, mkt) -> str:
         """
-        SWING MODE entry: RSI-2 < 10 + price > 200 MA + volume confirmation
-        Research: 72-77% win rate with this signal stack
+        V3 Entry Rules:
+        1. Primary signal: RSI-2 < threshold
+        2. Falling-knife gate: price must NOT be > 25% below 200 SMA (allow normal bear-mkt oversold)
+        3. Extreme-panic VIX gate: only block if VIX > 50-SMA * crisis_mult (default 2.0)
+        4. ML crash veto: only veto on very high DOWN confidence (0.65)
+        5. Volume is a scoring factor (not a binary gate)
         """
         regime = mkt.get('regime', 'UNKNOWN')
-        if regime not in ('LOW_VOL', 'NORMAL', 'HIGH_VOL'):
+        # CRISIS regime (VIX > 32) — no new trades per plan
+        if regime == 'CRISIS':
             return 'HOLD'
 
-        # === LAYER 1: 200 MA Gate (most important crash guard) ===
+        # === PRIMARY ENTRY SIGNAL: RSI-2 < threshold ===
+        rsi2 = ta.get('rsi_2', 50)
+        rsi2_threshold = getattr(self.config, 'SWING_ENTRY_RSI2_THRESHOLD', 10)
+        if rsi2 >= rsi2_threshold:
+            return 'HOLD'
+
+        # === LAYER 1: V3 Falling-Knife Guard (< -25% from 200 SMA) ===
+        # V3 allows trading in bear markets, but not on free-falling knives
         tqqq_price = mkt.get('tqqq_price', 0)
         ma_200 = mkt.get('tqqq_200ma', 0)
-        if ma_200 > 0 and tqqq_price < ma_200:
-            logger.debug(f"IDLE: Price {tqqq_price:.2f} < 200MA {ma_200:.2f} — no new trades")
-            return 'HOLD'
+        if ma_200 > 0:
+            dist_sma = (tqqq_price - ma_200) / ma_200
+            if dist_sma < -0.25:
+                logger.debug(f"IDLE: Falling knife ({dist_sma:.1%} below 200MA) — no new trades")
+                return 'HOLD'
 
-        # === LAYER 2: VIX regime gate ===
+        # === LAYER 2: Extreme-panic VIX gate (VIX > 50-SMA * 2.0) ===
+        # V3 loves high VIX (rich premium). Only block extreme panics.
         vix = mkt.get('vix_level', 20)
         vix_50sma = mkt.get('vix_50sma', vix)
-        crisis_mult = getattr(self.config, 'CRASH_GUARD_VIX_CRISIS_MULT', 1.15)
+        crisis_mult = getattr(self.config, 'CRASH_GUARD_VIX_CRISIS_MULT', 2.0)
         if vix_50sma > 0 and vix > vix_50sma * crisis_mult:
-            logger.debug(f"IDLE: VIX crisis regime ({vix:.1f} > {vix_50sma:.1f}x{crisis_mult}) — no new trades")
+            logger.debug(f"IDLE: Extreme VIX panic ({vix:.1f} > {vix_50sma:.1f}x{crisis_mult:.1f}) — no new trades")
             return 'HOLD'
 
         # === LAYER 3: ML crash guard (SuperTrend HIGH_VOL BEARISH) ===
@@ -167,84 +205,62 @@ class ActiveDiagonalManager:
             logger.debug("IDLE: ML crash guard active — no new trades")
             return 'HOLD'
 
-        # === PRIMARY ENTRY SIGNAL: RSI-2 < 10 ===
-        rsi2 = ta.get('rsi_2', 50)
-        rsi2_threshold = getattr(self.config, 'SWING_ENTRY_RSI2_THRESHOLD', 10)
-        if rsi2 >= rsi2_threshold:
-            return 'HOLD'
-
-        # === OPTIONAL: Volume capitulation confirmation ===
-        if getattr(self.config, 'SWING_ENTRY_USE_VOLUME_CONFIRM', False):
-            vol_mult = getattr(self.config, 'SWING_ENTRY_VOLUME_MULTIPLIER', 2.0)
-            if ta.get('volume_ratio', 1.0) < vol_mult:
-                logger.debug(f"IDLE: RSI-2={rsi2:.1f} but volume insufficient — waiting for capitulation")
-                return 'HOLD'
-
-        # === ML soft filter: only veto on very high DOWN confidence ===
-        if ml['direction'] == 'DOWN' and ml['confidence'] > 0.70:
+        # === LAYER 4: ML soft veto (tightened to 0.65 for V3) ===
+        if ml['direction'] == 'DOWN' and ml['confidence'] > 0.65:
             logger.debug(f"IDLE: RSI-2 signal blocked by ML DOWN confidence {ml['confidence']:.2f}")
             return 'HOLD'
 
-        logger.debug(f"IDLE: RSI-2={rsi2:.1f} < {rsi2_threshold} + price {tqqq_price:.2f} > 200MA {ma_200:.2f} — OPEN_DIAGONAL")
+        logger.debug(f"IDLE: RSI-2={rsi2:.1f} < {rsi2_threshold} | SMA dist={((tqqq_price-ma_200)/ma_200*100) if ma_200>0 else 0:.1f}% | VIX={vix:.1f} → OPEN_DIAGONAL")
         return 'OPEN_DIAGONAL'
 
     def _evaluate_full_diagonal(self, pos, ta, ml, mkt) -> str:
         """
-        SWING MODE: Close BOTH legs on bounce.
-        Exit signals: price > 5-day MA, RSI-2 > 70, max hold days, stop loss.
-        No hedge cycling — position is closed as a unit.
+        V3 Priority Checklist for Full Diagonal
         """
-        anchor_pnl_pct = self._anchor_pnl_pct(pos, mkt)
-        regime = mkt.get('regime', 'NORMAL')
-        params = self.config.TQQQ_DIAGONAL_PARAMS.get(regime, self.config.TQQQ_DIAGONAL_PARAMS['NORMAL'])
-
-        # Priority 1: Stop Loss
-        if anchor_pnl_pct <= -pos.anchor_stop_loss_mult:
-            logger.info(f"SWING: Stop loss breached ({anchor_pnl_pct:.1%})")
-            return 'CLOSE_ALL'
-
-        # Priority 2: DTE Exit (anchor about to expire)
         anchor_dte = (pos.anchor_expiry - mkt['current_date']).days if pos.anchor_expiry else 0
-        if anchor_dte <= 7:
-            logger.info("SWING: Anchor DTE <= 7. Closing.")
-            return 'CLOSE_ALL'
-
-        # Priority 3: Layer 4 crash guard — single day crash
+        hedge_dte = (pos.current_cycle.hedge_expiry - mkt['current_date']).days if (pos.current_cycle and pos.current_cycle.hedge_expiry) else 0
+        
+        # Priority 0: Crash guard — single day rout, exit immediately
         tqqq_daily_chg = mkt.get('tqqq_daily_change', 0.0)
         crash_threshold = getattr(self.config, 'CRASH_GUARD_DAILY_DROP_PCT', -0.15)
         if tqqq_daily_chg <= crash_threshold:
-            logger.info(f"SWING: Single-day crash {tqqq_daily_chg:.1%} — emergency exit")
+            logger.info(f"V3: Single-day crash {tqqq_daily_chg:.1%} — emergency exit all")
             return 'CLOSE_ALL'
 
-        # Priority 4: Max hold days (force close to avoid overstaying)
-        if pos.anchor_entry_date:
-            days_held = (mkt['current_date'] - pos.anchor_entry_date).days
-            max_hold = params.get('swing_max_hold_days',
-                                  getattr(self.config, 'SWING_EXIT_MAX_HOLD_DAYS', 7))
-            if days_held >= max_hold:
-                logger.info(f"SWING: Max hold days ({days_held}d >= {max_hold}d) — closing")
+        # Priority A: Long put DTE <= 7 (Law 1 replacement cycle)
+        if hedge_dte <= getattr(self.config, 'V3_LAW1_HEDGE_REPLACE_DTE', 7):
+            if anchor_dte > 21:
+                logger.info(f"V3: Long put DTE ({hedge_dte}) <= 7. Replacing long put.")
+                return 'REPLACE_LONG_PUT'
+        
+        # Priority B: Profit target — short put decayed to 50% of original credit (primary exit)
+        anchor_val = mkt.get('anchor_mid_price', pos.anchor_entry_credit)
+        if pos.anchor_entry_credit > 0:
+            credit_remaining_pct = anchor_val / pos.anchor_entry_credit
+            if credit_remaining_pct <= (1.0 - pos.anchor_profit_target_pct):
+                logger.info(f"V3: Profit target hit — short put at {credit_remaining_pct:.1%} of original credit. Closing.")
                 return 'CLOSE_ALL'
 
-        # Priority 5: BOUNCE EXIT — primary swing exit
-        rsi2 = ta.get('rsi_2', 50)
-        rsi2_exit = getattr(self.config, 'SWING_EXIT_RSI2_ABOVE', 70)
-        tqqq_price = mkt.get('tqqq_price', 0)
-        ma_5 = mkt.get('tqqq_5ma', 0)
+            # Priority C: Short put credit lost >= 75% (Law 3 BTC — loss stop)
+            credit_lost_pct = (pos.anchor_entry_credit - anchor_val) / pos.anchor_entry_credit
+            if credit_lost_pct >= getattr(self.config, 'V3_LAW3_SHORT_BTC_PCT', 0.75):
+                logger.info(f"V3: Short put credit lost >= 75% ({credit_lost_pct:.1%}). Closing short leg only.")
+                return 'CLOSE_SHORT_LEG_ONLY'
 
-        bounce_rsi = rsi2 > rsi2_exit
-        bounce_5ma = (getattr(self.config, 'SWING_EXIT_ABOVE_5MA', True)
-                      and ma_5 > 0 and tqqq_price > ma_5)
+        # Priority D: Spread at -90% max loss (Law 2 Roll trigger)
+        anchor_pnl_pct = self._anchor_pnl_pct(pos, mkt)
+        if anchor_pnl_pct <= getattr(self.config, 'V3_LAW2_ROLL_TRIGGER_PCT', -0.90):
+            logger.info(f"V3: Position at -90% max loss trigger. Evaluating roll-down.")
+            return 'CLOSE_AND_ROLL_DOWN'  # Action handler will invoke RollQualifier
 
-        if bounce_rsi or bounce_5ma:
-            reason = f"RSI-2={rsi2:.1f} > {rsi2_exit}" if bounce_rsi else f"price {tqqq_price:.2f} > 5MA {ma_5:.2f}"
-            logger.info(f"SWING: Bounce detected ({reason}) — CLOSE_ALL")
+        # Priority E: Short put DTE <= 7 (Law 1 force close)
+        if anchor_dte <= getattr(self.config, 'V3_LAW1_FORCE_CLOSE_DTE', 7):
+            logger.info(f"V3: Short put DTE ({anchor_dte}) <= 7. Force close all.")
             return 'CLOSE_ALL'
 
-        # Priority 6: Hedge expiration (keep hedge protection alive)
-        hedge_dte = (pos.current_cycle.hedge_expiry - mkt['current_date']).days if (pos.current_cycle and pos.current_cycle.hedge_expiry) else 0
-        if hedge_dte <= 1:
-            # In swing mode, if hedge expires without bounce, close the whole position
-            logger.info("SWING: Hedge expired without bounce — closing whole position")
+        # Fallback general stop loss (>2x credit received = max loss)
+        if anchor_pnl_pct <= -pos.anchor_stop_loss_mult:
+            logger.info(f"V3: General Stop loss breached ({anchor_pnl_pct:.1%})")
             return 'CLOSE_ALL'
 
         return 'HOLD'

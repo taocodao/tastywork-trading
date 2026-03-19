@@ -1,5 +1,26 @@
 ---
 
+## 2026-03-13: TurboCore Pro Integration
+
+**Decision**: Integrate TurboCore Pro as a first-class strategy and update the TradeMind landing page to feature it dynamically alongside the legacy TurboCore strategy.
+
+**Context**:
+- We generated strong backtest results (+1,144.6% Total Return, 39.3% CAGR) using the new ML-driven multi-asset rotation strategy using QQQ LEAPS, QLD, QQQ, and SGOV.
+- The marketing page needed to be updated to present this new data to users without replacing the legacy TurboCore data.
+
+**Resolution**:
+- Finalized and evaluated the ML-driven TurboCore Pro strategy.
+- Updated `trademind-app/src/app/page.tsx` with multilingual marketing videos for TurboCore Pro.
+- Updated the `EducationCenter.tsx` component to include the Pro strategy reports. Fixed CSS `z-index` and overflow issues that caused the dropdown list to visually clip under other sections.
+- Overhauled the `StatisticsPanel.tsx` component, introducing a UI toggle button that switches the statistics and yearly breakdown between "TurboCore (Standard)" and "TurboCore Pro ML" dynamically so users can see the comparison.
+
+**Affected**: 
+- `trademind-app/src/app/page.tsx`
+- `trademind-app/src/components/marketing/EducationCenter.tsx`
+- `trademind-app/src/components/marketing/StatisticsPanel.tsx`
+
+---
+
 ## 2026-03-09: Migration of Equity Execution to Vercel (Next.js)
 
 **Decision**: Move the TurboCore (Equity/ETF Rebalancing) delta calculation and order submission logic from the EC2 Python backend directly into the Vercel (Next.js) frontend client.

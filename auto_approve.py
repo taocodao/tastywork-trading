@@ -116,6 +116,47 @@ DEFAULT_AUTO_APPROVE_SETTINGS = {
         "custom_overrides": {},
     },
 
+    # TurboBounce Strategy settings
+    "turbobounce": {
+        "enabled": True,  # Allow TurboBounce execution via auto-approve
+        "risk_level": "MEDIUM",
+        "risk_profiles": {
+            "LOW": {
+                "min_confidence": 75,
+                "max_capital_per_trade": 5000
+            },
+            "MEDIUM": {
+                "min_confidence": 65,
+                "max_capital_per_trade": 25000
+            },
+            "HIGH": {
+                "min_confidence": 50,
+                "max_capital_per_trade": 100000
+            }
+        },
+        "custom_overrides": {}
+    },
+    # TurboCore Strategy settings
+    "turbocore": {
+        "enabled": True,
+        "risk_level": "MEDIUM",
+        "risk_profiles": {
+            "LOW": {
+                "min_confidence": 0.70, # Signal confidence is a 0-1 float
+                "max_capital_per_trade": 10000
+            },
+            "MEDIUM": {
+                "min_confidence": 0.55,
+                "max_capital_per_trade": 25000
+            },
+            "HIGH": {
+                "min_confidence": 0.40,
+                "max_capital_per_trade": 100000
+            }
+        },
+        "custom_overrides": {}
+    },
+
     # DVO (Deep Value Overlay) settings
     "dvo": {
         "enabled": True,
@@ -248,7 +289,7 @@ def should_auto_approve(signal: Dict[str, Any], user_refresh_token: str = None) 
     elif "dvo" in strategy or "value" in strategy:
         strategy_key = "dvo"
     elif "turbobounce" in strategy:
-        strategy_key = "theta"  # Group with theta for risk limits, or we could add a new key
+        strategy_key = "turbobounce"
     elif "turbocore" in strategy:
         strategy_key = "turbocore"
     else:
@@ -265,10 +306,24 @@ def should_auto_approve(signal: Dict[str, Any], user_refresh_token: str = None) 
     active = _get_active_strategy_settings(settings, strategy_key)
     
     # Check confidence
-    confidence = signal.get("confidence", signal.get("winRate", 0))
-    min_confidence = active.get("min_confidence", 70)
+    # 4. Check confidence requirements
+    # Handle confidence scaling for older signals vs newer signals (TurboCore confidence is 0.0-1.0 float, others are 0-100 float)
+    confidence = float(signal.get('confidence', 0))
+    min_confidence = float(active.get('min_confidence', 0))
+    
+    # If using TurboCore, let's normalize check if necessary (though the dict is already set up for 0-1 float comparison)
+    if strategy_key == 'turbocore':
+        if min_confidence > 1.0: # If settings were accidently configured as 0-100%
+             min_confidence = min_confidence / 100.0
+        if confidence > 1.0:     # If signal confidence was 0-100%
+             confidence = confidence / 100.0
+    else:
+        # For all other strategies where min_confidence is a percent but signal comes in as 0-1
+        if confidence <= 1.0 and min_confidence > 1.0:
+            confidence = confidence * 100.0
+
     if confidence < min_confidence:
-        logger.debug(f"Auto-approve: Confidence {confidence}% < {min_confidence}%")
+        logger.info(f"🚫 Auto-approve rejected: confidence {confidence} < minimum {min_confidence}")
         return False
     
     # Check capital limit
@@ -759,64 +814,139 @@ def _execute_dvo_auto_approve(signal: Dict, session, account) -> Dict[str, Any]:
         return None
 
 
-def _execute_turbocore_auto_approve(signal: Dict, session, account) -> Dict[str, Any]:
+def _execute_turbocore_auto_approve(signal_data: Dict[str, Any], session, account) -> Optional[Dict[str, Any]]:
     """
-    Execute auto-approved TurboCore Rebalance.
-    Reads the target multi-asset allocation matrix from the signal, compares it
-    to current Tastytrade holdings, and executes atomic sell/buy batches.
+    Executes a TurboCore multi-ticker equity rebalance strategy using Tastytrade.
+    This implementation mirrors Vercel's V2 calculateTurboCoreOrders & executeTurboCoreStrategy.
+    Uses NOTIONAL orders for fractional share precision where supported.
     """
-    from tastytrade.order import NewOrder, OrderLeg, OrderAction, OrderType, OrderTimeInForce
-    from datetime import datetime
-    import time
+    logger.info(f"Executing TurboCore rebalance for {signal_data.get('symbol')}...")
     
-    logger.info("🌪️ Executing TurboCore Auto-Approve Rebalance")
-    
-    legs = signal.get("legs", [])
-    if not legs:
-         logger.error("TurboCore missing allocation array in 'legs' payload.")
-         return None
-         
-    # Generate Target Map { "TQQQ": 0.30, "QQQ": 0.40... }
-    target_weights = {leg['symbol']: float(leg['target_pct']) for leg in legs}
-    
-    # 1. Fetch Current Account State
-    balances = account.get_balances(session)
-    net_liq = float(balances.net_liquidating_value)
-    if net_liq <= 0:
-        logger.error("Invalid net liquidating value for account.")
-        return None
+    try:
+        from tastytrade_client import TastyTradeClient
+        client = TastyTradeClient(session)
+        import tastytrade_utils
         
-    positions = account.get_positions(session)
-    
-    # Translate open positions into dollar values (Estimations since TT returns quantity)
-    current_holdings = {"QQQ": 0.0, "QLD": 0.0, "TQQQ": 0.0, "SGOV": 0.0}
-    
-    for pos in positions:
-        sym = pos.symbol
-        if sym in current_holdings:
-            # We need live price to do this perfectly.
-            # But TT `pos.average_open_price * pos.quantity` or `mark_price` isn't always fully synced here.
-            # In a production execution script, you'd pull live quotes or mark prices.
-            # Assuming close-mark is available in `pos` or we do a lazy approximation for demo:
-            # In TastyTrade SDK, `pos` doesn't strictly have a live mark built in without streamer.
-            # For this MVP phase, we'll log the intention.
-            current_holdings[sym] = float(pos.quantity) # Placeholder for value math
+        # Determine available/targeted capital. If capital_required is not explicitly provided, fetch account Net Liq.
+        net_liq = float(signal_data.get('capital_required') or 0)
+        
+        if net_liq <= 0:
+            logger.info("Fetching account balance to determine target investment capital...")
+            balance = tastytrade_utils.get_account_balance(session, account)
+            net_liq = float(balance.get('netLiquidatingValue', 0))
+            if net_liq <= 0:
+                logger.error("Failed to determine account net liquidity for rebalance.")
+                return None
+                
+        logger.info(f"Capital basis for rebalance: ${net_liq:,.2f}")
+        
+        # 1. Gather the legs (target weights)
+        legs = signal_data.get('legs')
+        if not legs:
+            raw_target_pct = signal_data.get('target_pct')
+            symbol = signal_data.get('symbol')
+            if not symbol or raw_target_pct is None:
+                logger.error("TurboCore signal is missing legs/target_pct payload.")
+                return None
+            legs = [{'symbol': symbol, 'target_pct': float(raw_target_pct)}]
             
-    logger.info(f"TurboCore Rebalance Target: {target_weights} on NetLiq: ${net_liq}")
-    logger.warning("Actual atomic rebalance order submission deferred to V2 TT streaming phase.")
-    
-    # Logic path:
-    # 1. Calculate Target $$ per ticker = NetLiq * target_weights[sym]
-    # 2. Compare to Current $$ holding
-    # 3. Queue Sells for components that are overweight
-    # 4. Execute Sells (time.sleep to clear)
-    # 5. Queue Buys for components that are underweight
-    # 6. Execute Buys
-    
-    return {
-        "orderId": "turbocore_batch_" + str(int(time.time())),
-        "symbol": "TQQQ_PORTFOLIO",
-        "strategy": "TURBOCORE_REBALANCE",
-        "status": "simulated_success",
-        "timestamp": datetime.now().isoformat()
-    }
+        # 2. Get current equity positions from TT
+        logger.info("Fetching current positions...")
+        positions = tastytrade_utils.get_account_positions(session, account)
+        pos_map = {p.get('symbol'): float(p.get('quantity', 0)) for p in positions}
+        
+        # 3. Calculate necessary rebalance orders
+        orders_to_submit = []
+        for leg in legs:
+            sym = leg.get('symbol')
+            if sym == 'SGOV':
+                continue # Ignore SGOV allocations (represent cash)
+                
+            target_pct = float(leg.get('target_pct', 0))
+            target_value = net_liq * target_pct
+            current_shares = pos_map.get(sym, 0.0)
+            
+            # Fetch latest price
+            logger.info(f"Fetching latest quote for {sym}...")
+            quote = tastytrade_utils.get_equity_quotes(session, sym)
+            current_price = 0.0
+            if quote and len(quote) > 0:
+                current_price = float(quote[0].get('last_price', quote[0].get('bid_price', 0)))
+            
+            if current_price <= 0:
+                current_price = float(signal_data.get('cost', 0)) # fallback
+            
+            if current_price <= 0:
+                logger.error(f"Cannot resolve market price for {sym}, skipping leg.")
+                continue
+                
+            current_value = current_shares * current_price
+            diff_value = target_value - current_value
+            action = 'Buy' if diff_value > 0 else 'Sell'
+            
+            order_dollar_value = abs(diff_value)
+            
+            # 🛡️ Sell cap logic: Do not attempt to sell more notional value than we currently hold
+            if action == 'Sell':
+                max_sell_value = int(current_value * 100) / 100.0 # Floor to cent
+                if order_dollar_value > max_sell_value:
+                    logger.info(f"⚠️ {sym}: Capping SELL strictly to current value ${max_sell_value:,.2f} preventing oversold notional API errors.")
+                    order_dollar_value = max_sell_value
+                    
+            exact_shares = order_dollar_value / current_price
+            whole_shares = int(exact_shares) if action == 'Buy' else int(exact_shares + 0.999) # Ceil for sells roughly
+            
+            if order_dollar_value >= 5.0: # TT min notional is $5
+                orders_to_submit.append({
+                    'symbol': sym,
+                    'action': action,
+                    'diffValue': order_dollar_value,
+                    'currentShares': current_shares,
+                    'targetPct': target_pct
+                })
+                logger.info(f"🔄 {sym}: Target {(target_pct*100):.1f}% (${target_value:,.2f}) Curr {current_shares}sh (${current_value:,.2f}) -> {action.upper()} ${order_dollar_value:,.2f}")
+            else:
+                logger.info(f"✅ {sym}: Target {(target_pct*100):.1f}% is relatively balanced. Delta < $5.")
+                
+        # 4. Sequence orders: sells before buys
+        orders_to_submit.sort(key=lambda x: 0 if x['action'] == 'Sell' else 1)
+        
+        if not orders_to_submit:
+            logger.info("No rebalance actions required; portfolio matched target weights.")
+            return {"status": "completed", "message": "Portfolio already matches target allocation."}
+            
+        # 5. Submit orders
+        logger.info(f"🚀 Submitting {len(orders_to_submit)} notional rebalance orders via V3 API...")
+        last_order_id = "unknown"
+        
+        for o in orders_to_submit:
+            # 🛡️ Full liquidation condition
+            full_liquidation = o['action'] == 'Sell' and o['targetPct'] == 0 and o['currentShares'] > 0
+            
+            try:
+                if full_liquidation:
+                    logger.info(f"🏳️ Full liquidation of {o['symbol']}: Share-based order for {o['currentShares']} sh (safer than notional).")
+                    resp = client.submit_equity_order(account, o['symbol'], 'Sell', o['currentShares'], order_type='Market')
+                else:
+                    logger.info(f"Executing NOTIONAL {o['action']} for {o['symbol']} at ${o['diffValue']:.2f}")
+                    # Notional value orders are the TT v3 API special sauce for fractional buying. They are constructed specially.
+                    resp = client.submit_notional_equity_order(account, o['symbol'], o['action'].capitalize(), o['diffValue'])
+                    
+                if resp and resp.get('order'):
+                    last_order_id = str(resp['order'].get('id', 'unknown'))
+                    logger.info(f"✅ {o['action']} {o['symbol']} submitted successfully. Order ID: {last_order_id}")
+            except Exception as leg_err:
+                logger.error(f"❌ Failed to submit {o['action']} for {o['symbol']}: {leg_err}")
+                return None # Fail the whole operation if a leg fails to avoid being half-allocated
+                
+        return {
+            "status": "executed",
+            "order_id": f"batch_{last_order_id}",
+            "legs": len(orders_to_submit),
+            "strategy": "turbocore"
+        }
+    except Exception as e:
+        logger.error(f"TurboCore auto-execute failed: {str(e)}")
+        import traceback
+        logger.error(traceback.format_exc())
+        return None

@@ -18,25 +18,29 @@ from typing import Dict, Any
 TQQQ_DIAGONAL_PARAMS: Dict[str, Dict[str, Any]] = {
     # ── LOW_VOL: Tight spreads, calm market — best for swing entries ──
     'LOW_VOL': {
-        'anchor_dte': 35,               # 30-45 DTE per research
-        'anchor_delta': -0.38,          # slightly below -0.40 in calm mkt
-        'hedge_dte': 10,                # 7-12 DTE per research
-        'hedge_delta': -0.18,           # -0.15 to -0.25 per research
-        'max_cycles': 1,                # SWING MODE: no cycling
+        # V3: Use LEAPS modes in LOW_VOL (IVR < 20%)
+        'mode': 'LEAPS_PMCC',
+        'anchor_dte': 365,              # LEAPS 12+ months
+        'anchor_delta': -0.80,          # Deep ITM
+        'hedge_dte': 35,                # Short call 30-45 DTE
+        'hedge_delta': -0.30,           # OTM short call
+        'max_cycles': 1,
         'anchor_profit_target_pct': 0.50,
         'anchor_stop_loss_mult': 2.0,   # 2x credit = 1x net loss
-        'hedge_close_decay_pct': 0.50,  # unused in swing mode — position closes as unit
-        'max_naked_hours': 4,           # very short — re-hedge immediately in swing mode
+        'hedge_close_decay_pct': 0.50,
+        'max_naked_hours': 4,
         'vix_spike_close': 3.0,
-        'swing_max_hold_days': 7,       # force close after 7 days regardless
+        'swing_max_hold_days': 7,
     },
     # ── NORMAL: Core trading regime ──
     'NORMAL': {
-        'anchor_dte': 35,
-        'anchor_delta': -0.40,          # research: -0.35 to -0.45
-        'hedge_dte': 10,
-        'hedge_delta': -0.20,           # research: -0.15 to -0.25
-        'max_cycles': 1,                # SWING MODE: no cycling
+        'mode': 'BULL_PUT_DIAGONAL',
+        'anchor_dte': 60,               # V3: 60-90 DTE (short put — fat premium)
+        'anchor_delta': -0.40,          # V3: 0.35-0.45 delta
+        'hedge_dte': 28,                # V3: 21-35 DTE (long put — cheap hedge)
+        'hedge_delta': -0.22,           # V3: 0.20-0.25 delta
+        'credit_width_min': 0.35,       # V3: net credit >= 35% of width
+        'max_cycles': 1,
         'anchor_profit_target_pct': 0.50,
         'anchor_stop_loss_mult': 2.0,
         'hedge_close_decay_pct': 0.50,
@@ -46,20 +50,41 @@ TQQQ_DIAGONAL_PARAMS: Dict[str, Dict[str, Any]] = {
     },
     # ── HIGH_VOL: Rich premium but higher risk — smaller size, tighter stops ──
     'HIGH_VOL': {
-        'anchor_dte': 30,               # shorter DTE in volatile conditions
-        'anchor_delta': -0.40,
-        'hedge_dte': 7,
-        'hedge_delta': -0.22,           # slightly more protection in high vol
-        'max_cycles': 1,                # SWING MODE: no cycling
-        'anchor_profit_target_pct': 0.40,  # take profit earlier in high vol
-        'anchor_stop_loss_mult': 1.5,   # tighter stop in high vol
+        'mode': 'BULL_PUT_DIAGONAL',
+        'anchor_dte': 75,               # V3: longer DTE in high vol = more premium
+        'anchor_delta': -0.42,
+        'hedge_dte': 30,                # V3: slightly longer hedge in high vol
+        'hedge_delta': -0.24,
+        'credit_width_min': 0.35,
+        'max_cycles': 1,
+        'anchor_profit_target_pct': 0.40,
+        'anchor_stop_loss_mult': 1.5,
         'hedge_close_decay_pct': 0.50,
         'max_naked_hours': 4,
         'vix_spike_close': 2.0,
-        'swing_max_hold_days': 5,       # shorter hold in high vol (faster moves)
+        'swing_max_hold_days': 5,
     },
     # Note: CRISIS (VIX > 32) — no new trades per 4-layer crash guard
+    'CRISIS': {
+        'mode': 'NO_ENTRY',
+        'anchor_dte': 90,
+        'anchor_delta': -0.40,
+        'hedge_dte': 35,
+        'hedge_delta': -0.25,
+        'max_positions': 2,
+        'spread_width_min': 15,
+    },
 }
+
+# =============================================================================
+# V3 THREE LAWS THRESHOLDS
+# =============================================================================
+V3_LAW1_FORCE_CLOSE_DTE = 7           # Short put <= 7 DTE -> force close (let credit decay further)
+V3_LAW1_HEDGE_REPLACE_DTE = 7         # Long put <= 7 DTE -> replace
+V3_LAW2_ROLL_TRIGGER_PCT = -0.90      # -90% of max loss -> roll check (give more room)
+V3_LAW3_SHORT_BTC_PCT = 0.75          # Short put lost >= 75% credit -> BTC (avoid premature exits on spikes)
+V3_MAX_ROLLS_PER_CYCLE = 1            # Hard cap: 1 roll per ticker
+V3_ROLL_COOLDOWN_DAYS = 5             # Minimum standoff after failed roll
 
 # =============================================================================
 # SWING ENTRY SIGNALS (RSI-2 + 200 MA)
@@ -67,8 +92,8 @@ TQQQ_DIAGONAL_PARAMS: Dict[str, Dict[str, Any]] = {
 # =============================================================================
 SWING_ENTRY_RSI2_THRESHOLD = 10         # Primary trigger: RSI-2 below this
 SWING_ENTRY_RSI2_AGGRESSIVE = 5         # More aggressive: fewer signals, higher win rate
-SWING_ENTRY_USE_VOLUME_CONFIRM = True   # Require volume > 2x 20-day avg (optional)
-SWING_ENTRY_VOLUME_MULTIPLIER = 2.0     # Volume capitulation threshold
+SWING_ENTRY_USE_VOLUME_CONFIRM = False  # V3: Volume is a scoring factor, not a binary gate
+SWING_ENTRY_VOLUME_MULTIPLIER = 2.0     # Volume capitulation threshold (for scoring only)
 
 # =============================================================================
 # SWING EXIT SIGNALS
@@ -87,8 +112,8 @@ CRASH_GUARD_200MA_ENABLED = True
 
 # Layer 2: VIX regime classification (VIX vs 50-day SMA of VIX)
 CRASH_GUARD_VIX_REGIME_ENABLED = True
-CRASH_GUARD_VIX_CRISIS_MULT = 1.15     # VIX > 50-SMA * 1.15 = crisis, no trades
-CRASH_GUARD_VIX_CAUTION_MULT = 1.0     # VIX > 50-SMA = caution, half size
+CRASH_GUARD_VIX_CRISIS_MULT = 2.0      # V3: VIX > 50-SMA * 2.0 = extreme panic, no trades (allow high-IV bounces)
+CRASH_GUARD_VIX_CAUTION_MULT = 1.25    # VIX > 50-SMA * 1.25 = caution, half size
 
 # Layer 3: VIX term structure (backwardation = fear spike)
 CRASH_GUARD_TERM_STRUCTURE_ENABLED = True

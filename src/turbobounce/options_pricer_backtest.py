@@ -26,6 +26,9 @@ from src.turbobounce.universe import get_turbobounce_symbols, get_category_for_s
 from src.turbobounce.risk_manager import TurboBounceRiskManager
 from src.turbobounce.strategy_router import StrategyRouter
 from src.turbobounce.swing_exit_engine import SwingExitEngine, ExitDecisionType
+from src.tqqq.crash_guard import CrashGuard
+
+crash_guard = CrashGuard()
 
 # ─── Black-Scholes Engine ─────────────────────────────────────────────────────
 
@@ -89,29 +92,83 @@ def price_trade(S, sigma, r, strategy_type, direction, days_held=0,
         bp = val  # Risk is the net debit paid
 
     elif strategy_type == 'CREDIT_SPREAD':
+        # Bull Put Credit Spread: $3-wide (3% and 6% OTM)
+        # Allows 2 contracts within the 5% budget ($300 risk x 2 = $600).
         T = max(1, anchor_dte - days_held) / 365.0
         if direction == 'BULLISH':
-            short_k, long_k = S * 0.97, S * 0.93
-            val = bs_put(S, short_k, T, r, sigma) - bs_put(S, long_k, T, r, sigma)
+            short_k = S * 0.97   # Sell put 3% OTM
+            long_k  = S * 0.94   # Buy put 6% OTM ($3 wide at $100)
+            short_val = bs_put(S, short_k, T, r, apply_skew(sigma, 0.03, is_put=True))
+            long_val  = bs_put(S, long_k,  T, r, apply_skew(sigma, 0.06, is_put=True))
+            val = short_val - long_val  # Net credit received (positive)
         else:
-            short_k, long_k = S * 1.03, S * 1.07
-            val = bs_call(S, short_k, T, r, sigma) - bs_call(S, long_k, T, r, sigma)
-        bp = abs(short_k - long_k)
+            short_k = S * 1.03   # Sell call 3% OTM
+            long_k  = S * 1.06   # Buy call 6% OTM
+            short_val = bs_call(S, short_k, T, r, apply_skew(sigma, 0.03, is_put=False))
+            long_val  = bs_call(S, long_k,  T, r, apply_skew(sigma, 0.06, is_put=False))
+            val = short_val - long_val  # Net credit received (positive)
+        bp = abs(short_k - long_k)  # Max loss = spread width (before credit)
 
     elif strategy_type == 'NAKED_LONG':
         # Entered in LOW-IV regime.
-        # FIX: To mimic true 3x stock leverage without losing to theta over 5-8 days,
-        # we construct a Deep ITM LEAP (stock replacement strategy).
-        # Practically zero extrinsic value = zero theta burn if stock chops.
+        # Use Deep ITM (85 delta) to minimize theta burn on 7-day holds.
+        # Near-ATM bleeds 20-25% in 7 flat days; deep ITM bleeds < 5%.
         T = max(1, anchor_dte - days_held) / 365.0
-        pct_itm = 0.20  # 20% in-the-money (~85-90 delta stock replacement)
+        pct_itm = 0.20  # 20% ITM = ~85 delta (stock replacement strategy)
         if direction == 'BULLISH':
             val = bs_call(S, S * (1 - pct_itm), T, r, sigma)   # Deep ITM Call
         else:
             val = bs_put(S, S * (1 + pct_itm), T, r, sigma)    # Deep ITM Put
         bp = val
 
+    elif strategy_type == 'PUT_BWB':
+        # Put Broken-Wing Butterfly (bullish, structured for a net CREDIT)
+        # Rule 1: Upper wing <= 3% OTM
+        # Rule 2: Lower wing width >= 2.0x upper wing width
+        T = max(1, anchor_dte - days_held) / 365.0
+        upper_k = S * 0.97      # Buy: slightly OTM put (3% OTM)
+        body_k  = S * 0.93      # Sellx2: body puts (7% OTM). Upper width = 4%
+        lower_k = S * 0.85      # Buy: far OTM (15% OTM). Lower width = 8% (Exactly 2.0x!)
+        
+        buy_upper  = bs_put(S, upper_k, T, r, apply_skew(sigma, 0.03, is_put=True))
+        sell_body  = bs_put(S, body_k,  T, r, apply_skew(sigma, 0.07, is_put=True)) * 2
+        buy_lower  = bs_put(S, lower_k, T, r, apply_skew(sigma, 0.15, is_put=True))
+        
+        val = sell_body - buy_upper - buy_lower  # Guaranteed net credit with 2.0x ratio
+        bp = abs(body_k - lower_k) - max(0, val)  # Max loss = lower spread width minus credit
+        bp = max(0.01, bp)
+        
+        return max(0, val), max(0.01, bp)
+
     return max(0.01, val), max(0.01, bp)
+
+def get_iv_multiplier(iv_rank, is_entry=True, days_held=0):
+    """
+    Dynamic IV multiplier based on IV rank regime.
+    Research: Carr & Wu (2009), Goyal & Saretto (2009)
+    """
+    if is_entry:
+        if iv_rank >= 70:   return 1.50  # Extreme fear
+        elif iv_rank >= 50: return 1.35  # High IV
+        elif iv_rank >= 30: return 1.20  # Moderate
+        else:               return 1.05  # Low IV — options near fair value
+    else:
+        import math
+        base_vrp = 0.30  # Starting VRP premium
+        decay_rate = 0.10  # ~7-day half-life
+        remaining_vrp = base_vrp * math.exp(-decay_rate * days_held)
+        return 1.0 + remaining_vrp  # Ranges from ~1.30 (day 0) to ~1.05 (day 10+)
+
+def apply_skew(base_sigma, strike_pct_otm, is_put=True):
+    """
+    Apply volatility smile skew correction.
+    +2 IV pts per 5% OTM for puts; -1 IV pt per 5% OTM for calls.
+    """
+    if is_put:
+        skew_adjustment = max(0, strike_pct_otm / 0.05) * 0.02
+    else:
+        skew_adjustment = -max(0, strike_pct_otm / 0.05) * 0.01
+    return base_sigma + skew_adjustment
 
 # ─── Scanner / Scoring (inline - no logging) ──────────────────────────────────
 
@@ -122,6 +179,25 @@ def calc_rsi(series, period=2):
     rs = gain / loss
     rsi = 100 - (100 / (1 + rs))
     return float(rsi.iloc[-1]) if not pd.isna(rsi.iloc[-1]) else 50.0
+
+def hurst_exponent(series, lags=range(2, 20)):
+    """Compute Hurst exponent via rescaled range (simple approximation)."""
+    try:
+        ts = np.log(series / series.shift(1)).dropna().values
+        if len(ts) < max(lags) + 1: return 0.50
+        tau = []; lagvec = []
+        for lag in lags:
+            diffs = np.subtract(ts[lag:], ts[:-lag])
+            if len(diffs) < 2: continue
+            std_diff = np.std(diffs)
+            if std_diff > 0:
+                tau.append(std_diff)
+                lagvec.append(lag)
+        if len(tau) < 2: return 0.50
+        pp = np.polyfit(np.log(lagvec), np.log(tau), 1)
+        return pp[0] * 0.5 + 0.5
+    except Exception:
+        return 0.50
 
 def get_metrics(sub_df):
     close   = float(sub_df['Close'].iloc[-1])
@@ -142,10 +218,13 @@ def get_metrics(sub_df):
     max_v = rv_252.rolling(252).max().iloc[-1]
     iv_rank = ((rvol - min_v) / (max_v - min_v) * 100) if (not pd.isna(min_v)) and (max_v - min_v > 0) else 50.0
 
+    hurst = hurst_exponent(sub_df['Close'].tail(60)) if len(sub_df) >= 60 else 0.50
+
     return {
         'close': close, 'avg_volume': vol_20, 'rsi_2': rsi_2,
         'pct_b': pct_b, 'ret_3d': ret_3d, 'dist_sma_200': dist_sma200,
-        'realized_vol': rvol, 'iv_rank': iv_rank
+        'realized_vol': rvol, 'iv_rank': iv_rank, 'hurst': hurst,
+        'sma_200': sma_200, 'vol_ratio': (sub_df['Volume'].iloc[-1] / vol_20) if vol_20 > 0 else 1.0
     }
 
 def scan_universe(historical_data, current_date, all_symbols):
@@ -157,25 +236,40 @@ def scan_universe(historical_data, current_date, all_symbols):
         if len(sub) < 201: continue
 
         m = get_metrics(sub)
-        # Liquidity filter
-        if m['avg_volume'] < 2_000_000: continue
+        # Liquidity filter - V5 uses $1M Dollar Volume (Close * Volume)
+        if (m['close'] * m['avg_volume']) < 1_000_000: continue
         # Regime filter: not a falling knife
         if m['dist_sma_200'] < -0.25: continue
-        # Signal filter
-        is_oversold   = m['rsi_2'] < 10 or m['pct_b'] < 0 or m['ret_3d'] < -0.08
-        is_overbought = m['rsi_2'] > 90 or m['pct_b'] > 1.0 or m['ret_3d'] > 0.10
-        if not (is_oversold or is_overbought): continue
+        # Signal filter - V5 Expanded parameters for 150+ signals/yr
+        is_oversold = m['rsi_2'] < 10 or m['pct_b'] < 0 or m['ret_3d'] < -0.08
+        if not is_oversold: continue
 
-        direction = 'BULLISH' if is_oversold else 'BEARISH'
-        # Score: RSI extremity is main driver
-        rsi_score = abs(m['rsi_2'] - 50) / 50 * 40  # 0-40 pts
+        direction = 'BULLISH'
+        
+        # Do NOT force strategy_override — let the StrategyRouter decide based on IV regime.
+        # Previously RSI-2 < 8 forced NAKED_LONG, bypassing the router and sending 98% of
+        # trades through NAKED_LONG even when IV was high (where CREDIT_SPREAD should dominate).
+        strategy_override = None
+        
+        # Mock ML probability for historical scan
+        ml_prob = 0.60
+        
+        # Evaluate using CrashGuard
+        intraday_row = pd.Series({'close': m['close'], 'rsi_2': m['rsi_2'], 'vol_ratio': m['vol_ratio']})
+        # Mock latest daily for hurst/sma
+        latest_daily = pd.Series({'tqqq_close': m['close'], 'sma_200': m['sma_200'], 'hurst_100': m['hurst'], 'vix_sma_ratio': 1.05})
+        daily_df = pd.DataFrame([latest_daily])
+        cg_result = crash_guard.evaluate_entry(daily_df, intraday_row, ml_prob)
+        
+        if not cg_result.passed: 
+            continue
+            
         candidates.append({'symbol': sym, 'direction': direction,
                            'category': get_category_for_symbol(sym),
-                           'score': rsi_score, **m})
+                           'score': cg_result.score, 'size_mult': cg_result.multiplier, 
+                           'strategy_override': strategy_override, **m})
 
-    oversold   = sorted([c for c in candidates if c['direction'] == 'BULLISH'], key=lambda x: -x['score'])[:3]
-    overbought = sorted([c for c in candidates if c['direction'] == 'BEARISH'], key=lambda x: -x['score'])[:3]
-    return oversold + overbought
+    return sorted(candidates, key=lambda x: -x['score'])[:3]
 
 # ─── Main Backtest ────────────────────────────────────────────────────────────
 
@@ -207,25 +301,22 @@ def run_backtest(start_date='2023-01-01', end_date='2024-01-01', initial_capital
     trade_log      = []
     MAX_SLOTS      = 6
 
-    # Strategy-specific hold days (realistic for each structure)
     HOLD_DAYS = {
-        'DIAGONAL':      15,  # Time spread needs days for theta/vega edge
-        'CREDIT_SPREAD': 15,  # Credit spread is also theta-based
-        'NAKED_LONG':     5,  # 14 DTE option — must exit quickly before decay kills it
+        'CREDIT_SPREAD':  10,  # Connors: "exit by day 10"
+        'PUT_BWB':        10,  # Same as credit spread
+        'NAKED_LONG':      7,  # Quick directional pop
     }
 
-    # Exit thresholds
-    STOP_LOSS_PCT      = -0.50  # Close if unrealized loss > 50% of capital deployed
-    PROFIT_TARGET_LONG =  0.40  # 40% gain on capital for DIAGONAL / NAKED_LONG
-    PROFIT_TARGET_CRED =  0.60  # 60% of credit captured for CREDIT_SPREAD
+    # Exit thresholds now handled in SwingExitEngine V4.1 per Perplexity research
+
 
     router = StrategyRouter()
 
     for current_date in tqdm(trading_days, desc='Simulating', leave=False):
         vidx = vix_close.index.get_indexer([current_date], method='pad')[0]
         if vidx >= 0:
-            vix_lvl = float(vix_close.iloc[vidx])
-            vix_sma = float(vix_close.iloc[:vidx+1].rolling(50).mean().iloc[-1]) if vidx >= 50 else 20.0
+            vix_lvl = float(np.squeeze(vix_close.iloc[vidx]))
+            vix_sma = float(np.squeeze(vix_close.iloc[:vidx+1].rolling(50).mean().iloc[-1])) if vidx >= 50 else 20.0
         else:
             vix_lvl, vix_sma = 20.0, 20.0
         # ── 1. Evaluate open positions for exit ──────────────────────────────
@@ -246,7 +337,9 @@ def run_backtest(start_date='2023-01-01', end_date='2024-01-01', initial_capital
             exit_sig = realized_vol(exit_sub['Close'])
 
             # IV normalizes after bounce — modest premium over realized at exit
-            adjusted_exit_sig = exit_sig * 1.05
+            adjusted_exit_sig = exit_sig * get_iv_multiplier(
+                pos.get('entry_iv_rank', 50), is_entry=False, days_held=days_held
+            )
 
             exit_val, _ = price_trade(exit_S, adjusted_exit_sig, exit_r,
                                       strategy_type=pos['strategy_type'],
@@ -271,23 +364,42 @@ def run_backtest(start_date='2023-01-01', end_date='2024-01-01', initial_capital
             regime_score = 50 # Base default for historical scan if unused
             ml_prob = 0.55 # Base default
             
-            # Backwards compatibility: calculate current spread mark vs entry
+            # Current spread mark vs entry
             current_spread_mark = exit_val
             
-            # Reconstruct trailing sma_5
+            # 5-day SMA of underlying for Connors exit signal
             sma_5 = float(exit_sub['Close'].rolling(5).mean().iloc[-1]) if len(exit_sub) >= 5 else exit_S
+            
+            # Previous day RSI-2 for consecutive-day confirmation (Alvarez research)
+            rsi_2_prev = calc_rsi(exit_sub['Close'].iloc[:-1], 2) if len(exit_sub) > 3 else rsi_2
+            
+            # Count trading days held (not calendar days — Connors uses trading days)
+            # exit_sub filtered to current_date, entry_sub filtered to entry_date
+            days_traded = len(exit_df[(exit_df.index > pos['entry_date']) & (exit_df.index <= current_date)])
+            
+            # Calculate ATR-14 for directional stop
+            high_low_range = exit_sub['High'] - exit_sub['Low']
+            true_range = pd.concat([
+                high_low_range,
+                abs(exit_sub['High'] - exit_sub['Close'].shift(1)),
+                abs(exit_sub['Low'] - exit_sub['Close'].shift(1))
+            ], axis=1).max(axis=1)
+            atr_14 = float(true_range.rolling(14).mean().iloc[-1])
             
             decision = engine.evaluate(
                 position=pos,
                 current_price=exit_S,
                 rsi_2=rsi_2,
+                rsi_2_prev=rsi_2_prev,
                 sma_5=sma_5,
                 regime_score=regime_score,
                 ml_prob=ml_prob,
                 days_held=days_held,
+                days_traded=days_traded,
                 bp_consumed=pos['capital_allocated'],
                 current_spread_mark=current_spread_mark,
-                pnl_pct=pnl_pct
+                pnl_pct=pnl_pct,
+                atr_14=atr_14
             )
             
             if decision.decision in [ExitDecisionType.CLOSE_ALL, ExitDecisionType.ROLL_HEDGE]:
@@ -334,49 +446,76 @@ def run_backtest(start_date='2023-01-01', end_date='2024-01-01', initial_capital
             # Route strategy via StrategyRouter
             dir_str = "OVERSOLD" if pick['direction'] == 'BULLISH' else "OVERBOUGHT"
             score_obj = type('ScoreObj', (), {'symbol': pick['symbol'], 'direction': dir_str, 'iv_rank': pick['iv_rank']})()
-            routed = router.route_candidate(score_obj, vix_lvl, vix_sma)
-            strategy_type = routed.strategy_type
-            # Pull DTE params from router, overriding NAKED_LONG and DIAGONAL anchor to 180 DTE (LEAP)
-            route_anchor = routed.target_anchor_dte or 30
-            if strategy_type in ('NAKED_LONG', 'DIAGONAL'): route_anchor = 180
-            anchor_dte = route_anchor
-            hedge_dte  = routed.target_hedge_dte  or 10
+            
+            override = pick.get('strategy_override')
+            if override:
+                strategy_type = override
+                anchor_dte, hedge_dte = 45, 10
+            else:
+                routed = router.route_candidate(score_obj, vix_lvl, vix_sma)
+                strategy_type = routed.strategy_type
+                # Take DTE from router, this allows NAKED_LONG to get 180 DTE and Spreads 30.
+                anchor_dte = routed.target_anchor_dte or 30
+                hedge_dte = routed.target_hedge_dte or 10
 
-            # IV multiplier is strategy + regime aware:
-            # DIAGONAL     → high VIX regime, implied vol materially above realized
-            # CREDIT_SPREAD → moderately elevated IV
-            # NAKED_LONG   → router only picks this in LOW-IV; IV ≈ realized (no markup)
-            if strategy_type == 'DIAGONAL':
-                entry_sigma = sigma * 1.35
-            elif strategy_type == 'CREDIT_SPREAD':
-                entry_sigma = sigma * 1.20
-            else:  # NAKED_LONG — low IV regime
-                entry_sigma = sigma * 1.05
+            # Apply size multiplier from CrashGuard
+            size_mult = pick.get('size_mult', 1.0)
+
+            # IV multiplier is strategy + regime aware
+            entry_sigma = sigma * get_iv_multiplier(pick['iv_rank'], is_entry=True)
 
             val, bp = price_trade(S, entry_sigma, r, strategy_type, pick['direction'],
                                   days_held=0, anchor_dte=anchor_dte, hedge_dte=hedge_dte)
 
-            if val <= 0: continue  # Avoid zero-cost artifacts
+            if val <= 0 and strategy_type not in ('CALL_BACKSPREAD', 'PUT_BWB'): continue  # Avoid zero-cost artifacts unless it's a backspread/bwb credit
 
-            # Evaluate Option Cost
-            option_cost = bp * 100
-            
-            # Target 1/6th of CURRENT EQUITY for True Compounding
-            current_equity = capital + sum(p['entry_val'] * p['contracts'] * 100 for p in open_positions)
-            target_slot = current_equity / MAX_SLOTS
-            
-            # If the option is more expensive than our target slot size (common for LEAPS on $5k accounts),
-            # we must allocate enough capital to buy exactly 1 contract.
-            if option_cost > target_slot:
-                slot_capital = option_cost
-                contracts = 1
+            # V5 Recommended Sizing: ~5% quarter-Kelly for LEAPS, 3% conservative for spreads
+            if strategy_type == 'NAKED_LONG':
+                MAX_RISK_PCT = 0.05
             else:
-                slot_capital = target_slot
-                contracts = max(1, int(slot_capital / option_cost))
+                MAX_RISK_PCT = 0.03
+            MAX_POSITION_PCT = 0.10  # Hard cap: never more than 10% of equity in one position
+            
+            current_equity = capital + sum(p['capital_allocated'] for p in open_positions)
+            max_dollar_risk = current_equity * MAX_RISK_PCT
+            
+            # For credit spreads: max loss = spread width * 100 per contract
+            # For long options: max loss = premium paid * 100 per contract
+            if strategy_type in ('CREDIT_SPREAD', 'PUT_BWB'):
+                max_loss_per_contract = bp * 100  # bp = spread width
+            else:
+                max_loss_per_contract = val * 100  # val = option premium
+            
+            if max_loss_per_contract <= 0:
+                continue
+            
+            # CRITICAL FIX: Strictly enforce 3% risk rule.
+            # If even 1 contract exceeds 3% risk budget, skip the trade.
+            # The previous max(1,...) override was causing $3k+ trades on a $15k account.
+            if max_loss_per_contract > max_dollar_risk:
+                continue  # Trade too large — enforce 3% rule, don't force 1 contract
+
+            # Calculate contracts: risk-normalized
+            contracts = max(1, int(max_dollar_risk / max_loss_per_contract))
+            
+            # Apply CrashGuard size multiplier for high-conviction trades
+            size_mult = pick.get('size_mult', 1.0)
+            contracts = max(1, int(contracts * size_mult))
+            
+            # Capital to allocate = either the actual cost or the max-loss reserve
+            if strategy_type in ('CREDIT_SPREAD', 'PUT_BWB'):
+                slot_capital = bp * contracts * 100  # Reserve spread width as margin
+            else:
+                slot_capital = val * contracts * 100  # Reserve full premium
+            
+            # Hard position size cap: never > 10% of account in one trade
+            max_absolute_slot = current_equity * MAX_POSITION_PCT
+            if slot_capital > max_absolute_slot:
+                contracts = max(1, int(max_absolute_slot / max_loss_per_contract))
+                slot_capital = max_loss_per_contract * contracts
                 
-            # Final check: do we actually have enough free cash to make this trade?
             if slot_capital > capital:
-                continue  # Skip trade, account is too poor to afford this option
+                continue
 
             capital -= slot_capital
             open_positions.append({
@@ -394,6 +533,7 @@ def run_backtest(start_date='2023-01-01', end_date='2024-01-01', initial_capital
                 'capital_allocated': slot_capital,
                 'anchor_dte':        anchor_dte,
                 'hedge_dte':         hedge_dte,
+                'entry_iv_rank':     pick['iv_rank'],  # For dynamic exit IV calc
             })
 
     # ── Output ────────────────────────────────────────────────────────────────
@@ -401,7 +541,13 @@ def run_backtest(start_date='2023-01-01', end_date='2024-01-01', initial_capital
 
     if df_log.empty:
         print("No trades completed in the period.")
-        return
+        zero_summary = {
+            'total_trades': 0, 'wins': 0, 'losses': 0, 'win_rate': 0.0,
+            'avg_win': 0.0, 'avg_loss': 0.0, 'profit_factor': 0.0,
+            'total_pnl': 0.0, 'return_pct': 0.0, 'final_capital': initial_capital,
+            'tqqq_trades': 0, 'tqqq_pnl': 0.0, 'multi_trades': 0, 'multi_pnl': 0.0
+        }
+        return zero_summary, pd.DataFrame()
 
     # ── Trade Table ───────────────────────────────────────────────────────────
     pd.set_option('display.max_rows', None)

@@ -2,12 +2,11 @@
 TurboBounce Options: Multi-Ticker Universe Definition
 =====================================================
 
-Contains the list of ~47 high-beta/liquid tickers categorized by sector,
-primarily sourced from the D watch.csv and core ETFs.
+Contains the list of tickers provided by the user.
 """
 
 from dataclasses import dataclass
-from typing import List, Dict
+from typing import List
 
 @dataclass
 class TickerConfig:
@@ -15,76 +14,55 @@ class TickerConfig:
     category: str
     is_leveraged_etf: bool = False
     
-# TurboBounce Multi-Ticker Universe (~47 symbols)
-# TQQQ is included here so it can compete in the "Unified" mode.
-TURBOBOUNCE_UNIVERSE = [
-    # 3x Leveraged ETFs
-    TickerConfig("TQQQ", "3x Leveraged", True),
-    TickerConfig("SOXL", "3x Leveraged", True),
-    TickerConfig("LABU", "3x Leveraged", True),
-    
-    # Mega-cap Tech
-    TickerConfig("NVDA", "Mega-cap Tech"),
-    TickerConfig("AAPL", "Mega-cap Tech"),
-    TickerConfig("MSFT", "Mega-cap Tech"),
-    TickerConfig("GOOGL", "Mega-cap Tech"),
-    TickerConfig("AMZN", "Mega-cap Tech"),
-    TickerConfig("META", "Mega-cap Tech"),
-    TickerConfig("TSLA", "Mega-cap Tech"),
-    
-    # Semiconductors
-    TickerConfig("AMD", "Semiconductor"),
-    TickerConfig("AVGO", "Semiconductor"),
-    TickerConfig("MU", "Semiconductor"),
-    TickerConfig("QCOM", "Semiconductor"),
-    TickerConfig("AMAT", "Semiconductor"),
-    TickerConfig("ASML", "Semiconductor"),
-    TickerConfig("MRVL", "Semiconductor"),
-    
-    # High-beta Growth
-    TickerConfig("SHOP", "Growth"),
-    TickerConfig("COIN", "Growth"),
-    TickerConfig("PLTR", "Growth"),
-    TickerConfig("CRWD", "Growth"),
-    TickerConfig("SNOW", "Growth"),
-    TickerConfig("MSTR", "Growth"),
-    TickerConfig("APP", "Growth"),
-    
-    # Infra / AI Data
-    TickerConfig("VRT", "Infra"),
-    TickerConfig("CLS", "Infra"),
-    TickerConfig("ANET", "Infra"),
-    TickerConfig("NET", "Infra"),
-    TickerConfig("NOW", "Infra"),
-    TickerConfig("ARM", "Infra"),
-    
-    # High-beta (from user D watch.csv)
-    TickerConfig("EME", "High-beta Watchlist"),
-    TickerConfig("CRDO", "High-beta Watchlist"),
-    TickerConfig("COHR", "High-beta Watchlist"),
-    TickerConfig("CIEN", "High-beta Watchlist"),
-    TickerConfig("RDDT", "High-beta Watchlist"),
-    TickerConfig("DASH", "High-beta Watchlist"),
-    TickerConfig("HOOD", "High-beta Watchlist"),
-    
-    # Core ETFs
-    TickerConfig("SPY", "Core ETF"),
-    TickerConfig("QQQ", "Core ETF"),
-    TickerConfig("IWM", "Core ETF"),
-    TickerConfig("GDX", "Core ETF"),
-    
-    # SaaS / Cloud
-    TickerConfig("CRM", "SaaS"),
-    TickerConfig("WDAY", "SaaS"),
-    TickerConfig("ZS", "SaaS"),
-    TickerConfig("MDB", "SaaS"),
-    TickerConfig("INTU", "SaaS"),
-    TickerConfig("ADBE", "SaaS"),
+import pandas as pd
+
+# TurboBounce User-Provided Universe (Essential Base)
+base_symbols = [
+    "EME", "FN", "LITE", "CRDO", "VRT", "AMAT", "AVGO", "CLS", "LABU", "WDC", "COHR", 
+    "BIDU", "ASML", "AGQ", "CIEN", "MU", "VST", "TQQQ", "GLW", "NVDA", "SANM", "ALAB", 
+    "CAT", "CEG", "TSM", "BABA", "GEV", "NVT", "AMD", "SNDK", "ANET", "MRVL", "JBL", 
+    "APLX", "GOOG", "ARM", "HROW", "NUGT", "MSTR", "TT", "TSLA", "ADI", "AXSM", "NBIS", 
+    "JCI", "BA", "QQQ", "NVO", "WPM", "CRWV", "CSCO", "COIN", "OKLO", "AMZN", "GDX", 
+    "MELI", "ABBV", "ARKK", "SPXC", "AYI", "AEM", "LMT", "VRTX", "RMBS", "ECL", "AAPL", 
+    "ARKW", "LEU", "AEP", "HOOD", "SLB", "ORCL", "META", "SATS", "PLTR", "WAT", "WMT", 
+    "COST", "RSP", "QCOM", "CVX", "XOM", "MSFT", "RKLB", "GS", "AVAV", "JPM", "CHRW", 
+    "NFLX", "ADBE", "ASTS", "GPOR", "DIS", "KTOS", "VLO", "MA", "V", "RCL", "NET", 
+    "LULU", "XYL", "CRM", "AXP", "APP", "SAP", "SHOP", "RDDT", "IBM", "RBRK", "SPOT", 
+    "NOW", "CRWD", "ANF", "DUOL", "SNOW", "DASH", "INTU", "MDB", "WDAY", "ZS", "CRCL", 
+    "TFX", "VIX"
 ]
 
+_cached_symbols = None
+TURBOBOUNCE_UNIVERSE: List[TickerConfig] = []
+
 def get_turbobounce_symbols() -> List[str]:
-    """Returns a flat list of just the symbols."""
-    return [config.symbol for config in TURBOBOUNCE_UNIVERSE]
+    """Returns a flat list of symbols: Base + S&P 500 dynamically fetched."""
+    global _cached_symbols
+    if _cached_symbols is not None:
+        return _cached_symbols
+
+    combined = list(base_symbols)
+    try:
+        # Dynamically fetch S&P 500
+        sp500_table = pd.read_html('https://en.wikipedia.org/wiki/List_of_S%26P_500_companies')
+        sp500_df = sp500_table[0]
+        sp500_tickers = sp500_df['Symbol'].tolist()
+        
+        # Clean up tickers for yfinance (e.g., BRK.B -> BRK-B)
+        sp500_tickers = [sym.replace('.', '-') for sym in sp500_tickers]
+        combined.extend(sp500_tickers)
+    except Exception as e:
+        print(f"Warning: Could not fetch S&P 500 tickers ({e}). Falling back to base list.")
+        
+    _cached_symbols = list(set(combined)) # Deduplicate
+    return _cached_symbols
+
+def init_universe():
+    global TURBOBOUNCE_UNIVERSE
+    syms = get_turbobounce_symbols()
+    TURBOBOUNCE_UNIVERSE = [TickerConfig(sym, "Dynamic Watchlist", sym in ["TQQQ", "LABU", "NUGT", "AGQ"]) for sym in syms]
+
+init_universe()
 
 def get_category_for_symbol(symbol: str) -> str:
     for config in TURBOBOUNCE_UNIVERSE:

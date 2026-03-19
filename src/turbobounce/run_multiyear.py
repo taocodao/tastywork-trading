@@ -1,6 +1,6 @@
 import os
 import pandas as pd
-from options_pricer_backtest import run_backtest
+from src.turbobounce.options_pricer_backtest import run_backtest
 
 def run_multiyear(start_year, end_year, initial_capital, accumulate=True):
     print(f"\n========================================================")
@@ -88,6 +88,7 @@ def run_multiyear(start_year, end_year, initial_capital, accumulate=True):
     return report
 
 if __name__ == "__main__":
-    report_25k = run_multiyear(2019, 2026, 25000, accumulate=True)
+    # The user requested to just test one year to save time (2025-2026) with $15,000 capital
+    report_25k = run_multiyear(2025, 2026, 15000, accumulate=True)
     
     print("\nALL BACKTESTS COMPLETE.")

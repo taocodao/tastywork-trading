@@ -227,7 +227,7 @@ async def approve_signal(signal_id: str, request: SignalApproveRequest):
                 # by mocking it, or we bypass should_auto_approve. Since user requested execution manually,
                 # we will bypass internal checks and route directly.
                 import os
-                from auto_approve import _execute_theta_auto_approve, _execute_zebra_auto_approve, _execute_dvo_auto_approve, _execute_pmcc_auto_approve, _execute_calendar_auto_approve
+                from auto_approve import _execute_theta_auto_approve, _execute_zebra_auto_approve, _execute_dvo_auto_approve, _execute_pmcc_auto_approve, _execute_calendar_auto_approve, _execute_turbocore_auto_approve
                 
                 user_token = os.getenv("TASTYTRADE_REFRESH_TOKEN")
                 if user_token:
@@ -247,6 +247,8 @@ async def approve_signal(signal_id: str, request: SignalApproveRequest):
                     elif "turbobounce" in strategy:
                         from src.turbobounce.executor import execute_turbobounce_trade
                         result = execute_turbobounce_trade(signal_data, session, account)
+                    elif "turbocore" in strategy or "rebalance" in strategy:
+                        result = _execute_turbocore_auto_approve(signal_data, session, account)
                     else:
                         result = _execute_calendar_auto_approve(signal_data, session, account)
                     

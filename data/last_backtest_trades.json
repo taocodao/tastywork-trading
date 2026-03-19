@@ -1,1 +1,233 @@
-[]
+[
+  {
+    "date": "2020-10-15",
+    "action": "OPEN",
+    "pid": "DIAG_2020-10-15",
+    "net_credit": 0.9757737243115079,
+    "contracts": 1
+  },
+  {
+    "date": "2020-10-16",
+    "action": "OPEN",
+    "pid": "DIAG_2020-10-16",
+    "net_credit": 0.8036321512093112,
+    "contracts": 1
+  },
+  {
+    "date": "2020-10-26",
+    "action": "CLOSE_ANCHOR",
+    "pid": "DIAG_2020-10-15",
+    "cost": 2.4016294808894667,
+    "contracts": 1
+  },
+  {
+    "date": "2020-10-26",
+    "action": "CLOSE_HEDGE",
+    "pid": "DIAG_2020-10-15",
+    "credit": 0.8529107832683929,
+    "contracts": 1
+  },
+  {
+    "date": "2020-10-26",
+    "action": "ROLL_DOWN",
+    "pid": "DIAG_2020-10-15",
+    "net_credit": 0.9671770228997811,
+    "contracts": 1
+  },
+  {
+    "date": "2020-10-28",
+    "action": "CLOSE_ANCHOR",
+    "pid": "DIAG_2020-10-16",
+    "cost": 3.3230668221873483,
+    "contracts": 1
+  },
+  {
+    "date": "2020-10-28",
+    "action": "CLOSE_HEDGE",
+    "pid": "DIAG_2020-10-16",
+    "credit": 1.9495070193609045,
+    "contracts": 1
+  },
+  {
+    "date": "2020-10-28",
+    "action": "ROLL_DOWN",
+    "pid": "DIAG_2020-10-16",
+    "net_credit": 1.0699743095219283,
+    "contracts": 1
+  },
+  {
+    "date": "2020-11-04",
+    "action": "CLOSE_ANCHOR_ONLY",
+    "pid": "DIAG_2020-10-16",
+    "cost": 0.563864181558686,
+    "contracts": 1
+  },
+  {
+    "date": "2020-11-05",
+    "action": "CLOSE_ANCHOR_ONLY",
+    "pid": "DIAG_2020-10-15",
+    "cost": 0.5984042892846153,
+    "contracts": 1
+  },
+  {
+    "date": "2020-11-06",
+    "action": "CLOSE_ANCHOR",
+    "pid": "DIAG_2020-10-15",
+    "cost": 0.45956458967876124,
+    "contracts": 1
+  },
+  {
+    "date": "2020-11-06",
+    "action": "CLOSE_ANCHOR",
+    "pid": "DIAG_2020-10-16",
+    "cost": 0.21208409264552364,
+    "contracts": 1
+  },
+  {
+    "date": "2020-11-09",
+    "action": "OPEN",
+    "pid": "DIAG_2020-11-09",
+    "net_credit": 0.9467648230447319,
+    "contracts": 1
+  },
+  {
+    "date": "2020-11-10",
+    "action": "OPEN",
+    "pid": "DIAG_2020-11-10",
+    "net_credit": 0.7439656170423676,
+    "contracts": 1
+  },
+  {
+    "date": "2020-11-16",
+    "action": "CLOSE_ANCHOR_ONLY",
+    "pid": "DIAG_2020-11-10",
+    "cost": 0.4789119682433194,
+    "contracts": 1
+  },
+  {
+    "date": "2020-11-24",
+    "action": "CLOSE_ANCHOR_ONLY",
+    "pid": "DIAG_2020-11-09",
+    "cost": 0.6300144294021015,
+    "contracts": 1
+  },
+  {
+    "date": "2020-11-24",
+    "action": "CLOSE_ANCHOR",
+    "pid": "DIAG_2020-11-10",
+    "cost": 0.35483724094633073,
+    "contracts": 1
+  },
+  {
+    "date": "2020-11-25",
+    "action": "CLOSE_ANCHOR",
+    "pid": "DIAG_2020-11-09",
+    "cost": 0.5137564957555538,
+    "contracts": 1
+  },
+  {
+    "date": "2020-12-21",
+    "action": "OPEN",
+    "pid": "DIAG_2020-12-21",
+    "net_credit": 1.0065182681390539,
+    "contracts": 1
+  },
+  {
+    "date": "2021-01-08",
+    "action": "CLOSE_ANCHOR_ONLY",
+    "pid": "DIAG_2020-12-21",
+    "cost": 0.46662863788013986,
+    "contracts": 1
+  },
+  {
+    "date": "2021-01-11",
+    "action": "CLOSE_ANCHOR",
+    "pid": "DIAG_2020-12-21",
+    "cost": 0.8079455399581867,
+    "contracts": 1
+  },
+  {
+    "date": "2021-01-12",
+    "action": "OPEN",
+    "pid": "DIAG_2021-01-12",
+    "net_credit": 0.6644391736387174,
+    "contracts": 1
+  },
+  {
+    "date": "2021-01-15",
+    "action": "OPEN",
+    "pid": "DIAG_2021-01-15",
+    "net_credit": 1.0073880549395682,
+    "contracts": 1
+  },
+  {
+    "date": "2021-01-20",
+    "action": "CLOSE_ANCHOR_ONLY",
+    "pid": "DIAG_2021-01-12",
+    "cost": 0.37188030350542434,
+    "contracts": 1
+  },
+  {
+    "date": "2021-01-20",
+    "action": "CLOSE_ANCHOR_ONLY",
+    "pid": "DIAG_2021-01-15",
+    "cost": 0.5155589134969212,
+    "contracts": 1
+  },
+  {
+    "date": "2021-01-21",
+    "action": "CLOSE_ANCHOR",
+    "pid": "DIAG_2021-01-12",
+    "cost": 0.2695114887440706,
+    "contracts": 1
+  },
+  {
+    "date": "2021-01-21",
+    "action": "CLOSE_ANCHOR",
+    "pid": "DIAG_2021-01-15",
+    "cost": 0.39790388762233775,
+    "contracts": 1
+  },
+  {
+    "date": "2021-02-10",
+    "action": "OPEN",
+    "pid": "DIAG_2021-02-10",
+    "net_credit": 0.8730151212705994,
+    "contracts": 1
+  },
+  {
+    "date": "2021-02-17",
+    "action": "OPEN",
+    "pid": "DIAG_2021-02-17",
+    "net_credit": 0.9110831624424591,
+    "contracts": 1
+  },
+  {
+    "date": "2021-02-22",
+    "action": "CLOSE_ANCHOR",
+    "pid": "DIAG_2021-02-10",
+    "cost": 2.4359376108026947,
+    "contracts": 1
+  },
+  {
+    "date": "2021-02-22",
+    "action": "CLOSE_HEDGE",
+    "pid": "DIAG_2021-02-10",
+    "credit": 0.9682662371113349,
+    "contracts": 1
+  },
+  {
+    "date": "2021-02-22",
+    "action": "CLOSE_ANCHOR",
+    "pid": "DIAG_2021-02-17",
+    "cost": 2.8663575247679383,
+    "contracts": 1
+  },
+  {
+    "date": "2021-02-22",
+    "action": "CLOSE_HEDGE",
+    "pid": "DIAG_2021-02-17",
+    "credit": 1.416107682693175,
+    "contracts": 1
+  }
+]

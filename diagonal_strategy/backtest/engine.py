@@ -17,6 +17,9 @@ from diagonal_strategy.core.state_machine import (
 )
 from diagonal_strategy.backtest.bsm_pricer import bs_put, put_strike
 from diagonal_strategy.core.risk_manager import DiagonalRiskManager
+from diagonal_strategy.core.roll_qualifier import RollQualifier
+from diagonal_strategy.core.long_put_replacer import LongPutReplacer
+from diagonal_strategy.core.stop_limit_manager import StopLimitManager
 
 logger = logging.getLogger(__name__)
 
@@ -28,6 +31,9 @@ class BacktestEngine:
         self.rx_manager = rx_manager
         self.osc_predictor = osc_predictor
         self.manager = ActiveDiagonalManager(config, ta_engine, osc_predictor)
+        self.roll_qualifier = RollQualifier(config)
+        self.long_put_replacer = LongPutReplacer(config)
+        self.stop_limit_manager = StopLimitManager(config)
         
         # Determine VIX multiplier from historical TQQQ volatility vs VIX
         self.vix_mult = 1.75
@@ -132,6 +138,17 @@ class BacktestEngine:
                 if action == 'CLOSE_ALL':
                     self._close_position(pos, current_date, tqqq_price, iv)
                     to_remove.append(pid)
+                elif action == 'CLOSE_SHORT_LEG_ONLY':
+                    self._close_anchor(pos, current_date, tqqq_price, iv)
+                    pos.state = DiagonalState.SHORT_CLOSED_LONG_RUNNING
+                    pos.trail_stop_limit = self.stop_limit_manager.calculate_stop(mkt_data.get('hedge_mid_price', 0.0), regime)
+                elif action == 'REPLACE_LONG_PUT':
+                    self._replace_long_put(pos, current_date, tqqq_price, iv, mkt_data, regime)
+                elif action == 'CLOSE_AND_ROLL_DOWN':
+                    res = self._qualify_and_roll(pos, current_date, tqqq_price, iv, mkt_data, regime)
+                    if not res:
+                        self._close_position(pos, current_date, tqqq_price, iv)
+                        to_remove.append(pid)
                 elif action == 'CLOSE_HEDGE':
                     self._close_hedge(pos, current_date, tqqq_price, iv)
                 elif action == 'CLOSE_ANCHOR':
@@ -367,3 +384,94 @@ class BacktestEngine:
             if pos.state in (DiagonalState.FULL_DIAGONAL, DiagonalState.RE_HEDGED):
                 # Will be closed within same loop at DTE 0/1, so this is just a fail-safe
                 pass
+
+    def _replace_long_put(self, pos, current_date, spot, iv, mkt_data, regime):
+        self._close_hedge(pos, current_date, spot, iv)
+        
+        params = self.long_put_replacer.get_replacement_params(regime)
+        h_dte = params['target_dte']
+        h_del = params['target_delta']
+        
+        h_k = put_strike(spot, h_del, iv, h_dte)
+        h_price = bs_put(spot, h_k, h_dte/365.0, iv)
+        
+        cycle = DiagonalCycle(
+            cycle_number=pos.cycles_completed + 1,
+            hedge_entry_date=current_date,
+            hedge_entry_price=h_price,
+            hedge_strike=h_k,
+            hedge_expiry=(pd.Timestamp(current_date) + pd.Timedelta(days=h_dte)).date(),
+            hedge_dte_at_entry=h_dte,
+        )
+        pos.cycles.append(cycle)
+        pos.state = DiagonalState.RE_HEDGED
+        pos.naked_since = None
+        
+        self.rx_manager.update_pnl(-h_price * 100 * pos.contracts)
+        self.trades_history.append({'date': current_date, 'action': 'REPLACE_LONG_PUT', 'pid': pos.position_id, 'cost': h_price, 'contracts': pos.contracts})
+
+    def _qualify_and_roll(self, pos, current_date, spot, iv, mkt_data, regime) -> bool:
+        params = self.config.TQQQ_DIAGONAL_PARAMS.get(regime, self.config.TQQQ_DIAGONAL_PARAMS['NORMAL'])
+        new_dte = params['anchor_dte']
+        new_del = params['anchor_delta']
+        
+        new_a_k = put_strike(spot, new_del, iv, new_dte)
+        new_a_price = bs_put(spot, new_a_k, new_dte/365.0, iv)
+        
+        a_dte = max(0, (pos.anchor_expiry - current_date).days)
+        a_price_to_close = bs_put(spot, pos.anchor_strike, a_dte/365.0, iv) if a_dte > 0 else max(0, pos.anchor_strike - spot)
+        
+        h_dte = params['hedge_dte']
+        h_del = params['hedge_delta']
+        new_h_k = put_strike(spot, h_del, iv, h_dte)
+        new_h_price = bs_put(spot, new_h_k, h_dte/365.0, iv)
+        
+        new_credit = new_a_price - new_h_price
+        new_width = max(0, new_a_k - new_h_k)
+        
+        res = self.roll_qualifier.evaluate_roll(
+            position=pos,
+            current_price=spot,
+            iv_rank=mkt_data.get('iv_rank', 50),
+            vol_regime=regime,
+            ml_prob=1.0, # simplified for phase 1 backtest
+            new_credit=new_credit,
+            new_width=new_width,
+            bp_total=self.rx_manager._current_value,
+            bp_consumed=self.rx_manager._total_at_risk
+        )
+        
+        if res.passed:
+            logger.info(f"V3 Roll Qualified. Rolling down position {pos.position_id}.")
+            self._close_position(pos, current_date, spot, iv)
+            
+            pos.roll_count += 1
+            max_loss = new_width * 100 * pos.contracts
+            
+            # Restart as a new full diagonal position with history preserved in pos
+            pos.state = DiagonalState.FULL_DIAGONAL
+            pos.anchor_strike = new_a_k
+            pos.anchor_expiry = (pd.Timestamp(current_date) + pd.Timedelta(days=new_dte)).date()
+            pos.anchor_entry_date = current_date
+            pos.anchor_entry_credit = new_a_price
+            pos.anchor_delta_at_entry = new_del
+            pos.anchor_dte_at_entry = new_dte
+            pos.tqqq_price_at_entry = spot
+            
+            cycle = DiagonalCycle(
+                cycle_number=pos.cycles_completed + 1,
+                hedge_entry_date=current_date,
+                hedge_entry_price=new_h_price,
+                hedge_strike=new_h_k,
+                hedge_expiry=(pd.Timestamp(current_date) + pd.Timedelta(days=h_dte)).date(),
+                hedge_dte_at_entry=h_dte,
+            )
+            pos.cycles.append(cycle)
+            
+            self.rx_manager.on_position_opened(max_loss)
+            self.rx_manager.update_pnl(new_credit * 100 * pos.contracts)
+            self.trades_history.append({'date': current_date, 'action': 'ROLL_DOWN', 'pid': pos.position_id, 'net_credit': new_credit, 'contracts': pos.contracts})
+            return True
+            
+        logger.info(f"V3 Roll Rejected. Reasons: {res.reasons}. Closing position.")
+        return False

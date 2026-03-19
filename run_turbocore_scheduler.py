@@ -11,6 +11,7 @@ by auto_approve.py.
 import os
 import time
 import logging
+import requests
 from datetime import datetime, date, timedelta
 import pytz
 from dotenv import load_dotenv
@@ -92,6 +93,7 @@ class TurboCoreScheduler:
         base_signal = int(today_row.get('base_signal', 0))
         confidence = float(today_row.get('ml_confidence', 0.5))
         is_sma_forced = bool(today_row.get('qqq_below_sma200_sell', False))
+        qqq_drawdown = float(today_row.get('qqq_drawdown_ath', 0.0))
         
         # 4. Determine Dynamic Allocation Matrix
         target_allocation = self.allocator.get_target_allocation(
@@ -104,6 +106,7 @@ class TurboCoreScheduler:
         
         rationale = f"Regime: {regime} | Conf: {confidence:.0%} | SMA Drop: {is_sma_forced}"
         
+        
         # 5. Publish
         publish_turbocore_rebalance_signal(
             regime=regime,
@@ -111,8 +114,23 @@ class TurboCoreScheduler:
             alloc_dict=target_allocation,
             rationale=rationale,
             ema_signal=base_signal,
-            sma200_gate=not is_sma_forced
+            sma200_gate=not is_sma_forced,
+            strategy="TQQQ_TURBOCORE"
         )
+        
+        # 6. Notify trademind.bot Web Application via SSE Push
+        try:
+            resp = requests.post(
+                "https://www.trademind.bot/api/signals/notify",
+                json={"strategy": "TQQQ_TURBOCORE"},
+                timeout=10
+            )
+            if resp.status_code == 200:
+                logger.info("✅ Pushed SSE notification to trademind.bot frontend")
+            else:
+                logger.warning(f"⚠️ SSE Push returned status {resp.status_code}")
+        except Exception as e:
+            logger.error(f"❌ Failed to notify trademind.bot SSE endpoint: {e}")
         
         logger.info("--- TurboCore Scan Complete ---")
 
@@ -126,8 +144,9 @@ class TurboCoreScheduler:
                 is_open = is_market_open()
                 
                 time_to_scan = False
-                # Trigger scan at 15:00 ET (1 hour before market close)
-                if now.hour == 15 and now.weekday() < 5:
+                
+                # Trigger scan continuously after 15:00 ET (1 hour before close) and catch-up if missed
+                if now.weekday() < 5 and now.hour >= 15:
                     if self.last_scan_date != now.date():
                         time_to_scan = True
                 
@@ -136,8 +155,8 @@ class TurboCoreScheduler:
                     self.last_scan_date = now.date()
                     
                 if is_open:
-                    # Check periodically just in case (e.g. 10m)
-                    time.sleep(600)
+                    # Check every 1 minute to ensure we trigger cleanly at 3:00 PM
+                    time.sleep(60)
                 else:
                     sleep_time = time_until_market_open()
                     logger.info(f"Market closed. Sleeping for {sleep_time/3600:.1f} hours.")

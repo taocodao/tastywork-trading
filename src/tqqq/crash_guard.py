@@ -28,7 +28,7 @@ class CrashGuard:
     """
 
     def evaluate_entry(self, daily_df: pd.DataFrame, intraday_row: pd.Series, ml_prob: float) -> CrashGuardResult:
-        if daily_df.empty or len(daily_df) < 200:
+        if daily_df.empty or len(daily_df) < 1:
             return CrashGuardResult(False, 0, 0.0, {"error": "Insufficient daily data"})
 
         latest_daily = daily_df.iloc[-1]

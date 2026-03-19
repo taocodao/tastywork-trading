@@ -1,0 +1,72 @@
+[
+  {
+    "date": "2020-10-15",
+    "action": "OPEN",
+    "pid": "DIAG_2020-10-15",
+    "net_credit": 0.6060095419623304,
+    "contracts": 2
+  },
+  {
+    "date": "2020-10-16",
+    "action": "OPEN",
+    "pid": "DIAG_2020-10-16",
+    "net_credit": 0.563161213456997,
+    "contracts": 2
+  },
+  {
+    "date": "2020-10-22",
+    "action": "CLOSE_HEDGE",
+    "pid": "DIAG_2020-10-15",
+    "credit": 0.4381866455078125,
+    "contracts": 2
+  },
+  {
+    "date": "2020-10-22",
+    "action": "REPLACE_LONG_PUT",
+    "pid": "DIAG_2020-10-15",
+    "cost": 0.2187560788792684,
+    "contracts": 2
+  },
+  {
+    "date": "2020-10-23",
+    "action": "CLOSE_HEDGE",
+    "pid": "DIAG_2020-10-16",
+    "credit": 0,
+    "contracts": 2
+  },
+  {
+    "date": "2020-10-23",
+    "action": "REPLACE_LONG_PUT",
+    "pid": "DIAG_2020-10-16",
+    "cost": 0.18534357052946948,
+    "contracts": 2
+  },
+  {
+    "date": "2020-10-28",
+    "action": "CLOSE_ANCHOR",
+    "pid": "DIAG_2020-10-15",
+    "cost": 3.207960785087227,
+    "contracts": 2
+  },
+  {
+    "date": "2020-10-28",
+    "action": "CLOSE_HEDGE",
+    "pid": "DIAG_2020-10-15",
+    "credit": 1.6331191323767573,
+    "contracts": 2
+  },
+  {
+    "date": "2020-10-28",
+    "action": "CLOSE_ANCHOR",
+    "pid": "DIAG_2020-10-16",
+    "cost": 2.774085194109041,
+    "contracts": 2
+  },
+  {
+    "date": "2020-10-28",
+    "action": "CLOSE_HEDGE",
+    "pid": "DIAG_2020-10-16",
+    "credit": 1.6363415474501917,
+    "contracts": 2
+  }
+]

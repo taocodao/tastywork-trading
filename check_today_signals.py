@@ -1,26 +1,31 @@
-#!/usr/bin/env python3
-"""Check if any signals were generated today."""
+import os
+import psycopg2
+from dotenv import load_dotenv
 
-from datetime import datetime
-from src.earnings_intelligence.database import SignalRepository
+load_dotenv()
+db_url = os.getenv("DATABASE_URL")
+if not db_url:
+    print("No DATABASE_URL found.")
+    exit(1)
 
-repo = SignalRepository()
-signals = repo.get_all_signals(include_expired=True)
+conn = psycopg2.connect(db_url)
+cur = conn.cursor()
 
-today = datetime.now().date()
-today_signals = [s for s in signals if s.created_at.date() == today]
-
-print(f"\n📊 Total signals generated today ({today}): {len(today_signals)}\n")
-
-if today_signals:
-    print("Time     | Strategy        | Symbol | Status")
-    print("-" * 55)
-    for s in sorted(today_signals, key=lambda x: x.created_at):
-        time_str = s.created_at.strftime("%H:%M:%S")
-        strategy_str = s.strategy[:15].ljust(15)
-        symbol_str = s.symbol[:6].ljust(6)
-        status_str = s.status
-        print(f"{time_str} | {strategy_str} | {symbol_str} | {status_str}")
+print("\n=== SIGNALS GENERATED TODAY ===")
+cur.execute("""
+    SELECT id, strategy, status, created_at, ts_rank 
+    FROM (
+        SELECT id, strategy, status, created_at, 1 as ts_rank FROM signals
+    ) sub
+    WHERE created_at > CURRENT_DATE
+    ORDER BY created_at DESC
+""")
+rows = cur.fetchall()
+if not rows:
+    print("No signals found for today.")
 else:
-    print("❌ No signals generated yet today.")
-    print("\nChecking service logs for errors...")
+    for row in rows:
+        print(row)
+
+cur.close()
+conn.close()

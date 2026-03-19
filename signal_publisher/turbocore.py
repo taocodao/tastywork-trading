@@ -74,7 +74,8 @@ def publish_turbocore_rebalance_signal(
     alloc_dict: Dict[str, float],
     rationale: str,
     ema_signal: int,
-    sma200_gate: bool
+    sma200_gate: bool,
+    strategy: str = "TQQQ_TURBOCORE"
 ):
     import logging
     logger = logging.getLogger(__name__)
@@ -83,11 +84,12 @@ def publish_turbocore_rebalance_signal(
         timestamp=datetime.utcnow().isoformat() + "Z",
         symbol="TQQQ_PORT",
         action="REBALANCE",
+        strategy=strategy,
         ml_regime=regime,
         ml_confidence=confidence,
         allocation_qqq=alloc_dict.get("QQQ", 0.0),
         allocation_qld=alloc_dict.get("QLD", 0.0),
-        allocation_tqqq=alloc_dict.get("TQQQ", 0.0),
+        allocation_tqqq=alloc_dict.get("QQQ_LEAPS", alloc_dict.get("TQQQ", 0.0)),
         allocation_sgov=alloc_dict.get("SGOV", 1.0),
         rationale=rationale,
         ema_signal=ema_signal,

@@ -1,0 +1,19 @@
+[Unit]
+Description=TradeMind TurboCore TQQQ Strategy Scheduler
+After=network.target
+
+[Service]
+User=ubuntu
+WorkingDirectory=/home/ubuntu/tastywork-trading
+ExecStart=/usr/bin/python3 run_turbocore_scheduler.py
+Restart=always
+RestartSec=60
+Environment=PYTHONUNBUFFERED=1
+EnvironmentFile=/home/ubuntu/tastywork-trading/.env
+
+# Logging
+StandardOutput=append:/var/log/trademind/turbocore-scheduler.log
+StandardError=append:/var/log/trademind/turbocore-scheduler.error.log
+
+[Install]
+WantedBy=multi-user.target
