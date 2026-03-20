@@ -54,7 +54,6 @@ NEW_CRON=$(cat <<EOF
 # TradeMind Signal Generators — 3:00 PM ET, Mon-Fri (installed $(date))
 0 15 * * 1-5 cd $PROJECT_DIR && $PYTHON_BIN run_turbocore_scheduler.py --once >> $LOGS_DIR/run_turbocore_scheduler.log 2>&1
 1 15 * * 1-5 cd $PROJECT_DIR && $PYTHON_BIN run_turbocore_pro_scheduler.py --once >> $LOGS_DIR/run_turbocore_pro_scheduler.log 2>&1
-2 15 * * 1-5 cd $PROJECT_DIR && $PYTHON_BIN run_turbobounce_scheduler.py --once --mode MODE_A >> $LOGS_DIR/run_turbobounce_scheduler.log 2>&1
 EOF
 )
 

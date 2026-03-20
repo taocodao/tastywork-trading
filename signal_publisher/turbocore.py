@@ -18,11 +18,8 @@ class TurboCoreEntrySignal:
     ema_signal: int = 0
     sma200_gate: bool = True
     
-    # Portfolio Allocation Matrix (%)
-    allocation_qqq: float = 0.0
-    allocation_qld: float = 0.0
-    allocation_tqqq: float = 0.0
-    allocation_sgov: float = 1.0
+    # Portfolio Allocation Matrix (%) - dynamically passed from allocator
+    allocations: dict = field(default_factory=dict)
     
     # Optional metadata
     rationale: str = ""
@@ -56,10 +53,8 @@ class TurboCoreEntrySignal:
             # Pack custom TurboCore fields into JSON structure
             # (Matches DB schema 'legs' or dynamic 'cost' fields on Vercel)
             "legs": [
-                {"symbol": "QQQ", "target_pct": self.allocation_qqq},
-                {"symbol": "QLD", "target_pct": self.allocation_qld},
-                {"symbol": "TQQQ", "target_pct": self.allocation_tqqq},
-                {"symbol": "SGOV", "target_pct": self.allocation_sgov}
+                {"symbol": str(sym), "target_pct": float(pct)}
+                for sym, pct in self.allocations.items()
             ],
             "cost": 0.0,
             "capital_required": 1000.0, # Dummy for UI compatibility initially
@@ -87,17 +82,14 @@ def publish_turbocore_rebalance_signal(
         strategy=strategy,
         ml_regime=regime,
         ml_confidence=confidence,
-        allocation_qqq=alloc_dict.get("QQQ", 0.0),
-        allocation_qld=alloc_dict.get("QLD", 0.0),
-        allocation_tqqq=alloc_dict.get("QQQ_LEAPS", alloc_dict.get("TQQQ", 0.0)),
-        allocation_sgov=alloc_dict.get("SGOV", 1.0),
+        allocations=alloc_dict,
         rationale=rationale,
         ema_signal=ema_signal,
         sma200_gate=sma200_gate
     )
     
     data = sig.to_dict()
-    logger.info(f"Publishing TurboCore Signal: {regime} | Conf: {confidence:.2f} | TQQQ: {sig.allocation_tqqq*100}%")
+    logger.info(f"Publishing TurboCore Signal: {regime} | Conf: {confidence:.2f} | Legs: {list(alloc_dict.keys())}")
     
     # Save to PostgreSQL Base
     try:
