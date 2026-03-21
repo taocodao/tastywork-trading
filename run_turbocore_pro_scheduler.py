@@ -95,6 +95,12 @@ class TurboCoreProScheduler:
         is_sma_forced = bool(today_row.get('qqq_below_sma200_sell', False))
         qqq_drawdown = float(today_row.get('qqq_drawdown_ath', 0.0))
         
+        # BUG FIX: Override regime to BEAR_SMA_FORCED BEFORE allocator call.
+        # Previously is_sma_forced was only used in the rationale string, meaning
+        # the strongest risk-off gate never actually triggered 100% SGOV allocation.
+        if is_sma_forced:
+            regime = "BEAR_SMA_FORCED"
+        
         # 4. Determine Dynamic Allocation Matrix
         target_allocation = self.allocator.get_target_allocation(
             regime=regime,
