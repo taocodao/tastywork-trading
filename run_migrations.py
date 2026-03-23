@@ -43,7 +43,7 @@ def run_file(conn, path):
         run_statement(conn, stmt)
 
 if __name__ == "__main__":
-    print("Database: %s" % engine.url)
+    print("Database: " + str(engine.url))
     is_sqlite = "sqlite" in str(engine.url)
 
     # Run each migration file — each statement in its own transaction
