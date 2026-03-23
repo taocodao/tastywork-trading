@@ -1,0 +1,54 @@
+-- Migration 0013: IV-Switching Positions Table
+-- Tracks virtual options positions for all IV-Switching modes per user.
+-- This is the source of truth for position state used by daily_order_generator.py
+-- to avoid redundant TastyTrade API calls during order generation.
+
+CREATE TABLE IF NOT EXISTS iv_switching_positions (
+    id                  UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id             TEXT NOT NULL,
+
+    -- Strategy context
+    mode                VARCHAR(8)  NOT NULL,   -- A / B / C / D2 / D3
+    signal_type         VARCHAR(32) NOT NULL,   -- OPEN_ZEBRA / OPEN_CSP / etc.
+
+    -- Position details
+    symbol              VARCHAR(16),
+    option_type         VARCHAR(16),            -- ZEBRA / CSP / CCS / EQUITY
+    contracts           INTEGER DEFAULT 0,
+
+    -- Strikes & expiry
+    long_strike         FLOAT,
+    short_strike        FLOAT,
+    expiry_date         DATE,
+
+    -- Pricing
+    entry_price         FLOAT,                  -- net debit / premium at fill
+    fill_price          FLOAT,                  -- actual fill price from TT
+    current_price       FLOAT,                  -- last mark price
+
+    -- P&L
+    unrealized_pnl      FLOAT DEFAULT 0,
+    realized_pnl        FLOAT DEFAULT 0,
+
+    -- Lifecycle
+    status              VARCHAR(16) DEFAULT 'OPEN',
+    -- 'OPEN' | 'CLOSED_PROFIT' | 'CLOSED_STOP' | 'CLOSED_EXPIRY' | 'CLOSED_REGIME'
+    tt_order_id         TEXT,                   -- TastyTrade order ID for tracking
+    opened_at           TIMESTAMPTZ DEFAULT NOW(),
+    closed_at           TIMESTAMPTZ,
+
+    -- Metadata
+    created_at          TIMESTAMPTZ DEFAULT NOW(),
+    updated_at          TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Indexes for common query patterns
+CREATE INDEX IF NOT EXISTS idx_ivs_positions_user_status
+    ON iv_switching_positions (user_id, status);
+
+CREATE INDEX IF NOT EXISTS idx_ivs_positions_user_mode
+    ON iv_switching_positions (user_id, mode, status);
+
+CREATE INDEX IF NOT EXISTS idx_ivs_positions_tt_order
+    ON iv_switching_positions (tt_order_id)
+    WHERE tt_order_id IS NOT NULL;

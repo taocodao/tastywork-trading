@@ -1,0 +1,751 @@
+"""
+Daily Order Generator
+=====================
+Runs every trading day at 4:15 PM ET.
+
+One global IV-Switching signal is generated from today's market data, then
+for each subscribed user:
+  1. Fetch their live TastyTrade account balance + positions
+  2. Count what strategy positions they already have
+  3. Determine what order the strategy calls for
+  4. Build exact OCC option symbols + order legs
+  5. Persist to user_daily_orders table
+
+Entry point: run_daily_order_generation(trade_date=today)
+"""
+
+import sys
+import os
+import logging
+from datetime import date, datetime, timedelta
+from typing import Optional, Dict, Any, List
+
+log = logging.getLogger("IVS.DailyOrders")
+
+# ── Add iv-switching-composite to path ────────────────────────────────────────
+_THIS_DIR = os.path.dirname(os.path.abspath(__file__))
+sys.path.insert(0, _THIS_DIR)
+
+# ── Internal imports (strategy engine) ───────────────────────────────────────
+import data.features as features
+from regime_engine import classify_mode, should_open_d1
+from position_sizer import (
+    size_csp_trade, size_zebra_trade, size_ccs_trade, size_d2_sqqq
+)
+from pricing import bs_call_price, bs_put_price, find_strike_for_delta, SLIPPAGE_PER_SIDE
+
+
+def _get_monthly_friday(ref_date: date, offset_days: int = 35) -> date:
+    """Returns the Friday of the week ~offset_days from ref_date."""
+    import pandas as pd
+    target = pd.Timestamp(ref_date) + pd.Timedelta(days=offset_days)
+    weekday = target.weekday()
+    if weekday < 4:
+        target += pd.Timedelta(days=4 - weekday)
+    elif weekday > 4:
+        target += pd.Timedelta(days=7 - weekday + 4)
+    return target.date()
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# STEP 1 — Generate Global Daily Signal
+# ─────────────────────────────────────────────────────────────────────────────
+
+def generate_daily_signal(trade_date: date) -> dict:
+    """
+    Runs regime_engine on today's market data and returns a snapshot dict
+    that is shared across all user order calculations.
+    """
+    import pandas as pd
+    date_str = trade_date.strftime("%Y-%m-%d")
+    # Fetch a 400-day lookback so indicators (SMA200, IVP, etc.) are valid
+    start = (trade_date - timedelta(days=400)).strftime("%Y-%m-%d")
+
+    log.info(f"Building feature set for {date_str}...")
+    df = features.build_feature_set(start, date_str)
+    if df.empty:
+        raise RuntimeError(f"No market data returned for {date_str}")
+
+    row = df.iloc[-1]
+
+    # ── Extract core market data ─────────────────────────────────────────────
+    qqq_px       = float(row['qqq_close'])
+    qqqm_px      = float(row['qqqm_close'])
+    tqqq_px      = float(row['tqqq_close'])
+    sqqq_px      = float(row['sqqq_close'])
+    vix          = float(row['vix'])
+    rf           = float(row['rf'])
+    iv_short     = float(row['qqq_short_iv'])
+    iv_leaps     = float(row['qqq_iv_leaps'])   # LEAPS-tenor IV (~110% of spot VIX)
+    iv_tqqq_10d  = float(row['tqqq_iv_10d'])
+    vvix_10d_chg = float(row.get('vvix_10d_chg', 0))
+    vix_vix3m    = float(row['vix_vix3m_ratio'])
+
+
+    # Classify regime (no user-specific peak_vix at this level)
+    mode = classify_mode(row, peak_vix=None, d2_active=False, current_date=date_str)
+
+    signal = {
+        "trade_date":   trade_date,
+        "mode":         mode,
+        "qqq_px":       qqq_px,
+        "qqqm_px":      qqqm_px,
+        "tqqq_px":      tqqq_px,
+        "sqqq_px":      sqqq_px,
+        "vix":          vix,
+        "rf":           rf,
+        "iv_short":     iv_short,
+        "iv_leaps":     iv_leaps,
+        "iv_tqqq_10d":  iv_tqqq_10d,
+        "vvix_10d_chg": vvix_10d_chg,
+        "vix_vix3m":    vix_vix3m,
+        "row":          row,          # full row for advanced calcs
+    }
+    log.info(f"Daily signal: Mode={mode}, VIX={vix:.1f}, QQQM=${qqqm_px:.2f}")
+    return signal
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# STEP 2 — Fetch & Classify User's Live TastyTrade Account
+# ─────────────────────────────────────────────────────────────────────────────
+
+def fetch_user_account_state(user) -> dict:
+    """
+    Creates a TastyTrade session for the user and returns their live
+    account balance + classified position summary.
+
+    Args:
+        user: models.user.User ORM object (must have tt_refresh_token)
+
+    Returns:
+        dict with cash, nlv, buying_power, position_counts, raw_positions
+    """
+    from tastytrade_utils import create_user_session, get_user_account
+
+    if not user.tt_refresh_token:
+        raise ValueError(f"User {user.id} has no tt_refresh_token")
+
+    session = create_user_session(user.tt_refresh_token)
+    account = get_user_account(session, getattr(user, 'tt_account_number', None))
+    balances  = account.get_balances(session)
+    positions = account.get_positions(session)
+
+    # Classify positions
+    pos_counts = _classify_tt_positions(positions)
+
+    return {
+        "session":        session,
+        "account":        account,
+        "cash":           float(getattr(balances, 'cash_balance', 0) or 0),
+        "nlv":            float(getattr(balances, 'net_liquidating_value', 0) or 0),
+        "buying_power":   float(getattr(balances, 'derivative_buying_power', 0) or 0),
+        "position_counts": pos_counts,
+        "raw_positions":  positions,
+    }
+
+
+def _classify_tt_positions(positions) -> dict:
+    """
+    Inspect live TastyTrade positions and classify into strategy buckets.
+
+    - ZEBRA = QQQM calls (2 long + 1 short per unit)
+    - CSP   = TQQQ short puts
+    - CCS   = QQQ short call spread
+    - SQQQ  = SQQQ long shares
+    """
+    qqqm_long_qty  = 0
+    qqqm_short_qty = 0
+    tqqq_short_put = 0
+    qqq_ccs_count  = 0
+    sqqq_shares    = 0
+
+    for pos in positions:
+        symbol   = getattr(pos, 'underlying_symbol', '') or ''
+        qty      = int(getattr(pos, 'quantity', 0) or 0)
+        itype    = getattr(pos, 'instrument_type', '') or ''
+        opt_type = getattr(pos, 'option_type', '') or ''
+
+        if symbol == 'SQQQ' and itype in ('Equity', ''):
+            sqqq_shares += qty
+        elif symbol == 'TQQQ' and opt_type.upper() in ('P', 'PUT') and qty < 0:
+            tqqq_short_put += abs(qty)
+        elif symbol == 'QQQ' and opt_type.upper() in ('C', 'CALL'):
+            if qty < 0:
+                qqq_ccs_count += 1
+        elif symbol == 'QQQM' and opt_type.upper() in ('C', 'CALL'):
+            if qty > 0:
+                qqqm_long_qty += qty
+            else:
+                qqqm_short_qty += abs(qty)
+
+    # Each ZEBRA unit = 2 long calls + 1 short call
+    zebra_by_long  = qqqm_long_qty // 2
+    zebra_by_short = qqqm_short_qty
+    zebra_units    = min(zebra_by_long, zebra_by_short)
+
+    return {
+        "zebra_units":  zebra_units,
+        "csp_count":    tqqq_short_put,
+        "ccs_count":    qqq_ccs_count // 2,   # pairs
+        "sqqq_shares":  sqqq_shares,
+    }
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# STEP 3 — Build Order for Each Mode
+# ─────────────────────────────────────────────────────────────────────────────
+
+def _build_zebra_order(signal: dict, contracts: int) -> dict:
+    """Builds a Mode B ZEBRA order dict with exact OCC symbols.
+
+    ZEBRA ratio spread: 2× long 70-delta / 1× short 50-delta at 75 DTE (same expiry).
+    Validated by Perplexity (2026-03-22): lower net debit than PMCC diagonal, higher
+    upside convexity, and theta-neutral from Day 0 — optimal for 30–60 day hold periods.
+    """
+    qqqm_px  = signal['qqqm_px']
+    iv_short = signal['iv_short']
+    rf       = signal['rf']
+    T_z      = 75 / 365.0
+
+    long_strike  = find_strike_for_delta(qqqm_px, T_z, rf, iv_short, 0.70, 'call')
+    short_strike = find_strike_for_delta(qqqm_px, T_z, rf, iv_short, 0.50, 'call')
+
+    lc_px = bs_call_price(qqqm_px, long_strike,  T_z, rf, iv_short)
+    sc_px = bs_call_price(qqqm_px, short_strike, T_z, rf, iv_short)
+    net_debit = round((2 * lc_px) - sc_px, 2)
+
+    expiry  = _get_monthly_friday(signal['trade_date'], 75)
+    exp_str = expiry.strftime('%y%m%d')
+
+    long_occ  = f"QQQM  {exp_str}C{int(long_strike * 1000):08d}"
+    short_occ = f"QQQM  {exp_str}C{int(short_strike * 1000):08d}"
+
+    cap = round(net_debit * contracts * 100, 2)
+
+    return {
+        "signal_type":     "OPEN_ZEBRA",
+        "symbol":          "QQQM",
+        "option_type":     "ZEBRA",
+        "contracts":       contracts,
+        "long_strike":     long_strike,
+        "short_strike":    short_strike,
+        "expiry_date":     expiry,
+        "limit_price":     net_debit,
+        "capital_required": cap,
+        "order_legs": [
+            {"action": "BUY_TO_OPEN",  "symbol": long_occ.strip(),  "qty": contracts * 2,
+             "instrument_type": "Equity Option"},
+            {"action": "SELL_TO_OPEN", "symbol": short_occ.strip(), "qty": contracts,
+             "instrument_type": "Equity Option"},
+        ],
+    }
+
+
+def _build_csp_order(signal: dict, contracts: int) -> dict:
+    """Builds a Mode A TQQQ CSP order dict with exact OCC symbol."""
+    tqqq_px    = signal['tqqq_px']
+    rf         = signal['rf']
+    iv_tqqq    = signal['iv_tqqq_10d']
+    T_csp      = 7 / 365.0
+
+    strike  = find_strike_for_delta(tqqq_px, T_csp, rf, iv_tqqq, 0.12, 'put')
+    premium = round(bs_put_price(tqqq_px, strike, T_csp, rf, iv_tqqq), 2)
+
+    # Expiry: next Friday (7 DTE)
+    d = signal['trade_date']
+    days_to_fri = (4 - d.weekday()) % 7
+    if days_to_fri == 0:
+        days_to_fri = 7
+    expiry  = d + timedelta(days=days_to_fri)
+    exp_str = expiry.strftime('%y%m%d')
+
+    occ = f"TQQQ  {exp_str}P{int(strike * 1000):08d}"
+
+    return {
+        "signal_type":     "OPEN_CSP",
+        "symbol":          "TQQQ",
+        "option_type":     "CSP",
+        "contracts":       contracts,
+        "long_strike":     None,
+        "short_strike":    strike,
+        "expiry_date":     expiry,
+        "limit_price":     premium,
+        "capital_required": round(strike * contracts * 100, 2),  # margin held
+        "order_legs": [
+            {"action": "SELL_TO_OPEN", "symbol": occ.strip(), "qty": contracts,
+             "instrument_type": "Equity Option"},
+        ],
+    }
+
+
+def _build_ccs_order(signal: dict, contracts: int) -> dict:
+    """Builds a Mode C QQQ Bear Call Spread order."""
+    qqq_px   = signal['qqq_px']
+    iv_short = signal['iv_short']
+    rf       = signal['rf']
+    T_ccs    = 45 / 365.0
+
+    short_strike = find_strike_for_delta(qqq_px, T_ccs, rf, iv_short, 0.30, 'call')
+    long_strike  = find_strike_for_delta(qqq_px, T_ccs, rf, iv_short, 0.20, 'call')
+
+    sc_px = bs_call_price(qqq_px, short_strike, T_ccs, rf, iv_short)
+    lc_px = bs_call_price(qqq_px, long_strike,  T_ccs, rf, iv_short)
+    net_credit = round(sc_px - lc_px, 2)
+    margin = round((long_strike - short_strike) * 100, 2)
+
+    expiry  = _get_monthly_friday(signal['trade_date'], 45)
+    exp_str = expiry.strftime('%y%m%d')
+
+    short_occ = f"QQQ   {exp_str}C{int(short_strike * 1000):08d}"
+    long_occ  = f"QQQ   {exp_str}C{int(long_strike  * 1000):08d}"
+
+    return {
+        "signal_type":      "OPEN_CCS",
+        "symbol":           "QQQ",
+        "option_type":      "CCS",
+        "contracts":        contracts,
+        "long_strike":      long_strike,
+        "short_strike":     short_strike,
+        "expiry_date":      expiry,
+        "limit_price":      net_credit,
+        "capital_required": round(margin * contracts, 2),
+        "order_legs": [
+            {"action": "SELL_TO_OPEN", "symbol": short_occ.strip(), "qty": contracts,
+             "instrument_type": "Equity Option"},
+            {"action": "BUY_TO_OPEN",  "symbol": long_occ.strip(),  "qty": contracts,
+             "instrument_type": "Equity Option"},
+        ],
+    }
+
+
+def _build_sqqq_order(signal: dict, dollar_amount: float) -> dict:
+    """Builds a Mode D2 SQQQ equity buy order."""
+    sqqq_px = signal['sqqq_px']
+    shares  = max(int(dollar_amount / sqqq_px), 0)
+    if shares == 0:
+        return _hold_order("Insufficient cash for SQQQ")
+
+    return {
+        "signal_type":      "OPEN_SQQQ",
+        "symbol":           "SQQQ",
+        "option_type":      "EQUITY",
+        "contracts":        shares,
+        "long_strike":      None,
+        "short_strike":     None,
+        "expiry_date":      None,
+        "limit_price":      round(sqqq_px, 2),
+        "capital_required": round(shares * sqqq_px, 2),
+        "order_legs": [
+            {"action": "BUY", "symbol": "SQQQ", "qty": shares,
+             "instrument_type": "Equity"},
+        ],
+    }
+
+
+def _hold_order(reason: str = "Strategy is HOLD") -> dict:
+    """Returns a NO_ACTION order placeholder."""
+    return {
+        "signal_type":      "NO_ACTION",
+        "symbol":           None,
+        "option_type":      None,
+        "contracts":        0,
+        "long_strike":      None,
+        "short_strike":     None,
+        "expiry_date":      None,
+        "limit_price":      None,
+        "capital_required": 0.0,
+        "order_legs":       [],
+        "skip_reason":      reason,
+    }
+
+
+# (P3 OVERLAY_SHORT_CALL removed: Perplexity confirmed selling on negative momentum
+#  caps upside during V-shape recoveries. The ZEBRA's built-in 50-delta short already
+#  handles theta collection. Do not add a separate overlay.)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# STEP 4 — Reconcile and Pick Order per User
+# ─────────────────────────────────────────────────────────────────────────────
+
+def reconcile_and_generate_order(signal: dict, account_state: dict) -> dict:
+    """
+    Given today's global signal and the user's live account state, determine
+    what order (if any) the strategy requires.
+
+    Returns an order dict which will be saved to user_daily_orders.
+    """
+    mode  = signal['mode']
+    nav   = account_state['nlv']
+    cash  = account_state['cash']
+    pc    = account_state['position_counts']
+
+    if nav <= 0:
+        return _hold_order("Account NAV is zero or negative")
+
+    # ── Mode A: Sell weekly TQQQ CSP ─────────────────────────────────────────
+    if mode == 'A':
+        if pc['csp_count'] > 0:
+            return _hold_order("Already have open CSP — no new entry needed")
+        contracts = size_csp_trade(nav, signal['vix'],
+                                   find_strike_for_delta(signal['tqqq_px'], 7/365.0,
+                                                         signal['rf'], signal['iv_tqqq_10d'],
+                                                         0.12, 'put'))
+        if contracts == 0:
+            return _hold_order("NAV too small or VIX too high for CSP")
+        return _build_csp_order(signal, contracts)
+
+    # ── Mode B: Open QQQM ZEBRA (75 DTE, 2× 70-delta / 1× 50-delta) ─────────
+    elif mode == 'B':
+        if pc['zebra_units'] >= 2:
+            return _hold_order("Already at max ZEBRA slots (2)")
+        contracts = size_zebra_trade(nav, 0, n_open=pc['zebra_units'])
+        # Re-compute with actual debit
+        qqqm_px  = signal['qqqm_px']
+        T_z      = 75 / 365.0
+        ls = find_strike_for_delta(qqqm_px, T_z, signal['rf'], signal['iv_short'], 0.70, 'call')
+        ss = find_strike_for_delta(qqqm_px, T_z, signal['rf'], signal['iv_short'], 0.50, 'call')
+        lc = bs_call_price(qqqm_px, ls, T_z, signal['rf'], signal['iv_short'])
+        sc = bs_call_price(qqqm_px, ss, T_z, signal['rf'], signal['iv_short'])
+        net_debit = (2 * lc) - sc
+        contracts = size_zebra_trade(nav, net_debit, n_open=pc['zebra_units'])
+        if contracts == 0:
+            return _hold_order("NAV too small or already max slots")
+        cost = net_debit * contracts * 100
+        if cash < cost * 1.05:  # 5% buffer
+            return _hold_order(f"Insufficient cash (need ${cost:.0f}, have ${cash:.0f})")
+        return _build_zebra_order(signal, contracts)
+
+    # ── Mode C: Bear Call Spread (LEAPS held, not rolled) ─────────────────────
+    elif mode == 'C':
+        # P4 (kept): Existing ZEBRA positions are held through Mode C for recovery —
+        # the regime engine is the stop-loss; no forced close, no new roll.
+        # CCS income continues regardless — it runs in parallel with open LEAPS
+        # since it uses free buying power and is unrelated to the ZEBRA position.
+        if pc['ccs_count'] > 0:
+            return _hold_order("Already have open CCS — no new entry")
+        qqq_px   = signal['qqq_px']
+        T_ccs    = 45 / 365.0
+        ss = find_strike_for_delta(qqq_px, T_ccs, signal['rf'], signal['iv_short'], 0.30, 'call')
+        ls = find_strike_for_delta(qqq_px, T_ccs, signal['rf'], signal['iv_short'], 0.20, 'call')
+        margin_per = (ls - ss) * 100
+        contracts = size_ccs_trade(nav, margin_per)
+        if contracts == 0:
+            return _hold_order("NAV too small for CCS margin")
+        return _build_ccs_order(signal, contracts)
+
+    # ── Mode D2: Buy SQQQ ─────────────────────────────────────────────────────
+    elif mode == 'D2':
+        if pc['sqqq_shares'] > 0:
+            return _hold_order("Already have SQQQ position")
+        dollar_amt = size_d2_sqqq(nav, signal['vix'])
+        if cash < dollar_amt:
+            dollar_amt = cash * 0.95
+        return _build_sqqq_order(signal, dollar_amt)
+
+    # ── Mode D3: Crash recovery re-entry ─────────────────────────────────────
+    elif mode == 'D3':
+        if pc['zebra_units'] >= 2:
+            return _hold_order("Already at max ZEBRA slots for D3 recovery")
+        # Same 75 DTE ZEBRA params as Mode B
+        qqqm_px  = signal['qqqm_px']
+        T_z      = 75 / 365.0
+        ls = find_strike_for_delta(qqqm_px, T_z, signal['rf'], signal['iv_short'], 0.70, 'call')
+        ss = find_strike_for_delta(qqqm_px, T_z, signal['rf'], signal['iv_short'], 0.50, 'call')
+        lc = bs_call_price(qqqm_px, ls, T_z, signal['rf'], signal['iv_short'])
+        sc = bs_call_price(qqqm_px, ss, T_z, signal['rf'], signal['iv_short'])
+        net_debit = (2 * lc) - sc
+        contracts = size_zebra_trade(nav, net_debit, n_open=pc['zebra_units'])
+        if contracts == 0:
+            return _hold_order("NAV too small for D3 re-entry")
+        order = _build_zebra_order(signal, contracts)
+        order["signal_type"] = "OPEN_ZEBRA_D3"
+        return order
+
+    return _hold_order(f"Unrecognized mode: {mode}")
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# STEP 5 — Persist to DB
+# ─────────────────────────────────────────────────────────────────────────────
+
+def _upsert_order(db_session, user_id: str, trade_date: date,
+                  signal: dict, account_state: dict, order: dict):
+    """
+    Insert or update a UserDailyOrder row for this user+date.
+    """
+    from models.user_daily_order import UserDailyOrder
+    from sqlalchemy import and_
+
+    existing = db_session.query(UserDailyOrder).filter(
+        and_(UserDailyOrder.user_id == user_id,
+             UserDailyOrder.trade_date == trade_date)
+    ).first()
+
+    pc = account_state['position_counts']
+    nav = account_state['nlv']
+    cap = order.get('capital_required', 0)
+
+    row_data = dict(
+        user_id           = user_id,
+        trade_date        = trade_date,
+        strategy_mode     = signal['mode'],
+        signal_type       = order['signal_type'],
+        account_cash      = account_state['cash'],
+        account_nlv       = nav,
+        account_bp        = account_state['buying_power'],
+        open_zebra_count  = pc['zebra_units'],
+        open_csp_count    = pc['csp_count'],
+        open_ccs_count    = pc['ccs_count'],
+        open_sqqq_shares  = pc['sqqq_shares'],
+        symbol            = order.get('symbol'),
+        option_type       = order.get('option_type'),
+        contracts         = order.get('contracts', 0),
+        capital_required  = cap,
+        nav_pct           = round(cap / nav, 4) if nav > 0 else 0,
+        order_legs        = order.get('order_legs', []),
+        limit_price       = order.get('limit_price'),
+        long_strike       = order.get('long_strike'),
+        short_strike      = order.get('short_strike'),
+        expiry_date       = order.get('expiry_date'),
+        status            = 'PENDING',
+        skip_reason       = order.get('skip_reason'),
+        generation_error  = None,
+    )
+
+    if existing:
+        for k, v in row_data.items():
+            setattr(existing, k, v)
+        existing.updated_at = datetime.utcnow()
+        row = existing
+    else:
+        import uuid
+        row_data['id'] = str(uuid.uuid4())
+        row = UserDailyOrder(**row_data)
+        db_session.add(row)
+
+    db_session.commit()
+    log.info(f"  └─ {user_id[:8]}… | {signal['mode']} | {order['signal_type']} | "
+             f"${cap:.0f} ({row_data['nav_pct']*100:.1f}% NAV)")
+    return row
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# STEP 5b — Serialize as TurboCore-Compatible Signal
+# ─────────────────────────────────────────────────────────────────────────────
+
+def format_as_turbocore_signal(signal: dict, order: dict, order_db_id: str) -> dict:
+    """
+    Converts an IV-Switching order into a TQQQ_TURBOCORE_PRO-format signal
+    payload so it renders in the existing TurboCoreSignalCard without any
+    frontend changes.
+
+    Regime mapping:
+      Mode A (CSP)   → 'SIDEWAYS'  (calm, theta-income environment)
+      Mode B (ZEBRA) → 'BULL'      (trend-following long exposure)
+      Mode C (CCS)   → 'BEAR'      (defensive, directional short)
+      Mode D2 (SQQQ) → 'BEAR'      (crash hedge)
+      Mode D3        → 'BULL'      (crash recovery re-entry)
+    """
+    mode = signal['mode']
+    regime_map = {
+        'A': 'SIDEWAYS',
+        'B': 'BULL',
+        'C': 'BEAR',
+        'D2': 'BEAR',
+        'D3': 'BULL',
+    }
+
+    # Confidence: inverse of VIX percentile (lower VIX → higher confidence in the signal)
+    vix = signal.get('vix', 20.0)
+    confidence = round(min(0.95, max(0.50, 1.0 - (vix / 60.0))), 3)
+
+    # Build legs in TurboCore format — the card displays them in the order grid
+    legs = []
+    for leg in (order.get('order_legs') or []):
+        legs.append({
+            'symbol':     leg['symbol'].strip(),
+            'action':     leg['action'],           # BUY_TO_OPEN, SELL_TO_OPEN, etc.
+            'qty':        leg['qty'],
+            'target_pct': 0.0,                     # not applicable for options legs
+        })
+
+    signal_type   = order.get('signal_type', 'NO_ACTION')
+    option_type   = order.get('option_type', '')
+    contracts     = order.get('contracts', 0)
+    expiry        = order.get('expiry_date')
+    expiry_str    = expiry.isoformat() if hasattr(expiry, 'isoformat') else str(expiry or '')
+    limit_price   = order.get('limit_price', 0)
+
+    return {
+        # TurboCore Pro signal shape — matches TurboCoreSignal interface in frontend
+        'strategy':          'TQQQ_TURBOCORE_PRO',
+        'action':            signal_type,
+        'regime':            regime_map.get(mode, 'SIDEWAYS'),
+        'confidence':        confidence,
+        'capital_required':  order.get('capital_required', 0),
+        'cost':              limit_price,
+        'legs':              legs,
+        'rationale': (
+            f'IV-Switching Mode {mode} · {signal_type} · '
+            f'VIX {vix:.1f} · {contracts} contract(s) · '
+            f'Exp {expiry_str} · Limit ${limit_price:.2f}'
+        ),
+        'ema_signal':        1 if mode in ('B', 'D3') else 0,
+        'sma200_gate':       mode not in ('D2', 'D3'),
+        # Back-reference: used by auto_approve.py to route to IV-Switching
+        # placement engine instead of TurboCore equity rebalancer
+        'iv_switching_order_id': order_db_id,
+    }
+
+
+def _publish_user_signal(turbocore_payload: dict, user_id: str) -> None:
+    """
+    Persists the TurboCore-format signal to tqqq_signals.json (picked up by
+    SignalContext WebSocket) and pushes SSE notification to the frontend.
+    Also tags the payload with the user_id so the frontend can filter.
+    """
+    import json, os, uuid, requests
+
+    payload = {
+        **turbocore_payload,
+        'id':         str(uuid.uuid4()),
+        'user_id':    user_id,            # frontend filters per user
+        'status':     'pending',
+        'createdAt':  datetime.utcnow().isoformat() + 'Z',
+    }
+
+    # ── Write to shared signals file ─────────────────────────────────────────
+    path = os.path.expanduser('~/tastywork-trading/tqqq_signals.json')
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    signals = []
+    if os.path.exists(path):
+        try:
+            with open(path) as f:
+                signals = json.load(f)
+        except Exception:
+            pass
+    signals.append(payload)
+    with open(path, 'w') as f:
+        json.dump(signals, f, indent=2)
+
+    # ── SSE push to frontend (reuses TurboCore Pro endpoint) ─────────────────
+    try:
+        resp = requests.post(
+            'https://www.trademind.bot/api/signals/notify',
+            json={'strategy': 'TQQQ_TURBOCORE_PRO', 'user_id': user_id},
+            timeout=8
+        )
+        if resp.status_code == 200:
+            log.info(f"  ✅ SSE notified for user {user_id[:8]}")
+        else:
+            log.warning(f"  ⚠️ SSE push returned {resp.status_code}")
+    except Exception as e:
+        log.warning(f"  ⚠️ SSE push failed (non-fatal): {e}")
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# MAIN ENTRY POINT
+
+# ─────────────────────────────────────────────────────────────────────────────
+
+def run_daily_order_generation(trade_date: Optional[date] = None) -> dict:
+    """
+    Full pipeline: generate signal → for each user → build order → persist.
+
+    Returns summary dict {users_processed, errors, trade_date}.
+    """
+    if trade_date is None:
+        trade_date = date.today()
+
+    log.info(f"=== Daily Order Generation starting for {trade_date} ===")
+
+    # ─ 1. Global signal ───────────────────────────────────────────────────────
+    signal = generate_daily_signal(trade_date)
+
+    # ─ 2. Load subscribed users from DB ──────────────────────────────────────
+    parent_dir = os.path.dirname(_THIS_DIR)
+    sys.path.insert(0, parent_dir)
+    from models.db import SessionLocal
+
+    db = SessionLocal()
+
+    # Select all users with TurboCore Pro or Both Bundle subscription
+    # who have a TastyTrade account connected.
+    # Joins user_settings (shared Postgres table) to check subscription tier.
+    # Falls back to iv_strategy_enabled flag if user_settings isn't accessible.
+    try:
+        users = db.execute("""
+            SELECT u.*
+            FROM users u
+            JOIN user_settings us ON us.user_id = u.id
+            WHERE u.is_active = TRUE
+              AND u.tt_refresh_token IS NOT NULL
+              AND us.subscription_tier IN ('turbocore_pro', 'both_bundle')
+              AND us.subscription_status IN ('active', 'trialing')
+        """).fetchall()
+        log.info(f"Found {len(users)} TurboCore Pro users via subscription tier join")
+    except Exception as _e:
+        log.warning(f"subscription_tier join failed ({_e}), falling back to iv_strategy_enabled flag")
+        from models.user import User
+        users = db.query(User).filter(
+            User.is_active == True,
+            User.tt_refresh_token != None,
+            User.iv_strategy_enabled == True
+        ).all()
+        log.info(f"Found {len(users)} users via iv_strategy_enabled flag fallback")
+
+    processed, errors = 0, 0
+
+    for user in users:
+        try:
+            # ─ 3. Fetch live account state ────────────────────────────────────
+            account_state = fetch_user_account_state(user)
+            # ─ 4. Generate order ──────────────────────────────────────────────
+            order = reconcile_and_generate_order(signal, account_state)
+            # ─ 5. Persist ─────────────────────────────────────────────────────
+            order_row = _upsert_order(db, user.id, trade_date, signal, account_state, order)
+            processed += 1
+
+            # ─ 6. Publish as TurboCore Pro signal (unless HOLD/NO_ACTION) ─────
+            if order.get('signal_type') not in ('NO_ACTION', 'HOLD', 'ERROR') \
+               and order.get('order_legs'):
+                tc_signal = format_as_turbocore_signal(
+                    signal, order,
+                    order_db_id=order_row.id if order_row else ''
+                )
+                _publish_user_signal(tc_signal, user.id)
+
+        except Exception as e:
+            errors += 1
+            log.error(f"Failed to generate order for user {user.id}: {e}", exc_info=True)
+            # Write error record so user dashboard shows something
+            try:
+                from models.user_daily_order import UserDailyOrder
+                import uuid
+                err_row = UserDailyOrder(
+                    id=str(uuid.uuid4()), user_id=user.id, trade_date=trade_date,
+                    strategy_mode=signal.get('mode', '?'), signal_type='ERROR',
+                    status='ERROR', generation_error=str(e)[:500]
+                )
+                db.add(err_row)
+                db.commit()
+            except Exception:
+                pass
+
+    db.close()
+    log.info(f"=== Done: {processed} processed, {errors} errors ===")
+    return {"trade_date": trade_date.isoformat(), "users_processed": processed, "errors": errors}
+
+
+
+if __name__ == "__main__":
+    import argparse
+    logging.basicConfig(level=logging.INFO,
+                        format="%(asctime)s %(levelname)-7s %(message)s")
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--date", help="Trade date (YYYY-MM-DD), default=today")
+    args = parser.parse_args()
+    td = date.fromisoformat(args.date) if args.date else date.today()
+    result = run_daily_order_generation(td)
+    print(result)
