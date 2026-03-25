@@ -141,24 +141,55 @@ class TurboCoreProScheduler:
         
         logger.info("--- TurboCore Pro Scan Complete ---")
 
-        # ── IV-Switching Composite Strategy — Per-User Order Generation ────────
-        # Runs at the same 3:00 PM ET trigger, using today's market data.
-        # Generates per-user option orders (ZEBRA/CSP/CCS/SQQQ) based on each
-        # user's live TastyTrade balance and virtual positions, then persists to
-        # user_daily_orders table and pushes a TQQQ_TURBOCORE_PRO-format signal
-        # so users see it in the existing TurboCoreSignalCard on the frontend.
+        # ── IV-Switching Composite Strategy — Global Options Signal ────────────
+        # Publish ONE global options signal (CSP/ZEBRA/CCS) based on today's mode.
+        # Users see it in IVSwitchingSignalCard and submit with their own sizing.
         try:
             import sys as _sys, os as _os
+            from datetime import date as _date
             _ivs_dir = _os.path.join(_os.path.dirname(_os.path.abspath(__file__)),
                                      'iv-switching-composite')
             if _ivs_dir not in _sys.path:
                 _sys.path.insert(0, _ivs_dir)
-            from daily_order_generator import run_daily_order_generation
-            ivs_result = run_daily_order_generation()
-            logger.info(f"✅ IV-Switching orders: {ivs_result}")
+            from daily_order_generator import (
+                generate_daily_signal,
+                reconcile_and_generate_order,
+                format_as_turbocore_signal,
+            )
+
+            _signal = generate_daily_signal(_date.today())
+            _mode = _signal['mode']
+
+            # Use a $25K reference account — sizing adjusts at execution time
+            _ref_account = {
+                'nlv': 25000, 'cash': 25000, 'buying_power': 25000,
+                'position_counts': {'zebra_units': 0, 'csp_count': 0,
+                                    'ccs_count': 0, 'sqqq_shares': 0},
+            }
+            _order = reconcile_and_generate_order(_signal, _ref_account)
+
+            if _order.get('signal_type') not in ('NO_ACTION', 'HOLD', 'ERROR') \
+               and _order.get('order_legs'):
+                _tc_signal = format_as_turbocore_signal(_signal, _order, order_db_id='')
+                publish_turbocore_rebalance_signal(
+                    regime=_tc_signal['regime'],
+                    confidence=_tc_signal['confidence'],
+                    alloc_dict={},
+                    rationale=_tc_signal['rationale'],
+                    ema_signal=_tc_signal['ema_signal'],
+                    sma200_gate=_tc_signal.get('sma200_gate', True),
+                    strategy='TQQQ_TURBOCORE_PRO',
+                    legs_override=_tc_signal['legs'],
+                    action_override=_order.get('signal_type'),
+                    iv_switching_order_id='',
+                )
+                logger.info(f"✅ IV-Switching global signal published: Mode={_mode} → {_order.get('signal_type')}")
+            else:
+                logger.info(f"IV-Switching HOLD (Mode={_mode}): {_order.get('skip_reason', '')}")
         except Exception as _e:
-            logger.error(f"❌ IV-Switching order generation failed (non-fatal): {_e}",
+            logger.error(f"❌ IV-Switching signal publish failed (non-fatal): {_e}",
                          exc_info=True)
+
 
 
 
