@@ -207,8 +207,9 @@ def _build_zebra_order(signal: dict, contracts: int) -> dict:
     rf       = signal['rf']
     T_z      = 75 / 365.0
 
-    long_strike  = find_strike_for_delta(qqqm_px, T_z, rf, iv_short, 0.70, 'call')
-    short_strike = find_strike_for_delta(qqqm_px, T_z, rf, iv_short, 0.50, 'call')
+    # QQQM uses $1 strike increments — round continuous B-S output to nearest integer
+    long_strike  = round(find_strike_for_delta(qqqm_px, T_z, rf, iv_short, 0.70, 'call'))
+    short_strike = round(find_strike_for_delta(qqqm_px, T_z, rf, iv_short, 0.50, 'call'))
 
     lc_px = bs_call_price(qqqm_px, long_strike,  T_z, rf, iv_short)
     sc_px = bs_call_price(qqqm_px, short_strike, T_z, rf, iv_short)
@@ -248,7 +249,9 @@ def _build_csp_order(signal: dict, contracts: int) -> dict:
     iv_tqqq    = signal['iv_tqqq_10d']
     T_csp      = 7 / 365.0
 
-    strike  = find_strike_for_delta(tqqq_px, T_csp, rf, iv_tqqq, 0.12, 'put')
+    # TQQQ uses $0.50 increments — round to nearest 0.5 to get a valid strike
+    _raw_strike = find_strike_for_delta(tqqq_px, T_csp, rf, iv_tqqq, 0.12, 'put')
+    strike = round(_raw_strike * 2) / 2
     premium = round(bs_put_price(tqqq_px, strike, T_csp, rf, iv_tqqq), 2)
 
     # Expiry: next Friday (7 DTE)
@@ -285,8 +288,9 @@ def _build_ccs_order(signal: dict, contracts: int) -> dict:
     rf       = signal['rf']
     T_ccs    = 45 / 365.0
 
-    short_strike = find_strike_for_delta(qqq_px, T_ccs, rf, iv_short, 0.30, 'call')
-    long_strike  = find_strike_for_delta(qqq_px, T_ccs, rf, iv_short, 0.20, 'call')
+    # QQQ uses $1 strike increments — round continuous B-S output to nearest integer
+    short_strike = round(find_strike_for_delta(qqq_px, T_ccs, rf, iv_short, 0.30, 'call'))
+    long_strike  = round(find_strike_for_delta(qqq_px, T_ccs, rf, iv_short, 0.20, 'call'))
 
     sc_px = bs_call_price(qqq_px, short_strike, T_ccs, rf, iv_short)
     lc_px = bs_call_price(qqq_px, long_strike,  T_ccs, rf, iv_short)
