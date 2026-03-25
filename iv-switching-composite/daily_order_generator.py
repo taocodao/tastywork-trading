@@ -706,38 +706,36 @@ def run_daily_order_generation(trade_date: Optional[date] = None) -> dict:
     # ─ 1. Global signal ───────────────────────────────────────────────────────
     signal = generate_daily_signal(trade_date)
 
-    # ─ 2. Load subscribed users from DB ──────────────────────────────────────
-    parent_dir = os.path.dirname(_THIS_DIR)
-    sys.path.insert(0, parent_dir)
-    from models.db import SessionLocal
+    # ─ 2. Load subscribed Pro users via TradeMind Next.js API ─────────────────
+    # TT refresh tokens are stored in Upstash Redis (Next.js side), not in the
+    # Python PostgreSQL DB. Calling the internal /api/admin/pro-users endpoint
+    # which reads user_settings + Redis and returns users with TT credentials.
+    import requests as _req
 
-    db = SessionLocal()
+    _api_base = os.environ.get("TRADEMIND_API_URL", "https://www.trademind.bot")
+    _secret   = os.environ.get("EC2_API_SECRET", "")
 
-    # Select all users with TurboCore Pro or Both Bundle subscription
-    # who have a TastyTrade account connected.
-    # Joins user_settings (shared Postgres table) to check subscription tier.
-    # Falls back to iv_strategy_enabled flag if user_settings isn't accessible.
+    users = []
     try:
-        users = db.execute("""
-            SELECT u.*
-            FROM users u
-            JOIN user_settings us ON us.user_id = u.id
-            WHERE u.is_active = TRUE
-              AND u.tt_refresh_token IS NOT NULL
-              AND us.subscription_tier IN ('turbocore_pro', 'both_bundle')
-              AND us.subscription_status IN ('active', 'trialing')
-        """).fetchall()
-        log.info(f"Found {len(users)} TurboCore Pro users via subscription tier join")
+        resp_users = _req.get(
+            f"{_api_base}/api/admin/pro-users",
+            headers={"x-ec2-secret": _secret},
+            timeout=15
+        )
+        if resp_users.status_code == 200:
+            data = resp_users.json()
+            users = data.get("users", [])
+            log.info(f"Found {len(users)} TurboCore Pro users via /api/admin/pro-users")
+        else:
+            log.error(f"pro-users API returned {resp_users.status_code}: {resp_users.text[:200]}")
     except Exception as _e:
-        log.warning(f"subscription_tier join failed ({_e}), falling back to iv_strategy_enabled flag")
-        db.rollback()  # CRITICAL: must rollback aborted PostgreSQL transaction before any new query
-        from models.user import User
-        users = db.query(User).filter(
-            User.is_active == True,
-            User.tt_refresh_token != None,
-            User.iv_strategy_enabled == True
-        ).all()
-        log.info(f"Found {len(users)} users via iv_strategy_enabled flag fallback")
+        log.error(f"Failed to fetch pro users from Next.js API: {_e}")
+
+    # SimpleNamespace lets us access user fields with dot notation (user.id, etc.)
+    import types
+    users = [types.SimpleNamespace(**u) for u in users]
+
+
 
     processed, errors = 0, 0
 
