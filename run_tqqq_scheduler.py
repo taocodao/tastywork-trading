@@ -182,6 +182,9 @@ class TQQQScheduler:
         scheduler.add_job(self._position_check,    CronTrigger(hour=14, minute=30, day_of_week="mon-fri"))
         scheduler.add_job(self._pre_close_check,   CronTrigger(hour=15, minute=45, day_of_week="mon-fri"))
         scheduler.add_job(self._eod_report,        CronTrigger(hour=16, minute=15, day_of_week="mon-fri"))
+        # IV-Switching per-user order generation: 4:30 PM after market data settles
+        scheduler.add_job(self._iv_switching_order_generation,
+                          CronTrigger(hour=16, minute=30, day_of_week="mon-fri"))
 
         scheduler.start()
         logger.info("Scheduler started. Press Ctrl+C to stop.")
@@ -965,6 +968,29 @@ class TQQQScheduler:
             import json
             json.dump(status, f, indent=2)
         logger.info(f"Persisted TQQQ status: regime={status['regime']}")
+
+    async def _iv_switching_order_generation(self) -> None:
+        """
+        16:30 ET — Generate per-user IV-Switching orders for today.
+
+        Runs the full pipeline:
+          1. Build today's feature set + classify regime
+          2. For each subscribed user: fetch TT account balance + positions
+          3. Compute exact executable orders (OCC symbols, contracts, limit price)
+          4. Persist to user_daily_orders table
+        """
+        logger.info("── IV-Switching Order Generation ─────────────────────")
+        try:
+            import sys, os
+            COMPOSITE_DIR = os.path.join(os.path.dirname(__file__), 'iv-switching-composite')
+            if COMPOSITE_DIR not in sys.path:
+                sys.path.insert(0, COMPOSITE_DIR)
+            from daily_order_generator import run_daily_order_generation
+            # Run in thread pool so we don't block the async event loop
+            result = await asyncio.to_thread(run_daily_order_generation)
+            logger.info(f"IV-Switching orders generated: {result}")
+        except Exception as e:
+            logger.error(f"IV-Switching order generation FAILED: {e}", exc_info=True)
 
     def _persist_signal(self, signal_dict: dict) -> None:
         """Append a new signal to tqqq_signals.json."""

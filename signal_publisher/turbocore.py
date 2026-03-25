@@ -70,15 +70,20 @@ def publish_turbocore_rebalance_signal(
     rationale: str,
     ema_signal: int,
     sma200_gate: bool,
-    strategy: str = "TQQQ_TURBOCORE"
+    strategy: str = "TQQQ_TURBOCORE",
+    # ── IV-Switching options signal fields (optional) ─────────────────────
+    legs_override: list = None,          # Raw order legs for options signals
+    action_override: str = None,         # e.g., OPEN_CSP, OPEN_ZEBRA, OPEN_CCS
+    user_id_override: str = None,        # Per-user routing for options signals
+    iv_switching_order_id: str = None,   # FK to user_daily_orders.id
 ):
     import logging
     logger = logging.getLogger(__name__)
-    
+
     sig = TurboCoreEntrySignal(
         timestamp=datetime.utcnow().isoformat() + "Z",
         symbol="TQQQ_PORT",
-        action="REBALANCE",
+        action=action_override or "REBALANCE",
         strategy=strategy,
         ml_regime=regime,
         ml_confidence=confidence,
@@ -87,11 +92,25 @@ def publish_turbocore_rebalance_signal(
         ema_signal=ema_signal,
         sma200_gate=sma200_gate
     )
-    
+
     data = sig.to_dict()
-    logger.info(f"Publishing TurboCore Signal: {regime} | Conf: {confidence:.2f} | Legs: {list(alloc_dict.keys())}")
-    
-    # Save to PostgreSQL Base
+
+    # If options legs are provided, replace the allocations-based legs with the
+    # actual option order legs (OCC symbols, qty, action) so the frontend
+    # IVSwitchingSignalCard can render them correctly.
+    if legs_override:
+        data["legs"] = legs_override
+        logger.info(f"Publishing TurboCore Signal: {action_override or regime} | Conf: {confidence:.2f} | Legs: {[l.get('symbol','?') for l in legs_override]}")
+    else:
+        logger.info(f"Publishing TurboCore Signal: {regime} | Conf: {confidence:.2f} | Legs: {list(alloc_dict.keys())}")
+
+    # Attach options routing fields to the DB row
+    if iv_switching_order_id:
+        data["iv_switching_order_id"] = iv_switching_order_id
+    if user_id_override:
+        data["user_id"] = user_id_override
+
+    # Save to PostgreSQL
     try:
         from src.earnings_intelligence.database import SignalRepository
         repo = SignalRepository()
@@ -102,5 +121,6 @@ def publish_turbocore_rebalance_signal(
             repo.session.close()
     except Exception as e:
         logger.error(f"DB Save failed for TurboCore: {e}")
-        
+
     return data
+

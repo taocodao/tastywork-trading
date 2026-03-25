@@ -141,6 +141,27 @@ class TurboCoreProScheduler:
         
         logger.info("--- TurboCore Pro Scan Complete ---")
 
+        # ── IV-Switching Composite Strategy — Per-User Order Generation ────────
+        # Runs at the same 3:00 PM ET trigger, using today's market data.
+        # Generates per-user option orders (ZEBRA/CSP/CCS/SQQQ) based on each
+        # user's live TastyTrade balance and virtual positions, then persists to
+        # user_daily_orders table and pushes a TQQQ_TURBOCORE_PRO-format signal
+        # so users see it in the existing TurboCoreSignalCard on the frontend.
+        try:
+            import sys as _sys, os as _os
+            _ivs_dir = _os.path.join(_os.path.dirname(_os.path.abspath(__file__)),
+                                     'iv-switching-composite')
+            if _ivs_dir not in _sys.path:
+                _sys.path.insert(0, _ivs_dir)
+            from daily_order_generator import run_daily_order_generation
+            ivs_result = run_daily_order_generation()
+            logger.info(f"✅ IV-Switching orders: {ivs_result}")
+        except Exception as _e:
+            logger.error(f"❌ IV-Switching order generation failed (non-fatal): {_e}",
+                         exc_info=True)
+
+
+
     def run_loop(self):
         """Main execution loop for continuous running."""
         logger.info("Starting TurboCore Pro Background Daemon loop...")

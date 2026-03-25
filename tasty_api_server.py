@@ -875,11 +875,13 @@ class TastyHandler(BaseHTTPRequestHandler):
                             user_refresh_token,
                             account_number
                         )
-                    elif strategy_type in ['tqqq_turbocore', 'turbocore', 'rebalance']:
+                    elif strategy_type in ['tqqq_turbocore', 'turbocore', 'rebalance', 'turbocore_pro']:
+                        pre_orders = data.get('preCalculatedOrders', None)
                         result = self._execute_turbocore_for_user(
                             signal_data,
                             user_refresh_token,
-                            account_number
+                            account_number,
+                            pre_calculated_orders=pre_orders
                         )
                     else:
                         # Default to calendar spread (Theta)
@@ -972,14 +974,13 @@ class TastyHandler(BaseHTTPRequestHandler):
         self,
         signal: dict,
         user_refresh_token: str,
-        account_number: str = None
+        account_number: str = None,
+        pre_calculated_orders: list = None
     ) -> dict:
-        """Execute a TurboCore target allocation sync using USER's OAuth."""
-        target_matrix = {}
-        for leg in signal.get('legs', []):
-            target_matrix[leg['symbol']] = leg['target_pct']
-            
-        from src.tqqq_turbocore.executor import calculate_delta_orders
+        """Execute a TurboCore target allocation sync using USER's OAuth.
+        If pre_calculated_orders is provided, it uses those exact orders (derived from Virtual Balance)
+        rather than recalculating dynamically based on live TT Net Liq.
+        """
         from tastytrade_utils import create_user_session, get_user_account
         from tastytrade_client import TastytradeClient
         
@@ -990,26 +991,51 @@ class TastyHandler(BaseHTTPRequestHandler):
         client._session = user_session
         client._account = account
         
-        balances = client.get_account_balance()
-        net_liq = float(balances['net_liquidating_value'])
-        current_positions = client.get_equity_positions()
+        orders = []
+        net_liq = 0
         
-        live_prices = {}
-        for symbol in target_matrix.keys():
-            price = client.get_stock_price(symbol)
-            live_prices[symbol] = price if price > 0 else 0.0
-            
-        for pos_symbol in current_positions.keys():
-            if pos_symbol not in live_prices:
-                price = client.get_stock_price(pos_symbol)
-                live_prices[pos_symbol] = price if price > 0 else 0.0
+        if pre_calculated_orders is not None and len(pre_calculated_orders) > 0:
+            # VIRTUAL MIRROR MODE: The frontend already calculated the exact integer shares using the $25k virtual balance
+            print(f"🔄 Using pre-calculated orders from frontend: {pre_calculated_orders}")
+            # Map JS array ({symbol, action, quantity}) to proper python format expected below
+            # Keep in mind frontend actions are usually 'buy' or 'sell'
+            for frontend_order in pre_calculated_orders:
+                # Some frontends might send approxShares rather than quantity if taking from the preview UI directly
+                # However, approve/route.ts buildVirtualOrdersFromSignal uses {symbol, action, quantity, price}
+                orders.append({
+                    "symbol": frontend_order['symbol'],
+                    "action": str(frontend_order['action']).upper(),
+                    "quantity": int(frontend_order['quantity'])
+                })
+        else:
+            # FALLBACK LIVE MODE: Recalculate using real TT account balance (old behavior)
+            print(f"⚠️ No pre-calculated orders provided. Falling back to live Tastytrade net liq calculation.")
+            target_matrix = {}
+            for leg in signal.get('legs', []):
+                target_matrix[leg['symbol']] = leg['target_pct']
                 
-        orders = calculate_delta_orders(
-            target_matrix=target_matrix,
-            current_net_liq=net_liq,
-            current_positions=current_positions,
-            live_prices=live_prices
-        )
+            from src.tqqq_turbocore.executor import calculate_delta_orders
+            
+            balances = client.get_account_balance()
+            net_liq = float(balances['net_liquidating_value'])
+            current_positions = client.get_equity_positions()
+            
+            live_prices = {}
+            for symbol in target_matrix.keys():
+                price = client.get_stock_price(symbol)
+                live_prices[symbol] = price if price > 0 else 0.0
+                
+            for pos_symbol in current_positions.keys():
+                if pos_symbol not in live_prices:
+                    price = client.get_stock_price(pos_symbol)
+                    live_prices[pos_symbol] = price if price > 0 else 0.0
+                    
+            orders = calculate_delta_orders(
+                target_matrix=target_matrix,
+                current_net_liq=net_liq,
+                current_positions=current_positions,
+                live_prices=live_prices
+            )
         
         executed_orders = []
         for order_leg in orders:

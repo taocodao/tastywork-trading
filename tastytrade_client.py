@@ -999,6 +999,28 @@ class TastytradeClient:
                     
                 equity_dict[p.symbol] = int(qty_val)
                 
+        # Adjust for working/live orders so we don't double-buy or double-sell
+        try:
+            account = self.get_account()
+            live_orders = account.get_live_orders(self._session)
+            for order in live_orders:
+                for leg in order.legs:
+                    if leg.instrument_type == InstrumentType.EQUITY:
+                        sym = leg.symbol
+                        qty = float(leg.quantity) if leg.quantity else 0
+                        
+                        # Initialize if not present
+                        if sym not in equity_dict:
+                            equity_dict[sym] = 0
+                            
+                        action = leg.action.value if hasattr(leg.action, 'value') else str(leg.action)
+                        if action in ['Buy', 'Buy to Cover']:
+                            equity_dict[sym] += int(qty)
+                        elif action in ['Sell', 'Sell to Short']:
+                            equity_dict[sym] -= int(qty)
+        except Exception as e:
+            logger.warning(f"Could not adjust equity positions for working orders: {e}")
+            
         return equity_dict
 
     def build_equity_order(

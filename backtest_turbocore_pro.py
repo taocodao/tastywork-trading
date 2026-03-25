@@ -43,18 +43,22 @@ from src.turbocore_pro.allocation_optimizer import AllocationOptimizer
 from src.turbocore_pro.executor import calculate_delta_orders
 
 # ── Config ──────────────────────────────────────────────────────
-INITIAL_CAPITAL      = 5_000.0
+INITIAL_CAPITAL      = 25_000.0  # $25k: minimum viable for LEAPS strategy
 START_DATE           = "2019-01-01"
 END_DATE             = "2026-03-20"
 MIN_ORDER_NOTIONAL   = 5.0
 COMMISSION           = 0.0
+
+# Tastytrade supports fractional shares for ETFs (min $5, $0.10 fee).
+# OCC mandates all options contracts are whole integers (1 contract = 100 shares).
+FRACTIONAL_EQUITIES  = True   # QQQ, QLD, SGOV: fractional OK on Tastytrade
 
 LEAPS_DAYS_TO_EXPIRY = 365
 LEAPS_STRIKE_PCT     = 0.80      # 20% deep ITM -> delta ~0.85
 LEAPS_RISK_FREE_RATE = 0.045
 
 EQUITY_TICKERS = ["QQQ", "QLD", "SGOV"]
-ALL_TICKERS    = ["QQQ", "QLD", "SGOV", "^VIX", "^IRX"]
+ALL_TICKERS    = ["QQQ", "QLD", "SGOV", "^VIX", "^VIX3M", "HYG", "^IRX"]
 
 OUTPUT_CSV = ROOT / "backtest_turbocore_pro_results.csv"
 LOG_FILE   = ROOT / "logs" / "backtest_turbocore_pro.log"
@@ -174,6 +178,29 @@ def download_and_build_master():
         (master["tqqq_bull_cross"].shift(1) == False)
     )
 
+    # ── Fast-exit guard series (pre-computed for perf) ──────────────────────
+    # QQQ daily and multi-day returns for the guard conditions
+    qqq_1d_ret = qqq.pct_change(1)
+    qqq_3d_ret = qqq.pct_change(3)
+    qqq_5d_ret = qqq.pct_change(5)
+
+    # VIX / VIX3M ratio — < 1.0 = contango (calm), > 1.0 = backwardation (stress)
+    vix3m_raw  = data.get("^VIX3M", pd.DataFrame())
+    vix3m_close = (vix3m_raw["Close"].reindex(qqq.index).ffill()
+                   if not vix3m_raw.empty else pd.Series(21.0, index=qqq.index))
+    master["vix3m_close"] = vix3m_close
+    master["vix_ratio"]   = vix_close / vix3m_close.replace(0, np.nan)
+
+    # HYG credit spread proxy
+    hyg_raw    = data.get("HYG", pd.DataFrame())
+    hyg_close  = (hyg_raw["Close"].reindex(qqq.index).ffill()
+                  if not hyg_raw.empty else pd.Series(80.0, index=qqq.index))
+    master["hyg_1d_ret"] = hyg_close.pct_change(1)
+
+    master["qqq_1d_ret"] = qqq_1d_ret
+    master["qqq_3d_ret"] = qqq_3d_ret
+    master["qqq_5d_ret"] = qqq_5d_ret
+
     master = master.dropna(subset=["qqq_sma_200"])
 
     # LEAPS price series (close + open)
@@ -195,19 +222,52 @@ def download_and_build_master():
 # SIGNAL PIPELINE
 # ================================================================
 
-def run_turbocore_pro_signal(slice_df):
+def run_turbocore_pro_signal(slice_df, market_guard: dict = None):
+    """
+    Phase 0-3 signal pipeline.
+
+    market_guard: dict computed from today's market data for QLD fast-exit logic:
+      {'vix_ratio', 'hyg_ok', 'qqq_5d_ok', 'qqq_1d_ok', 'qqq_3d_ok'}
+      If None → conservative SGOV fallback for any QLD slot.
+    """
     df = BaseStrategy(slice_df).evaluate()
 
-    try:
-        df     = TurboCoreRegimeDetector().predict_regimes(df)
-        regime = str(df.iloc[-1].get("final_regime", "SIDEWAYS"))
-    except Exception as e:
-        log.debug("RegimeDetector fallback: %s", e)
-        last   = df.iloc[-1]
-        sr     = int(last.get("sma200_regime", 0))
-        bc     = bool(last.get("tqqq_bull_cross", False))
-        regime = "BULL" if (sr == 1 and bc) else ("BEAR" if sr == -1 else "SIDEWAYS")
+    # ── Try Phase 3: Voting Ensemble ─────────────────────────────────────────
+    caution_state  = False
+    ensemble_used  = False
 
+    try:
+        from src.turbocore_pro.ml.regime_ensemble import RegimeEnsemble
+        ensemble = RegimeEnsemble()
+
+        # Only use ensemble if MS-GARCH is trained (otherwise it adds noise)
+        if ensemble.msgarch.is_trained:
+            ens_result    = ensemble.predict(df)
+            regime        = ens_result['regime']
+            caution_state = ens_result.get('caution', False)
+            ensemble_used = True
+            log.debug("Ensemble regime: %s (HMM=%s MSGARCH=%s BOCD=%.3f caution=%s)",
+                      regime, ens_result['hmm_regime'], ens_result['msgarch_regime'],
+                      ens_result['bocd_cp_prob'], caution_state)
+        else:
+            raise ValueError("MS-GARCH not trained yet — using HMM fallback")
+    except Exception as e:
+        log.debug("Ensemble fallback to HMM: %s", e)
+        ensemble_used = False
+
+    # ── Fall back to Phase 0 HMM ─────────────────────────────────────────────
+    if not ensemble_used:
+        try:
+            df     = TurboCoreRegimeDetector().predict_regimes(df)
+            regime = str(df.iloc[-1].get("final_regime", "SIDEWAYS"))
+        except Exception as e:
+            log.debug("RegimeDetector fallback: %s", e)
+            last   = df.iloc[-1]
+            sr     = int(last.get("sma200_regime", 0))
+            bc     = bool(last.get("tqqq_bull_cross", False))
+            regime = "BULL" if (sr == 1 and bc) else ("BEAR" if sr == -1 else "SIDEWAYS")
+
+    # ── Phase 1: Meta-labeling signal scorer ─────────────────────────────────
     try:
         df         = TurboCoreSignalScorer().predict_confidence(df)
         confidence = float(df.iloc[-1].get("ml_confidence", 0.55))
@@ -218,15 +278,32 @@ def run_turbocore_pro_signal(slice_df):
     last         = df.iloc[-1]
     base_signal  = int(last.get("base_signal", 0))
     qqq_drawdown = float(last.get("qqq_drawdown_ath", 0.0))
+
+    # SMA200 hard gate (always authoritative, overrides ensemble)
     if bool(last.get("qqq_below_sma200_sell", False)):
-        regime = "BEAR_SMA_FORCED"
+        regime        = "BEAR_SMA_FORCED"
+        caution_state = False
 
     target_allocation = AllocationOptimizer().get_target_allocation(
         regime=regime, signal=base_signal,
-        ml_confidence=confidence, qqq_drawdown=qqq_drawdown)
+        ml_confidence=confidence, qqq_drawdown=qqq_drawdown,
+        market_guard=market_guard)  # ← Phase 0+1: fast-exit guard
+
+    # ── Phase 2: BOCD caution state → halve LEAPS ────────────────────────────
+    if caution_state and regime not in ("BEAR", "BEAR_SMA_FORCED"):
+        leaps_key = "QQQ_LEAPS"
+        if leaps_key in target_allocation:
+            halved = target_allocation[leaps_key] * 0.50
+            freed  = target_allocation[leaps_key] - halved
+            target_allocation[leaps_key] = halved
+            # Reallocate freed capital to QQQ (safer)
+            target_allocation["QQQ"] = target_allocation.get("QQQ", 0.0) + freed
+            log.debug("BOCD caution: LEAPS %.0f%% → %.0f%%", halved / 0.5 * 100, halved * 100)
 
     return dict(regime=regime, base_signal=base_signal, confidence=confidence,
-                qqq_drawdown=qqq_drawdown, target_allocation=target_allocation)
+                qqq_drawdown=qqq_drawdown, target_allocation=target_allocation,
+                caution=caution_state, ensemble_used=ensemble_used,
+                market_guard=market_guard)
 
 
 # ================================================================
@@ -248,11 +325,18 @@ class Portfolio:
     def apply_orders(self, orders, fill_prices, leaps_fill_px):
         for order in sorted(orders, key=lambda o: 0 if o["action"] == "SELL" else 1):
             sym = order["symbol"]
-            qty = int(abs(order.get("quantity", 0)))
-            if qty == 0:
+            # LEAPS: always whole integer contracts (OCC market rule)
+            # ETFs: fractional quantities allowed (Tastytrade supports fractional shares)
+            raw_qty = abs(order.get("quantity", 0))
+            if sym == "QQQ_LEAPS":
+                qty = int(raw_qty)  # OCC: whole contracts only
+            else:
+                qty = raw_qty if FRACTIONAL_EQUITIES else int(raw_qty)  # ETF: fractional OK
+            if qty == 0 or qty < 1e-6:
                 continue
 
             if sym == "QQQ_LEAPS":
+                qty = int(qty)  # ensure integer
                 px = leaps_fill_px
                 if px <= 0 or qty * px < MIN_ORDER_NOTIONAL:
                     continue
@@ -354,7 +438,23 @@ def run():
                        qqq_drawdown=0.0, target_allocation={})
         else:
             try:
-                sig = run_turbocore_pro_signal(slice_df)
+                # ── Compute fast-exit guard from today's market data ──────────
+                # Uses last row of slice_df (no lookahead — all past data)
+                last_row     = master_df.loc[:today].iloc[-1]
+                vix_ratio    = float(last_row.get("vix_ratio",  1.10))
+                hyg_ok       = float(last_row.get("hyg_1d_ret", -0.01)) > -0.005
+                qqq_5d_ok    = float(last_row.get("qqq_5d_ret", -0.02)) > -0.010
+                qqq_1d_ok    = float(last_row.get("qqq_1d_ret", -0.02)) > -0.015
+                qqq_3d_ok    = float(last_row.get("qqq_3d_ret", -0.03)) > -0.025
+
+                market_guard = {
+                    'vix_ratio':  vix_ratio,
+                    'hyg_ok':     hyg_ok,
+                    'qqq_5d_ok':  qqq_5d_ok,
+                    'qqq_1d_ok':  qqq_1d_ok,
+                    'qqq_3d_ok':  qqq_3d_ok,
+                }
+                sig = run_turbocore_pro_signal(slice_df, market_guard=market_guard)
             except Exception as e:
                 log.warning("%s -- signal error: %s", today.date(), e)
                 sig = dict(regime="ERROR", base_signal=0, confidence=0.0,
@@ -374,6 +474,7 @@ def run():
                     current_net_liq   = eq_net_liq,
                     current_positions = dict(portfolio.shares),
                     live_prices       = live_eq_px,
+                    fractional_shares = FRACTIONAL_EQUITIES,
                 )
             except Exception as e:
                 log.debug("%s -- executor: %s", today.date(), e)
@@ -383,12 +484,26 @@ def run():
             leaps_current = portfolio.leaps_contracts * leaps_today
             leaps_delta   = leaps_target - leaps_current
             leaps_orders: list = []
-            if abs(leaps_delta) >= MIN_ORDER_NOTIONAL and leaps_today > 0:
-                qty = int(abs(leaps_delta) / leaps_today)
-                if qty > 0:
+
+            if leaps_today > 0:
+                if leaps_alloc > 0:
+                    # Target number of contracts (integer)
+                    qty = int(abs(leaps_delta) / leaps_today)
+                    # Small-portfolio rule: if allocation calls for LEAPS but 1 contract
+                    # costs more than the target dollar value, buy 1 if we can afford it.
+                    # This mirrors real small-account LEAPS trading behavior.
+                    if qty == 0 and leaps_delta > 0 and portfolio.cash >= leaps_today:
+                        qty = 1
+                    if qty > 0:
+                        leaps_orders = [{"symbol": "QQQ_LEAPS",
+                                         "action": "BUY" if leaps_delta > 0 else "SELL",
+                                         "quantity": qty,
+                                         "estimated_price": leaps_today}]
+                elif portfolio.leaps_contracts > 0:
+                    # Regime is now BEAR/SGOV — liquidate all LEAPS immediately
                     leaps_orders = [{"symbol": "QQQ_LEAPS",
-                                     "action": "BUY" if leaps_delta > 0 else "SELL",
-                                     "quantity": qty,
+                                     "action": "SELL",
+                                     "quantity": portfolio.leaps_contracts,
                                      "estimated_price": leaps_today}]
 
             all_orders = eq_orders + leaps_orders

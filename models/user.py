@@ -15,15 +15,16 @@ class User(Base):
     tt_refresh_token = Column(String, nullable=True)
     tt_account_number = Column(String, nullable=True)
     
-    # Risk Profile
-    # Used for Position Sizing
+    # Risk Profile (kept for backwards compatibility with other strategies)
     risk_level = Column(String, default="MEDIUM") # LOW, MEDIUM, HIGH
     investment_amount = Column(Float, default=10000.0)
+    current_nav = Column(Float, nullable=True)  # Updated daily from TT API
     max_daily_trades = Column(Integer, default=5)
     auto_approve_enabled = Column(Boolean, default=False)
     
     # Strategy settings
     zebra_enabled = Column(Boolean, default=True)
+    iv_strategy_enabled = Column(Boolean, default=False)  # IV-Switching Composite Strategy
     
     # Metadata
     is_active = Column(Boolean, default=True)

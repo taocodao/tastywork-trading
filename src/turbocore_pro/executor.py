@@ -16,21 +16,23 @@ def calculate_delta_orders(
     current_positions: Dict[str, int],
     live_prices: Dict[str, float],
     drift_threshold: float = REBALANCE_DRIFT_THRESHOLD,
+    fractional_shares: bool = False,
 ) -> List[Dict]:
     """
-    Calculates the exact integer shares to buy or sell to align the portfolio with the target matrix.
+    Calculates the exact shares to buy or sell to align the portfolio with the target matrix.
     
     Args:
         target_matrix: e.g. {"TQQQ": 0.8, "SGOV": 0.2, "QQQ": 0.0, "QLD": 0.0}
         current_net_liq: Total account value in dollars (e.g., 50000.0)
-        current_positions: Current share counts for each symbol, e.g. {"TQQQ": 100, "SGOV": 50}
-        live_prices: Current market prices for each symbol, e.g. {"TQQQ": 45.50, "SGOV": 100.25}
+        current_positions: Current share counts for each symbol
+        live_prices: Current market prices for each symbol
         drift_threshold: Minimum drift (as fraction of net_liq) before generating a trade.
                          Default 5% prevents daily micro-rebalancing from normal price movements.
+        fractional_shares: If True, allows fractional share quantities (Tastytrade ETF mode).
+                           If False (default), rounds down to whole integer shares (production mode).
         
     Returns:
         List of order dictionaries sorted with SELL orders first, then BUY orders.
-        e.g. [{"action": "SELL", "symbol": "SGOV", "quantity": 10}, {"action": "BUY", "symbol": "TQQQ", "quantity": 15}]
     """
     orders = []
     
@@ -54,8 +56,11 @@ def calculate_delta_orders(
         if target_pct > 0 and current_net_liq > 0 and drift / current_net_liq < drift_threshold:
             continue
         
-        # 4. Convert to target integer shares (always round down to prevent margin calls)
-        target_shares = math.floor(target_dollar_value / live_price)
+        # 4. Convert to target shares — fractional or integer
+        if fractional_shares:
+            target_shares = target_dollar_value / live_price  # exact fractional
+        else:
+            target_shares = math.floor(target_dollar_value / live_price)  # integer only
         
         # 5. Calculate the delta
         delta_shares = target_shares - current_shares

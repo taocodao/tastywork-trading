@@ -601,35 +601,76 @@ def format_as_turbocore_signal(signal: dict, order: dict, order_db_id: str) -> d
 
 def _publish_user_signal(turbocore_payload: dict, user_id: str) -> None:
     """
-    Persists the TurboCore-format signal to tqqq_signals.json (picked up by
-    SignalContext WebSocket) and pushes SSE notification to the frontend.
-    Also tags the payload with the user_id so the frontend can filter.
+    Persists the IV-Switching options signal to the PostgreSQL signals table
+    (so the TradeMind frontend signal card can display it), writes to the
+    shared JSON file, and fires an SSE push notification.
     """
     import json, os, uuid, requests
 
     payload = {
         **turbocore_payload,
         'id':         str(uuid.uuid4()),
-        'user_id':    user_id,            # frontend filters per user
+        'user_id':    user_id,
         'status':     'pending',
         'createdAt':  datetime.utcnow().isoformat() + 'Z',
     }
 
-    # ── Write to shared signals file ─────────────────────────────────────────
-    path = os.path.expanduser('~/tastywork-trading/tqqq_signals.json')
-    os.makedirs(os.path.dirname(path), exist_ok=True)
-    signals = []
-    if os.path.exists(path):
-        try:
-            with open(path) as f:
-                signals = json.load(f)
-        except Exception:
-            pass
-    signals.append(payload)
-    with open(path, 'w') as f:
-        json.dump(signals, f, indent=2)
+    # ── PRIMARY: Write to PostgreSQL signals table ──────────────────────────
+    # This is what the TradeMind frontend actually reads from.
+    # Uses the same signal_publisher used by the TurboCore Pro equity signals.
+    try:
+        parent_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        import sys
+        if parent_dir not in sys.path:
+            sys.path.insert(0, parent_dir)
+        from signal_publisher.turbocore import publish_turbocore_rebalance_signal
 
-    # ── SSE push to frontend (reuses TurboCore Pro endpoint) ─────────────────
+        legs_formatted = payload.get('legs', [])
+        alloc_legs = [
+            {
+                'symbol':     leg.get('symbol', '').strip(),
+                'action':     leg.get('action', ''),
+                'qty':        leg.get('qty', 0),
+                'target_pct': 0.0,
+            }
+            for leg in legs_formatted
+        ]
+
+        publish_turbocore_rebalance_signal(
+            regime=payload.get('regime', 'SIDEWAYS'),
+            confidence=payload.get('confidence', 0.7),
+            alloc_dict={},          # No equity allocation for options signals
+            rationale=payload.get('rationale', ''),
+            ema_signal=payload.get('ema_signal', 0),
+            sma200_gate=payload.get('sma200_gate', True),
+            strategy='TQQQ_TURBOCORE_PRO',
+            legs_override=alloc_legs,
+            action_override=payload.get('action'),
+            user_id_override=user_id,
+            iv_switching_order_id=payload.get('iv_switching_order_id', ''),
+        )
+        log.info(f"  ✅ Persisted IV-Switching signal to DB for user {user_id[:8]}")
+    except Exception as e:
+        log.warning(f"  ⚠️ DB signal persist failed (non-fatal): {e}")
+
+    # ── FALLBACK: Write to shared signals JSON file ─────────────────────────
+    try:
+        path = os.path.expanduser('~/tastywork-trading/tqqq_signals.json')
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        signals = []
+        if os.path.exists(path):
+            try:
+                with open(path) as f:
+                    signals = json.load(f)
+            except Exception:
+                pass
+        signals.append(payload)
+        with open(path, 'w') as f:
+            json.dump(signals, f, indent=2)
+    except Exception as e:
+        log.warning(f"  ⚠️ JSON file write failed (non-fatal): {e}")
+
+    # ── SSE push to frontend ────────────────────────────────────────────────
     try:
         resp = requests.post(
             'https://www.trademind.bot/api/signals/notify',
@@ -642,6 +683,8 @@ def _publish_user_signal(turbocore_payload: dict, user_id: str) -> None:
             log.warning(f"  ⚠️ SSE push returned {resp.status_code}")
     except Exception as e:
         log.warning(f"  ⚠️ SSE push failed (non-fatal): {e}")
+
+
 
 
 # ─────────────────────────────────────────────────────────────────────────────
