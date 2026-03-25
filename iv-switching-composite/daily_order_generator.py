@@ -730,6 +730,7 @@ def run_daily_order_generation(trade_date: Optional[date] = None) -> dict:
         log.info(f"Found {len(users)} TurboCore Pro users via subscription tier join")
     except Exception as _e:
         log.warning(f"subscription_tier join failed ({_e}), falling back to iv_strategy_enabled flag")
+        db.rollback()  # CRITICAL: must rollback aborted PostgreSQL transaction before any new query
         from models.user import User
         users = db.query(User).filter(
             User.is_active == True,
