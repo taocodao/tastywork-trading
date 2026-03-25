@@ -770,12 +770,9 @@ def run_daily_order_generation(trade_date: Optional[date] = None) -> dict:
                     strategy_mode=signal.get('mode', '?'), signal_type='ERROR',
                     status='ERROR', generation_error=str(e)[:500]
                 )
-                db.add(err_row)
-                db.commit()
             except Exception:
                 pass
 
-    db.close()
     log.info(f"=== Done: {processed} processed, {errors} errors ===")
     return {"trade_date": trade_date.isoformat(), "users_processed": processed, "errors": errors}
 
