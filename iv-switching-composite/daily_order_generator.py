@@ -292,13 +292,26 @@ def _build_ccs_order(signal: dict, contracts: int) -> dict:
     short_strike = round(find_strike_for_delta(qqq_px, T_ccs, rf, iv_short, 0.30, 'call'))
     long_strike  = round(find_strike_for_delta(qqq_px, T_ccs, rf, iv_short, 0.20, 'call'))
 
-    sc_px = bs_call_price(qqq_px, short_strike, T_ccs, rf, iv_short)
-    lc_px = bs_call_price(qqq_px, long_strike,  T_ccs, rf, iv_short)
-    net_credit = round(sc_px - lc_px, 2)
-    margin = round((long_strike - short_strike) * 100, 2)
-
     expiry  = _get_monthly_friday(signal['trade_date'], 45)
     exp_str = expiry.strftime('%y%m%d')
+
+    # ── Try IB for real bid/ask; fall back to Black-Scholes ──────────────────
+    net_credit = None
+    try:
+        from ib_options_pricing import get_option_spread_quote
+        ib_quote = get_option_spread_quote("QQQ", short_strike, long_strike, exp_str, "C")
+        if ib_quote and ib_quote.net_credit > 0:
+            net_credit = ib_quote.net_credit
+            logger.info(f"IB CCS quote: short={short_strike} mid={ib_quote.short_mid}, long={long_strike} mid={ib_quote.long_mid}, net_credit={net_credit}")
+    except Exception as _e:
+        logger.debug(f"IB CCS pricing unavailable: {_e}")
+    if net_credit is None:
+        sc_px = bs_call_price(qqq_px, short_strike, T_ccs, rf, iv_short)
+        lc_px = bs_call_price(qqq_px, long_strike,  T_ccs, rf, iv_short)
+        net_credit = round(sc_px - lc_px, 2)
+        logger.info(f"B-S CCS: short={short_strike} sc={sc_px:.2f}, long={long_strike} lc={lc_px:.2f}, net_credit={net_credit}")
+
+    margin = round((long_strike - short_strike) * 100, 2)
 
     short_occ = f"QQQ   {exp_str}C{int(short_strike * 1000):08d}"
     long_occ  = f"QQQ   {exp_str}C{int(long_strike  * 1000):08d}"
