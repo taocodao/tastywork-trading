@@ -141,9 +141,9 @@ class TurboCoreProScheduler:
         
         logger.info("--- TurboCore Pro Scan Complete ---")
 
-        # ── IV-Switching Composite Strategy — Global Options Signal ────────────
-        # Publish ONE global options signal (CSP/ZEBRA/CCS) based on today's mode.
-        # Users see it in IVSwitchingSignalCard and submit with their own sizing.
+        # ── IV-Switching Composite Strategy — Unified Signal (equity + options) ──
+        # Publishes ONE combined signal with equity allocation legs AND options legs.
+        # Users see a single card and one "Execute All" button.
         try:
             import sys as _sys, os as _os
             from datetime import date as _date
@@ -160,7 +160,7 @@ class TurboCoreProScheduler:
             _signal = generate_daily_signal(_date.today())
             _mode = _signal['mode']
 
-            # Use a $25K reference account — sizing adjusts at execution time
+            # Reference account for sizing (scales to user's real account at execution)
             _ref_account = {
                 'nlv': 25000, 'cash': 25000, 'buying_power': 25000,
                 'position_counts': {'zebra_units': 0, 'csp_count': 0,
@@ -171,6 +171,18 @@ class TurboCoreProScheduler:
             if _order.get('signal_type') not in ('NO_ACTION', 'HOLD', 'ERROR') \
                and _order.get('order_legs'):
                 _tc_signal = format_as_turbocore_signal(_signal, _order, order_db_id='')
+
+                # Build combined legs: equity first (target_pct), then options (OCC symbols)
+                _equity_legs = [
+                    {'symbol': sym, 'action': 'BUY', 'target_pct': float(pct), 'leg_type': 'equity'}
+                    for sym, pct in target_allocation.items()
+                ]
+                _options_legs = [
+                    {**leg, 'leg_type': 'options'}
+                    for leg in _tc_signal.get('legs', [])
+                ]
+                _combined_legs = _equity_legs + _options_legs
+
                 publish_turbocore_rebalance_signal(
                     regime=_tc_signal['regime'],
                     confidence=_tc_signal['confidence'],
@@ -179,11 +191,11 @@ class TurboCoreProScheduler:
                     ema_signal=_tc_signal['ema_signal'],
                     sma200_gate=_tc_signal.get('sma200_gate', True),
                     strategy='TQQQ_TURBOCORE_PRO',
-                    legs_override=_tc_signal['legs'],
+                    legs_override=_combined_legs,
                     action_override=_order.get('signal_type'),
                     iv_switching_order_id='',
                 )
-                logger.info(f"✅ IV-Switching global signal published: Mode={_mode} → {_order.get('signal_type')}")
+                logger.info(f"✅ IV-Switching unified signal: Mode={_mode} → {_order.get('signal_type')} | {len(_equity_legs)} equity + {len(_options_legs)} options legs")
             else:
                 logger.info(f"IV-Switching HOLD (Mode={_mode}): {_order.get('skip_reason', '')}")
         except Exception as _e:
