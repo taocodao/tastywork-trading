@@ -382,15 +382,164 @@ def _hold_order(reason: str = "Strategy is HOLD") -> dict:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# STEP 4 — Reconcile and Pick Order per User
+# STEP 4 — Exit Scanner & Order Generation
 # ─────────────────────────────────────────────────────────────────────────────
 
-def reconcile_and_generate_order(signal: dict, account_state: dict) -> dict:
+def check_exits(account_state: dict, signal: dict) -> list:
+    """
+    Scans the user's live TastyTrade positions and generates BUY_TO_CLOSE / SELL_TO_CLOSE
+    legs if any exit conditions (profit target, stop-loss, time-stop, max-loss) are met.
+    """
+    from datetime import date
+    try:
+        from ib_options_pricing import get_option_spread_quote, get_single_option_quote
+    except ImportError:
+        get_option_spread_quote = None
+        get_single_option_quote = None
+        log.warning("IB pricing unavailable — check_exits will not work without live data.")
+
+    close_legs = []
+    raw_positions = account_state.get('raw_positions', [])
+    today = signal.get('trade_date', date.today())
+    mode = signal.get('mode', 'NO_ACTION')
+
+    # Group TT positions by underlying and expiry
+    csps = []   # TQQQ short puts
+    ccs_pairs = {} # QQQ C spreads: { expiry: { 'short': pos, 'long': pos } }
+    zebras = {}    # QQQM zebras: { expiry: { 'short': pos, 'long': pos } }
+
+    for pos in raw_positions:
+        symbol = getattr(pos, 'underlying_symbol', '') or ''
+        qty = int(getattr(pos, 'quantity', 0) or 0)
+        itype = getattr(pos, 'instrument_type', '') or ''
+        opt_type = getattr(pos, 'option_type', '') or ''
+        occ = getattr(pos, 'symbol', '') or ''
+        
+        if itype != 'Equity Option' or qty == 0:
+            continue
+            
+        # Parse OCC: QQQ   260515C00612000 => expiry is 260515
+        if len(occ) >= 15:
+            expiry_str = occ[6:12]
+            strike = int(occ[13:]) / 1000.0
+            
+            if symbol == 'TQQQ' and opt_type in ('P', 'PUT') and qty < 0:
+                csps.append({'pos': pos, 'expiry_str': expiry_str, 'strike': strike})
+                
+            elif symbol == 'QQQ' and opt_type in ('C', 'CALL'):
+                if expiry_str not in ccs_pairs:
+                    ccs_pairs[expiry_str] = {}
+                if qty < 0:
+                    ccs_pairs[expiry_str]['short'] = {'pos': pos, 'occ': occ, 'strike': strike}
+                else:
+                    ccs_pairs[expiry_str]['long'] = {'pos': pos, 'occ': occ, 'strike': strike}
+                    
+            elif symbol == 'QQQM' and opt_type in ('C', 'CALL'):
+                if expiry_str not in zebras:
+                    zebras[expiry_str] = {}
+                if qty < 0:
+                    zebras[expiry_str]['short'] = {'pos': pos, 'occ': occ, 'strike': strike, 'qty': qty}
+                else:
+                    zebras[expiry_str]['long'] = {'pos': pos, 'occ': occ, 'strike': strike, 'qty': qty}
+
+    if not get_option_spread_quote or not get_single_option_quote:
+        log.warning("IB not loaded, skipping exits.")
+        return close_legs 
+
+    # Evaluate MODE A: TQQQ CSP Exits
+    force_close_csps = mode in ['C', 'D2']
+    for csp in csps:
+        strike = csp['strike']
+        expiry_str = csp['expiry_str']
+        pos = csp['pos']
+        try:
+            entry_premium = abs(float(getattr(pos, 'average_open_price', 0) or 0))
+        except ValueError:
+            entry_premium = 0.0
+        qty = abs(int(getattr(pos, 'quantity', 0) or 0))
+        occ = getattr(pos, 'symbol', '')
+        
+        exp_y, exp_m, exp_d = 2000 + int(expiry_str[:2]), int(expiry_str[2:4]), int(expiry_str[4:6])
+        exp_date = date(exp_y, exp_m, exp_d)
+        
+        q = get_single_option_quote('TQQQ', strike, expiry_str, 'P')
+        if q and entry_premium > 0:
+            current_val = q[1]  # ask
+            profit_pct = 1.0 - (current_val / entry_premium)
+            
+            if profit_pct >= 0.50 or current_val > entry_premium * 3.0 or today >= exp_date or force_close_csps:
+                log.info(f"Closing CSP {occ}: profit={profit_pct*100:.1f}%, force={force_close_csps}")
+                close_legs.append({"action": "BUY_TO_CLOSE", "symbol": occ, "qty": qty, "instrument_type": "Equity Option"})
+
+    # Evaluate MODE C: QQQ CCS Exits
+    for exp_str, legs in ccs_pairs.items():
+        if 'short' in legs and 'long' in legs:
+            sl = legs['short']
+            ll = legs['long']
+            short_strike = sl['strike']
+            long_strike = ll['strike']
+            short_qty = abs(int(getattr(sl['pos'], 'quantity', 0) or 0))
+            
+            try:
+                sc_entry = abs(float(getattr(sl['pos'], 'average_open_price', 0) or 0))
+                lc_entry = float(getattr(ll['pos'], 'average_open_price', 0) or 0)
+            except ValueError:
+                sc_entry, lc_entry = 0.0, 0.0
+            entry_premium = sc_entry - lc_entry
+            
+            exp_y, exp_m, exp_d = 2000 + int(exp_str[:2]), int(exp_str[2:4]), int(exp_str[4:6])
+            exp_date = date(exp_y, exp_m, exp_d)
+            
+            q = get_option_spread_quote('QQQ', short_strike, long_strike, exp_str, 'C')
+            if q and entry_premium > 0:
+                liability = max(q.short_ask - q.long_bid, 0)
+                profit_pct = 1.0 - (liability / entry_premium)
+                
+                if profit_pct >= 0.50 or liability >= entry_premium * 3.0 or today >= exp_date:
+                    log.info(f"Closing CCS {exp_str}: profit={profit_pct*100:.1f}%, liability={liability}")
+                    close_legs.append({"action": "BUY_TO_CLOSE", "symbol": sl['occ'], "qty": short_qty, "instrument_type": "Equity Option"})
+                    close_legs.append({"action": "SELL_TO_CLOSE", "symbol": ll['occ'], "qty": short_qty, "instrument_type": "Equity Option"})
+
+    # Evaluate MODE B: QQQM ZEBRA Exits
+    for exp_str, legs in zebras.items():
+        if 'short' in legs and 'long' in legs:
+            sl = legs['short']
+            ll = legs['long']
+            short_strike = sl['strike']
+            long_strike = ll['strike']
+            short_qty = abs(sl['qty'])
+            long_qty = ll['qty']
+            if long_qty != short_qty * 2:
+                continue 
+                
+            try:
+                sc_entry = abs(float(getattr(sl['pos'], 'average_open_price', 0) or 0))
+                lc_entry = float(getattr(ll['pos'], 'average_open_price', 0) or 0)
+            except ValueError:
+                sc_entry, lc_entry = 0.0, 0.0
+            entry_debit = (lc_entry * 2) - sc_entry
+            
+            exp_y, exp_m, exp_d = 2000 + int(exp_str[:2]), int(exp_str[2:4]), int(exp_str[4:6])
+            exp_date = date(exp_y, exp_m, exp_d)
+            dte = (exp_date - today).days
+            
+            q = get_option_spread_quote('QQQM', short_strike, long_strike, exp_str, 'C')
+            if q and entry_debit > 0:
+                val = max((q.long_bid * 2) - q.short_ask, 0)
+                profit_pct = (val - entry_debit) / entry_debit
+                time_stop = dte <= 21
+                
+                if profit_pct >= 0.50 or time_stop or val <= 0.01:
+                    log.info(f"Closing ZEBRA {exp_str}: profit={profit_pct*100:.1f}%, time_stop={time_stop}")
+                    close_legs.append({"action": "BUY_TO_CLOSE", "symbol": sl['occ'], "qty": short_qty, "instrument_type": "Equity Option"})
+                    close_legs.append({"action": "SELL_TO_CLOSE", "symbol": ll['occ'], "qty": long_qty, "instrument_type": "Equity Option"})
+
+    return close_legs
+
+def _reconcile_open_orders(signal: dict, account_state: dict) -> dict:
     """
     Given today's global signal and the user's live account state, determine
-    what order (if any) the strategy requires.
-
-    Returns an order dict which will be saved to user_daily_orders.
+    what new entry order (if any) the strategy requires.
     """
     mode  = signal['mode']
     nav   = account_state['nlv']
@@ -480,6 +629,30 @@ def reconcile_and_generate_order(signal: dict, account_state: dict) -> dict:
         return order
 
     return _hold_order(f"Unrecognized mode: {mode}")
+
+def reconcile_and_generate_order(signal: dict, account_state: dict) -> dict:
+    """
+    Given today's global signal and the user's live account state, determine
+    what order (if any) the strategy requires, including EXITS.
+    """
+    # 1. Evaluate Exits via IB pricing
+    close_legs = check_exits(account_state, signal)
+    
+    # 2. Evaluate Entries
+    order = _reconcile_open_orders(signal, account_state)
+    
+    # 3. Combine
+    if close_legs:
+        if order['signal_type'] in ['NO_ACTION', 'HOLD']:
+            order['signal_type'] = 'CLOSE_POSITIONS'
+            order['order_legs']  = close_legs
+            order['skip_reason'] = None
+            order['limit_price'] = 0.0 # Will submit at market or mid in frontend
+        else:
+            # Append close legs to the open legs
+            order['order_legs'] = close_legs + order.get('order_legs', [])
+            
+    return order
 
 
 # ─────────────────────────────────────────────────────────────────────────────
