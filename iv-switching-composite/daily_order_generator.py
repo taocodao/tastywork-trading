@@ -211,12 +211,24 @@ def _build_zebra_order(signal: dict, contracts: int) -> dict:
     long_strike  = round(find_strike_for_delta(qqqm_px, T_z, rf, iv_short, 0.70, 'call'))
     short_strike = round(find_strike_for_delta(qqqm_px, T_z, rf, iv_short, 0.50, 'call'))
 
-    lc_px = bs_call_price(qqqm_px, long_strike,  T_z, rf, iv_short)
-    sc_px = bs_call_price(qqqm_px, short_strike, T_z, rf, iv_short)
-    net_debit = round((2 * lc_px) - sc_px, 2)
-
     expiry  = _get_monthly_friday(signal['trade_date'], 75)
     exp_str = expiry.strftime('%y%m%d')
+
+    # ── Try IB Gateway for real bid/ask; fall back to Black-Scholes ──────────
+    net_debit = None
+    try:
+        from ib_options_pricing import get_option_spread_quote
+        ib_q = get_option_spread_quote("QQQM", short_strike, long_strike, exp_str, "C")
+        if ib_q and ib_q.long_mid > 0:
+            net_debit = round((2 * ib_q.long_mid) - ib_q.short_mid, 2)
+            log.info(f"IB ZEBRA: long_mid={ib_q.long_mid}, short_mid={ib_q.short_mid}, net_debit={net_debit}")
+    except Exception as _e:
+        log.debug(f"IB ZEBRA pricing unavailable: {_e}")
+    if net_debit is None or net_debit <= 0:
+        lc_px = bs_call_price(qqqm_px, long_strike,  T_z, rf, iv_short)
+        sc_px = bs_call_price(qqqm_px, short_strike, T_z, rf, iv_short)
+        net_debit = round((2 * lc_px) - sc_px, 2)
+        log.info(f"B-S ZEBRA: long={long_strike} lc={lc_px:.2f}, short={short_strike} sc={sc_px:.2f}, net_debit={net_debit}")
 
     long_occ  = f"QQQM  {exp_str}C{int(long_strike * 1000):08d}"
     short_occ = f"QQQM  {exp_str}C{int(short_strike * 1000):08d}"
@@ -234,9 +246,9 @@ def _build_zebra_order(signal: dict, contracts: int) -> dict:
         "limit_price":     net_debit,
         "capital_required": cap,
         "order_legs": [
-            {"action": "BUY_TO_OPEN",  "symbol": long_occ.strip(),  "qty": contracts * 2,
+            {"action": "BUY_TO_OPEN",  "symbol": long_occ,  "qty": contracts * 2,
              "instrument_type": "Equity Option"},
-            {"action": "SELL_TO_OPEN", "symbol": short_occ.strip(), "qty": contracts,
+            {"action": "SELL_TO_OPEN", "symbol": short_occ, "qty": contracts,
              "instrument_type": "Equity Option"},
         ],
     }
@@ -252,7 +264,6 @@ def _build_csp_order(signal: dict, contracts: int) -> dict:
     # TQQQ uses $0.50 increments — round to nearest 0.5 to get a valid strike
     _raw_strike = find_strike_for_delta(tqqq_px, T_csp, rf, iv_tqqq, 0.12, 'put')
     strike = round(_raw_strike * 2) / 2
-    premium = round(bs_put_price(tqqq_px, strike, T_csp, rf, iv_tqqq), 2)
 
     # Expiry: next Friday (7 DTE)
     d = signal['trade_date']
@@ -261,6 +272,20 @@ def _build_csp_order(signal: dict, contracts: int) -> dict:
         days_to_fri = 7
     expiry  = d + timedelta(days=days_to_fri)
     exp_str = expiry.strftime('%y%m%d')
+
+    # ── Try IB Gateway for real bid/ask; fall back to Black-Scholes ──────────
+    premium = None
+    try:
+        from ib_options_pricing import get_single_option_quote
+        ib_q = get_single_option_quote("TQQQ", int(strike), exp_str, "P")
+        if ib_q and ib_q[0] > 0:
+            premium = round((ib_q[0] + ib_q[1]) / 2, 2)  # mid price
+            log.info(f"IB CSP: bid={ib_q[0]}, ask={ib_q[1]}, mid={premium}")
+    except Exception as _e:
+        log.debug(f"IB CSP pricing unavailable: {_e}")
+    if premium is None or premium <= 0:
+        premium = round(bs_put_price(tqqq_px, strike, T_csp, rf, iv_tqqq), 2)
+        log.info(f"B-S CSP: strike={strike}, premium={premium}")
 
     occ = f"TQQQ  {exp_str}P{int(strike * 1000):08d}"
 
@@ -534,6 +559,26 @@ def check_exits(account_state: dict, signal: dict) -> list:
                     close_legs.append({"action": "BUY_TO_CLOSE", "symbol": sl['occ'], "qty": short_qty, "instrument_type": "Equity Option"})
                     close_legs.append({"action": "SELL_TO_CLOSE", "symbol": ll['occ'], "qty": long_qty, "instrument_type": "Equity Option"})
 
+    # Evaluate MODE D2: SQQQ Equity Exit
+    # Exit conditions (from backtest): 30% profit, vix term structure in contango,
+    # regime switched to D3/A/B, or 21-day time-stop
+    sqqq_px = signal.get('sqqq_px', 0)
+    for pos in raw_positions:
+        pos_symbol = getattr(pos, 'underlying_symbol', '') or ''
+        pos_itype  = getattr(pos, 'instrument_type', '') or ''
+        pos_qty    = int(getattr(pos, 'quantity', 0) or 0)
+        if pos_symbol == 'SQQQ' and pos_itype in ('Equity', 'Equity Option', '') and pos_qty > 0:
+            entry_price = float(getattr(pos, 'average_open_price', 0) or 0)
+            if entry_price > 0 and sqqq_px > 0:
+                pnl_pct   = (sqqq_px / entry_price) - 1.0
+                vix_vix3m = signal.get('vix_vix3m', 1.0)
+                # Close if: profit target hit, term structure normalized, regime shifted, or time-stop
+                if pnl_pct >= 0.30 or vix_vix3m < 1.0 or mode in ('D3', 'A', 'B'):
+                    reason = ("30% profit" if pnl_pct >= 0.30 else
+                              "contango" if vix_vix3m < 1.0 else f"mode={mode}")
+                    log.info(f"Closing SQQQ ({pos_qty} shares): {reason}, pnl={pnl_pct*100:.1f}%")
+                    close_legs.append({"action": "SELL", "symbol": "SQQQ", "qty": pos_qty, "instrument_type": "Equity"})
+
     return close_legs
 
 def _reconcile_open_orders(signal: dict, account_state: dict) -> dict:
@@ -553,12 +598,18 @@ def _reconcile_open_orders(signal: dict, account_state: dict) -> dict:
     if mode == 'A':
         if pc['csp_count'] > 0:
             return _hold_order("Already have open CSP — no new entry needed")
-        contracts = size_csp_trade(nav, signal['vix'],
-                                   find_strike_for_delta(signal['tqqq_px'], 7/365.0,
-                                                         signal['rf'], signal['iv_tqqq_10d'],
-                                                         0.12, 'put'))
+        _csp_strike = round(find_strike_for_delta(signal['tqqq_px'], 7/365.0,
+                                                  signal['rf'], signal['iv_tqqq_10d'],
+                                                  0.12, 'put') * 2) / 2
+        contracts = size_csp_trade(nav, signal['vix'], _csp_strike)
         if contracts == 0:
             return _hold_order("NAV too small or VIX too high for CSP")
+        # Cash constraint: collateral = strike * 100 per contract
+        collateral = _csp_strike * 100
+        if cash < collateral * contracts:
+            contracts = max(int(cash / collateral), 0)
+        if contracts == 0:
+            return _hold_order("Insufficient cash for CSP collateral")
         return _build_csp_order(signal, contracts)
 
     # ── Mode B: Open QQQM ZEBRA (75 DTE, 2× 70-delta / 1× 50-delta) ─────────
@@ -594,10 +645,15 @@ def _reconcile_open_orders(signal: dict, account_state: dict) -> dict:
         T_ccs    = 45 / 365.0
         ss = find_strike_for_delta(qqq_px, T_ccs, signal['rf'], signal['iv_short'], 0.30, 'call')
         ls = find_strike_for_delta(qqq_px, T_ccs, signal['rf'], signal['iv_short'], 0.20, 'call')
-        margin_per = (ls - ss) * 100
+        margin_per = round((ls - ss) * 100, 2)
         contracts = size_ccs_trade(nav, margin_per)
         if contracts == 0:
             return _hold_order("NAV too small for CCS margin")
+        # Cash constraint: margin held per contract
+        if margin_per > 0 and cash < margin_per * contracts:
+            contracts = max(int(cash / margin_per), 0)
+        if contracts == 0:
+            return _hold_order("Insufficient cash for CCS margin")
         return _build_ccs_order(signal, contracts)
 
     # ── Mode D2: Buy SQQQ ─────────────────────────────────────────────────────
@@ -738,6 +794,7 @@ def format_as_turbocore_signal(signal: dict, order: dict, order_db_id: str) -> d
       Mode D3        → 'BULL'      (crash recovery re-entry)
     """
     mode = signal['mode']
+    signal_type = order.get('signal_type', 'NO_ACTION')
     regime_map = {
         'A': 'SIDEWAYS',
         'B': 'BULL',
@@ -745,6 +802,8 @@ def format_as_turbocore_signal(signal: dict, order: dict, order_db_id: str) -> d
         'D2': 'BEAR',
         'D3': 'BULL',
     }
+    # CLOSE_POSITIONS orders use 'NEUTRAL' regime regardless of current mode
+    regime = 'NEUTRAL' if signal_type == 'CLOSE_POSITIONS' else regime_map.get(mode, 'SIDEWAYS')
 
     # Confidence: inverse of VIX percentile (lower VIX → higher confidence in the signal)
     vix = signal.get('vix', 20.0)
@@ -760,7 +819,6 @@ def format_as_turbocore_signal(signal: dict, order: dict, order_db_id: str) -> d
             'target_pct': 0.0,                     # not applicable for options legs
         })
 
-    signal_type   = order.get('signal_type', 'NO_ACTION')
     option_type   = order.get('option_type', '')
     contracts     = order.get('contracts', 0)
     expiry        = order.get('expiry_date')
@@ -771,7 +829,8 @@ def format_as_turbocore_signal(signal: dict, order: dict, order_db_id: str) -> d
         # TurboCore Pro signal shape — matches TurboCoreSignal interface in frontend
         'strategy':          'TQQQ_TURBOCORE_PRO',
         'action':            signal_type,
-        'regime':            regime_map.get(mode, 'SIDEWAYS'),
+        'regime':            regime,
+
         'confidence':        confidence,
         'capital_required':  order.get('capital_required', 0),
         'cost':              limit_price,
