@@ -76,6 +76,7 @@ def publish_turbocore_rebalance_signal(
     action_override: str = None,         # e.g., OPEN_CSP, OPEN_ZEBRA, OPEN_CCS
     user_id_override: str = None,        # Per-user routing for options signals
     iv_switching_order_id: str = None,   # FK to user_daily_orders.id
+    cost_override: float = None,         # Limit price for options orders (overrides hardcoded 0.0)
 ):
     import logging
     logger = logging.getLogger(__name__)
@@ -103,6 +104,10 @@ def publish_turbocore_rebalance_signal(
         logger.info(f"Publishing TurboCore Signal: {action_override or regime} | Conf: {confidence:.2f} | Legs: {[l.get('symbol','?') for l in legs_override]}")
     else:
         logger.info(f"Publishing TurboCore Signal: {regime} | Conf: {confidence:.2f} | Legs: {list(alloc_dict.keys())}")
+
+    # FIX: Override the hardcoded cost=0.0 with the actual limit price for options orders
+    if cost_override is not None:
+        data["cost"] = cost_override
 
     # Attach options routing fields to the DB row
     if iv_switching_order_id:

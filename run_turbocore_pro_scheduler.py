@@ -194,6 +194,7 @@ class TurboCoreProScheduler:
                     legs_override=_combined_legs,
                     action_override=_order.get('signal_type'),
                     iv_switching_order_id='',
+                    cost_override=_tc_signal.get('cost', 0),  # Pass limit price to DB
                 )
                 logger.info(f"✅ IV-Switching unified signal: Mode={_mode} → {_order.get('signal_type')} | {len(_equity_legs)} equity + {len(_options_legs)} options legs")
             else:

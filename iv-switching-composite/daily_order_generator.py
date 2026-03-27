@@ -275,7 +275,7 @@ def _build_csp_order(signal: dict, contracts: int) -> dict:
         "limit_price":     premium,
         "capital_required": round(strike * contracts * 100, 2),  # margin held
         "order_legs": [
-            {"action": "SELL_TO_OPEN", "symbol": occ.strip(), "qty": contracts,
+            {"action": "SELL_TO_OPEN", "symbol": occ, "qty": contracts,
              "instrument_type": "Equity Option"},
         ],
     }
@@ -327,9 +327,9 @@ def _build_ccs_order(signal: dict, contracts: int) -> dict:
         "limit_price":      net_credit,
         "capital_required": round(margin * contracts, 2),
         "order_legs": [
-            {"action": "SELL_TO_OPEN", "symbol": short_occ.strip(), "qty": contracts,
+            {"action": "SELL_TO_OPEN", "symbol": short_occ, "qty": contracts,
              "instrument_type": "Equity Option"},
-            {"action": "BUY_TO_OPEN",  "symbol": long_occ.strip(),  "qty": contracts,
+            {"action": "BUY_TO_OPEN",  "symbol": long_occ,  "qty": contracts,
              "instrument_type": "Equity Option"},
         ],
     }
@@ -581,7 +581,7 @@ def format_as_turbocore_signal(signal: dict, order: dict, order_db_id: str) -> d
     legs = []
     for leg in (order.get('order_legs') or []):
         legs.append({
-            'symbol':     leg['symbol'].strip(),
+            'symbol':     leg['symbol'],            # Do NOT .strip() — OCC padding is required
             'action':     leg['action'],           # BUY_TO_OPEN, SELL_TO_OPEN, etc.
             'qty':        leg['qty'],
             'target_pct': 0.0,                     # not applicable for options legs
@@ -645,7 +645,7 @@ def _publish_user_signal(turbocore_payload: dict, user_id: str) -> None:
         legs_formatted = payload.get('legs', [])
         alloc_legs = [
             {
-                'symbol':     leg.get('symbol', '').strip(),
+                'symbol':     leg.get('symbol', ''),  # Do NOT .strip() — OCC padding required
                 'action':     leg.get('action', ''),
                 'qty':        leg.get('qty', 0),
                 'target_pct': 0.0,
@@ -665,6 +665,7 @@ def _publish_user_signal(turbocore_payload: dict, user_id: str) -> None:
             action_override=payload.get('action'),
             user_id_override=user_id,
             iv_switching_order_id=payload.get('iv_switching_order_id', ''),
+            cost_override=payload.get('cost', 0),  # Pass limit price to DB
         )
         log.info(f"  ✅ Persisted IV-Switching signal to DB for user {user_id[:8]}")
     except Exception as e:
