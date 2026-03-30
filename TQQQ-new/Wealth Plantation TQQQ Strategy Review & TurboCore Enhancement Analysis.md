@@ -1,4 +1,4 @@
-# Wealth Plantation TQQQ Strategy: Viability Review & TurboCore Enhancement Analysis
+alth Plantation TQQQ Strategy: Viability Review & TurboCore Enhancement Analysis
 
 ## Executive Summary
 

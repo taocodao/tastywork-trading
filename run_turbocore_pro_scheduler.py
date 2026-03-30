@@ -114,7 +114,7 @@ class TurboCoreProScheduler:
         rationale = f"Regime: {regime} | Conf: {confidence:.0%} | SMA Drop: {is_sma_forced}"
         
         
-        # 5. Publish
+        # 5. Publish ML regime signal — mark as pending while IV-Switching overlay computes
         publish_turbocore_rebalance_signal(
             regime=regime,
             confidence=confidence,
@@ -122,7 +122,8 @@ class TurboCoreProScheduler:
             rationale=rationale,
             ema_signal=base_signal,
             sma200_gate=not is_sma_forced,
-            strategy="TQQQ_TURBOCORE_PRO"
+            strategy="TQQQ_TURBOCORE_PRO",
+            iv_switching_pending=True,   # IV-Switching overlay publishes next
         )
         
         # 6. Notify trademind.bot Web Application via SSE Push

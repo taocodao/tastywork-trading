@@ -1,5 +1,44 @@
 ---
 
+## 2026-03-27: Fix submitOptionsOrder — OCC Symbol Trim, Type Coercion, Dry-Run & Retry
+
+**Decision**: Fix three bugs in `submitOptionsOrder` that caused TastyTrade to reject options orders with HTTP 500, add dry-run preflight, and add a single retry on transient 500s.
+
+**Context**:
+- TurboCore Pro IV-Switching Bear Call Spread (QQQ $612/$633 May 15) was rejected by TT with `Internal server error` while equity orders on the same account succeeded.
+- Perplexity deep-dive identified three payload issues: `.trim()` stripping required OCC symbol padding spaces, `quantity` sent as string instead of integer, `price` sent as string instead of number.
+
+**Resolution**:
+- Removed `.trim()` from OCC symbol — padding spaces are required (e.g. `"QQQ   260515C00612000"` = 21 chars).
+- Changed `quantity` from `String(Math.abs(leg.qty))` to `Math.abs(leg.qty)` (integer).
+- Changed `price` from `String(Math.abs(limitPrice).toFixed(2))` to `Math.round(Math.abs(limitPrice) * 100) / 100` (number).
+- Added OCC symbol length validation warning (expects 21 chars).
+- Added `/dry-run` preflight before live submission — catches 422 validation errors cleanly.
+- Added single retry with 2s delay on transient HTTP 500 errors.
+
+**Affected**: `trademind-app/src/lib/tastytrade-api.ts` (`submitOptionsOrder` function)
+
+---
+
+## 2026-03-26: TQQQ Signal UX & Position Tracking Improvement
+
+**Decision**: Overhaul the TQQQ Dashboard UX and position tracking infrastructure to support detailed trade activity sync, adaptive entry cooldowns based on principal, and proper lifecycle management.
+
+**Context**:
+- Hardcoded 6-day cooldowns were preventing profitable entries.
+- After a signal was approved, it silently vanished from the React state but had no "executed" tracker or fill price shown.
+- Auto-approve buttons were incorrectly available for users without a linked Tastytrade account.
+- The "Positions" tab lacked TQQQ spread aggregations or dynamic exit suggestions.
+
+**Resolution**:
+- Implemented concurrent-position-based limits dynamically driven by the user's `investmentPrincipal` (replacing the hard 6-day cooldown).
+- Upgraded the Signal Lifecycle UI and backend JSON (`tqqq_signals.json`) to persist `EXECUTED`/`TRACKED`/`EXPIRED` states with timestamps and fill prices.
+- Built a native `/api/tastytrade/orders` proxy stringing recent trade activity into the dashboard display.
+- Locked the auto-approve settings toggle logically behind the `tastyLinked` requirement.
+- Overhauled the Positions page to cluster multi-leg options into cohesive tracked spreads with explicit P/L % calculations and exit triggers.
+
+**Affected**: `config.py`, `run_tqqq_scheduler.py`, `SignalCard.tsx`, `tqqq_signals.json`, `TQQQAutoApproveSettings.tsx`, `api/tastytrade/orders/route.ts`, `positions/page.tsx`
+
 ## 2026-03-13: TurboCore Pro Integration
 
 **Decision**: Integrate TurboCore Pro as a first-class strategy and update the TradeMind landing page to feature it dynamically alongside the legacy TurboCore strategy.

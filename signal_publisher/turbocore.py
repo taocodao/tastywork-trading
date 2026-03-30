@@ -23,6 +23,10 @@ class TurboCoreEntrySignal:
     
     # Optional metadata
     rationale: str = ""
+
+    # Set to True on the first (ML-regime) publish when an IV-Switching overlay
+    # is still computing and will be published moments later.
+    iv_switching_pending: bool = False
     
     def to_dict(self) -> dict:
         import uuid
@@ -60,7 +64,8 @@ class TurboCoreEntrySignal:
             "capital_required": 1000.0, # Dummy for UI compatibility initially
             "regime": self.ml_regime,
             "ema_signal": self.ema_signal,
-            "sma200_gate": self.sma200_gate
+            "sma200_gate": self.sma200_gate,
+            "iv_switching_pending": self.iv_switching_pending,
         }
 
 def publish_turbocore_rebalance_signal(
@@ -77,6 +82,7 @@ def publish_turbocore_rebalance_signal(
     user_id_override: str = None,        # Per-user routing for options signals
     iv_switching_order_id: str = None,   # FK to user_daily_orders.id
     cost_override: float = None,         # Limit price for options orders (overrides hardcoded 0.0)
+    iv_switching_pending: bool = False,  # True when IV-Switching overlay is still computing
 ):
     import logging
     logger = logging.getLogger(__name__)
@@ -91,7 +97,8 @@ def publish_turbocore_rebalance_signal(
         allocations=alloc_dict,
         rationale=rationale,
         ema_signal=ema_signal,
-        sma200_gate=sma200_gate
+        sma200_gate=sma200_gate,
+        iv_switching_pending=iv_switching_pending,
     )
 
     data = sig.to_dict()
