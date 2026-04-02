@@ -16,8 +16,8 @@ import resend
 logger = logging.getLogger(__name__)
 
 resend.api_key = os.getenv("RESEND_API_KEY", "")
-FROM_ADDRESS   = os.getenv("SIGNAL_EMAIL_FROM", "TradeMind Signals <signals@trademind.app>")
-APP_URL        = "https://trademind.app"
+FROM_ADDRESS   = os.getenv("SIGNAL_EMAIL_FROM", "TradeMind Signals <signals@trademind.bot>")
+APP_URL        = "https://trademind.bot"
 
 
 # ── OCC Symbol Parser ─────────────────────────────────────────────────────────
