@@ -24,3 +24,6 @@ pandas>=1.5.0
 # Theta Strategy Scheduler
 apscheduler>=3.10.0
 websockets>=12.0
+
+# Email Notifications
+resend>=2.1.0

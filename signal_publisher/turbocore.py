@@ -3,6 +3,8 @@ from datetime import datetime, timedelta
 from typing import Optional, Dict
 import pytz
 
+from email_notifications.resend_sender import notify_signal_subscribers
+
 @dataclass
 class TurboCoreEntrySignal:
     timestamp: str
@@ -124,11 +126,36 @@ def publish_turbocore_rebalance_signal(
 
     # Save to PostgreSQL
     try:
-        from src.earnings_intelligence.database import SignalRepository
+        from src.earnings_intelligence.database import SignalRepository, get_session
         repo = SignalRepository()
         try:
             repo.save_signal(data)
             logger.info("DB Save success: TurboCore Rebalance")
+
+            # ── NEW: Notify email subscribers ─────────────────────────────
+            try:
+                session = get_session()
+                # Determine tier filter based on strategy name
+                strategy = data.get("strategy", "")
+                tier_filter = (
+                    "('TURBOCORE_PRO', 'BOTH_BUNDLE')"
+                    if "PRO" in (strategy or "")
+                    else "('TURBOCORE', 'BOTH_BUNDLE')"
+                )
+                
+                rows = session.execute(
+                    f"""SELECT email, first_name FROM user_settings
+                        WHERE subscription_tier IN {tier_filter}
+                          AND email IS NOT NULL
+                          AND email_signal_alerts = TRUE"""
+                ).fetchall()
+                session.close()
+                subscribers = [{"email": r[0], "first_name": r[1]} for r in rows]
+                notify_signal_subscribers(data, subscribers)
+            except Exception as email_err:
+                logger.warning(f"[Email] Signal notification failed (non-fatal): {email_err}")
+            # ── END NEW ───────────────────────────────────────────────────
+
         finally:
             repo.session.close()
     except Exception as e:
