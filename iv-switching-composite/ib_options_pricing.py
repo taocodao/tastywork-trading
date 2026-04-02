@@ -179,6 +179,83 @@ def get_single_option_quote(
     return (bid, ask) if ask > 0 else None
 
 
+def get_live_spot_prices(symbols: list) -> dict:
+    """
+    Fetch current live (or delayed) prices for multiple equities in ONE IB connection.
+    Returns {symbol: price} for any symbols with valid data.
+
+    Uses delayed market data (type 4 = delayed frozen, requires no live subscription).
+    Runs in a daemon thread with an asyncio event loop (required by ib_insync).
+    Hard 10s timeout prevents blocking the signal generator.
+    """
+    try:
+        from ib_insync import IB, Stock
+    except ImportError:
+        log.warning("ib_insync not installed — live spot prices unavailable")
+        return {}
+
+    result = {}
+
+    def _fetch():
+        # ib_insync requires an asyncio event loop in the calling thread.
+        # Simply create and set one — do NOT call util.startLoop() which blocks forever.
+        import asyncio
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+
+        ib = IB()
+        try:
+            ib.connect(IB_HOST, IB_PORT, clientId=IB_CLIENT + 1, timeout=5)
+            # Delayed frozen data — works without live market data subscription
+            ib.reqMarketDataType(4)  # 1=live, 2=frozen, 3=delayed, 4=delayed frozen
+            contracts = [Stock(sym, "SMART", "USD") for sym in symbols]
+            qualified = ib.qualifyContracts(*contracts)
+            if not qualified:
+                log.warning(f"IB: no qualified contracts for {symbols}")
+                return
+            # Non-blocking stream then sleep 4s for data to arrive
+            tickers = [ib.reqMktData(c, '', False, False) for c in qualified]
+            ib.sleep(4)
+            for ticker in tickers:
+                sym = ticker.contract.symbol
+                price = None
+                for val in (ticker.last, ticker.close, ticker.marketPrice()):
+                    if val and not isinstance(val, float) or (isinstance(val, float) and val > 0):
+                        try:
+                            p = float(val)
+                            if p > 0:
+                                price = p
+                                break
+                        except (TypeError, ValueError):
+                            pass
+                if price:
+                    result[sym] = price
+                    log.info(f"IB spot {sym}: ${price:.2f}")
+                else:
+                    log.warning(f"IB: no price for {sym} (last={ticker.last} close={ticker.close})")
+                ib.cancelMktData(ticker.contract)
+        except Exception as e:
+            log.warning(f"IB batch spot price error: {e}")
+        finally:
+            if ib.isConnected():
+                ib.disconnect()
+
+    import threading
+    t = threading.Thread(target=_fetch, daemon=True)
+    t.start()
+    t.join(timeout=12)
+    if t.is_alive():
+        log.warning("IB spot price fetch timed out after 12s")
+
+    return result
+
+
+# Keep single-symbol version for backwards compatibility
+def get_live_spot_price(symbol: str) -> 'Optional[float]':
+    prices = get_live_spot_prices([symbol])
+    return prices.get(symbol)
+
+
 # ── Quick test ────────────────────────────────────────────────────────────────
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)

@@ -47,6 +47,33 @@ def _get_monthly_friday(ref_date: date, offset_days: int = 35) -> date:
     return target.date()
 
 
+def _get_standard_monthly_expiry(ref_date: date, min_dte: int = 30) -> date:
+    """
+    Returns the nearest STANDARD MONTHLY expiry (3rd Friday of month) that is
+    at least min_dte calendar days away from ref_date.
+
+    Standard monthly expirations are guaranteed to be listed by TT/CBOE well
+    in advance, unlike weekly expirations which TT only lists 4-6 weeks ahead.
+    Using a weekly expiry can trigger 'Instrument not found in TT catalog'.
+    """
+    from calendar import monthcalendar
+    y, m = ref_date.year, ref_date.month
+    for _ in range(6):  # check up to 6 months ahead
+        cal = monthcalendar(y, m)
+        # All Fridays (weekday index 4) in month, skipping zeros (padding)
+        fridays = [week[4] for week in cal if week[4] != 0]
+        third_friday = date(y, m, fridays[2])  # 3rd Friday (0-indexed)
+        dte = (third_friday - ref_date).days
+        if dte >= min_dte:
+            return third_friday
+        # Advance to next month
+        m += 1
+        if m > 12:
+            m = 1
+            y += 1
+    raise ValueError(f"Could not find standard monthly expiry >= {min_dte} DTE from {ref_date}")
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # STEP 1 — Generate Global Daily Signal
 # ─────────────────────────────────────────────────────────────────────────────
@@ -68,7 +95,7 @@ def generate_daily_signal(trade_date: date) -> dict:
 
     row = df.iloc[-1]
 
-    # ── Extract core market data ─────────────────────────────────────────────
+    # ── Extract core market data (historical close as baseline) ──────────────
     qqq_px       = float(row['qqq_close'])
     qqqm_px      = float(row['qqqm_close'])
     tqqq_px      = float(row['tqqq_close'])
@@ -81,6 +108,86 @@ def generate_daily_signal(trade_date: date) -> dict:
     vvix_10d_chg = float(row.get('vvix_10d_chg', 0))
     vix_vix3m    = float(row['vix_vix3m_ratio'])
 
+    # ── Override with live spot prices for accurate strike computation ─────────
+    # Priority: 1) IB Gateway (batch, single connection)  2) yfinance 5-min intraday
+    #           3) yfinance Ticker.fast_info (most reliable REST fallback)
+    # Falls back to historical close ONLY if all three fail — logs a loud warning.
+    SPOT_SYMBOLS = ["QQQ", "QQQM", "TQQQ", "SQQQ"]
+    live_prices: dict = {}
+
+    # Attempt 1: IB Gateway (batch — one connection for all symbols)
+    try:
+        from ib_options_pricing import get_live_spot_prices
+        live_prices = get_live_spot_prices(SPOT_SYMBOLS)
+        if live_prices:
+            log.info(f"IB batch spot prices: {live_prices}")
+    except Exception as ib_err:
+        log.warning(f"IB live spot fetch failed: {ib_err}")
+
+    # Attempt 2: yfinance 5-min intraday (works during market hours, no IB needed)
+    missing = [s for s in SPOT_SYMBOLS if s not in live_prices]
+    if missing:
+        try:
+            import yfinance as yf
+            import pandas as pd
+            raw = yf.download(missing, period="1d", interval="5m",
+                              auto_adjust=True, progress=False, threads=False)
+            if not raw.empty:
+                # raw["Close"] is a Series for 1 symbol, DataFrame for multiple
+                close_data = raw["Close"] if "Close" in raw.columns else raw
+                for sym in missing:
+                    try:
+                        if isinstance(close_data, pd.DataFrame) and sym in close_data.columns:
+                            series = close_data[sym].dropna()
+                        elif isinstance(close_data, pd.Series):
+                            series = close_data.dropna()  # single-symbol case
+                        else:
+                            continue
+                        if not series.empty:
+                            last = float(series.iloc[-1])
+                            if last > 0:
+                                live_prices[sym] = last
+                                log.info(f"yfinance intraday {sym}: ${last:.2f}")
+                    except Exception:
+                        pass
+        except Exception as yf_err:
+            log.warning(f"yfinance intraday fallback failed: {yf_err}")
+
+    # Attempt 3: yfinance Ticker.fast_info — most reliable on high-volatility days
+    # (single lightweight REST call per symbol; doesn't require intraday history)
+    missing = [s for s in SPOT_SYMBOLS if s not in live_prices]
+    if missing:
+        try:
+            import yfinance as yf
+            for sym in missing:
+                try:
+                    ticker = yf.Ticker(sym)
+                    px = getattr(ticker.fast_info, 'last_price', None)
+                    if px and float(px) > 0:
+                        live_prices[sym] = float(px)
+                        log.info(f"yfinance fast_info {sym}: ${float(px):.2f}")
+                except Exception as _ticker_err:
+                    log.debug(f"yfinance fast_info {sym} failed: {_ticker_err}")
+        except Exception as yf3_err:
+            log.warning(f"yfinance fast_info fallback failed: {yf3_err}")
+
+    # Apply live prices (log delta vs historical close)
+    for sym, live_px in live_prices.items():
+        if sym == "QQQ" and live_px > 0:
+            diff = abs(live_px - qqq_px) / qqq_px
+            if diff > 0.05:
+                log.warning(f"STALE STRIKE WARNING: QQQ live ${live_px:.2f} vs close ${qqq_px:.2f} (diff {diff:.1%})")
+            log.info(f"QQQ live ${live_px:.2f} vs close ${qqq_px:.2f} — using live for strikes")
+            qqq_px = live_px
+        elif sym == "QQQM" and live_px > 0:
+            qqqm_px = live_px
+        elif sym == "TQQQ" and live_px > 0:
+            tqqq_px = live_px
+        elif sym == "SQQQ" and live_px > 0:
+            sqqq_px = live_px
+
+    if not live_prices:
+        log.warning("No live spot prices available — using historical closes (strikes may be stale)")
 
     # Classify regime (no user-specific peak_vix at this level)
     mode = classify_mode(row, peak_vix=None, d2_active=False, current_date=date_str)
@@ -101,8 +208,9 @@ def generate_daily_signal(trade_date: date) -> dict:
         "vix_vix3m":    vix_vix3m,
         "row":          row,          # full row for advanced calcs
     }
-    log.info(f"Daily signal: Mode={mode}, VIX={vix:.1f}, QQQM=${qqqm_px:.2f}")
+    log.info(f"Daily signal: Mode={mode}, VIX={vix:.1f}, QQQ=${qqq_px:.2f}, QQQM=${qqqm_px:.2f}")
     return signal
+
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -317,7 +425,10 @@ def _build_ccs_order(signal: dict, contracts: int) -> dict:
     short_strike = round(find_strike_for_delta(qqq_px, T_ccs, rf, iv_short, 0.30, 'call'))
     long_strike  = round(find_strike_for_delta(qqq_px, T_ccs, rf, iv_short, 0.20, 'call'))
 
-    expiry  = _get_monthly_friday(signal['trade_date'], 45)
+    # Use the STANDARD MONTHLY (3rd Friday) expiry — guaranteed to be listed
+    # in TT/CBOE catalog. Weekly expirations (~45 DTE) may not be listed yet
+    # and trigger 'Instrument not found in TT catalog' on submission.
+    expiry  = _get_standard_monthly_expiry(signal['trade_date'], min_dte=40)
     exp_str = expiry.strftime('%y%m%d')
 
     # ── Try IB for real bid/ask; fall back to Black-Scholes ──────────────────
