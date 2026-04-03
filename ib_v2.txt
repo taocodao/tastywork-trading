@@ -1,0 +1,19 @@
+2026-04-01 16:13:01,064 INFO === 1. Port 4004 check ===
+2026-04-01 16:13:01,066 INFO PORT 4004: OPEN ✅
+2026-04-01 16:13:01,066 INFO === 2. get_live_spot_prices(['QQQ', 'QQQM', 'TQQQ', 'SQQQ']) ===
+2026-04-01 16:13:01,066 INFO   get_live_spot_prices FAILED ❌ — No module named 'ib_options_pricing'
+2026-04-01 16:13:01,066 INFO === 3. yfinance 5-min intraday ===
+2026-04-01 16:13:01,269 INFO NumExpr defaulting to 2 threads.
+/usr/local/lib/python3.12/dist-packages/pandas/core/computation/expressions.py:22: UserWarning: Pandas requires version '2.10.2' or newer of 'numexpr' (version '2.9.0' currently installed).
+  from pandas.core.computation.check import NUMEXPR_INSTALLED
+/usr/local/lib/python3.12/dist-packages/pandas/core/arrays/masked.py:56: UserWarning: Pandas requires version '1.4.2' or newer of 'bottleneck' (version '1.3.5' currently installed).
+  from pandas.core import (
+2026-04-01 16:13:01,891 INFO   yfinance QQQ: $584.29 ✅
+2026-04-01 16:13:01,891 INFO   yfinance QQQM: $240.57 ✅
+=== 1. Port 4004 check ===
+PORT 4004: OPEN ✅
+=== 2. get_live_spot_prices(['QQQ', 'QQQM', 'TQQQ', 'SQQQ']) ===
+  get_live_spot_prices FAILED ❌ — No module named 'ib_options_pricing'
+=== 3. yfinance 5-min intraday ===
+  yfinance QQQ: $584.29 ✅
+  yfinance QQQM: $240.57 ✅

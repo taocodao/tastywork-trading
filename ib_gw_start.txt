@@ -1,0 +1,8 @@
+time="2026-04-01T15:54:53-04:00" level=warning msg="The \"PERPLEXITY_API_KEY\" variable is not set. Defaulting to a blank string."
+time="2026-04-01T15:54:53-04:00" level=warning msg="/home/ubuntu/ib-program-trading/docker-compose.yml: the attribute `version` is obsolete, it will be ignored, please remove it to avoid potential confusion"
+time="2026-04-01T15:54:53-04:00" level=warning msg="No services to build"
+time="2026-04-01T15:54:53-04:00" level=warning msg="Found orphan containers ([ib-program-trading-ib-gateway-1]) for this project. If you removed or renamed this service in your compose file, you can run this command with the --remove-orphans flag to clean it up."
+ Container ib-program-trading-ib-gateway-data-1 Creating 
+ Container ib-program-trading-ib-gateway-data-1 Created 
+ Container ib-program-trading-ib-gateway-data-1 Starting 
+ Container ib-program-trading-ib-gateway-data-1 Started 

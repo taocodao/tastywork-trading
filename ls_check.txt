@@ -1,0 +1,1 @@
+-rw-rw-r-- 1 ubuntu ubuntu 3574 Apr  1 16:08 /tmp/ib_live.txt

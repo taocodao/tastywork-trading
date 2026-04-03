@@ -138,9 +138,9 @@ def publish_turbocore_rebalance_signal(
                 # Determine tier filter based on strategy name
                 strategy = data.get("strategy", "")
                 tier_filter = (
-                    "('TURBOCORE_PRO', 'BOTH_BUNDLE')"
+                    "('TURBOCORE_PRO', 'BOTH_BUNDLE', 'turbocore_pro', 'both_bundle')"
                     if "PRO" in (strategy or "")
-                    else "('TURBOCORE', 'BOTH_BUNDLE')"
+                    else "('TURBOCORE', 'BOTH_BUNDLE', 'turbocore', 'both_bundle')"
                 )
                 
                 rows = session.execute(
@@ -154,6 +154,26 @@ def publish_turbocore_rebalance_signal(
                 notify_signal_subscribers(data, subscribers)
             except Exception as email_err:
                 logger.warning(f"[Email] Signal notification failed (non-fatal): {email_err}")
+                
+            # ── NEW: Fire Ghost Auto-Execution Webhook ────────────────────
+            try:
+                import requests, os
+                logger.info(f"🤖 Firing Ghost Executor for Signal {data.get('id')}")
+                # Fallback to local host if dev
+                base_url = "https://trademind.app" if os.environ.get("FLASK_ENV") != "development" else "http://localhost:3000"
+                secret_key = os.environ.get("INTERNAL_API_SECRET", "dev_secret_key")
+                res = requests.post(
+                    f"{base_url}/api/internal/signals/{data.get('id', 'new')}/auto-execute",
+                    json={"signal": data},
+                    headers={"Authorization": f"Bearer {secret_key}"},
+                    timeout=5
+                )
+                if res.status_code == 200:
+                    logger.info(f"✅ Ghost Executor verified: {res.json().get('processed', 0)} users executed.")
+                else:
+                    logger.warning(f"❌ Ghost Executor warning: status {res.status_code}")
+            except Exception as ghost_err:
+                logger.warning(f"[Ghost] Auto-execute trigger failed (non-fatal): {ghost_err}")
             # ── END NEW ───────────────────────────────────────────────────
 
         finally:

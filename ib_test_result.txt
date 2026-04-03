@@ -1,0 +1,2 @@
+=== 1. Port 4004 check ===
+PORT 4004: FAILED ❌ — [Errno 111] Connection refused

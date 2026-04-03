@@ -1,0 +1,50 @@
+=== EC2 Deploy: Git Pull + Restart === 
+Time: ?? 2026/04/02 21:51:02.91 
+ 
+Running git pull... 
+From https://github.com/taocodao/tastywork-trading
+ * branch            main       -> FETCH_HEAD
+Already up to date.
+PULL_OK
+aa9b0c3 Fix email domain to trademind.bot
+de9f598 Add signal email notifications via Resend
+a6bad83 fix: standard monthly expiry (3rd Friday) for CCS + yfinance fast_info fallback + deploy get_live_spot_prices
+ 
+Checking services... 
+  UNIT                                           LOAD   ACTIVE SUB     DESCRIPTION
+  acpid.service                                  loaded active running ACPI event daemon
+  calendar-monitor.service                       loaded active running Calendar Monitor Continuous
+  chrony.service                                 loaded active running chrony, an NTP client/server
+  containerd.service                             loaded active running containerd container runtime
+  cron.service                                   loaded active running Regular background program processing daemon
+  dbus.service                                   loaded active running D-Bus System Message Bus
+  docker.service                                 loaded active running Docker Application Container Engine
+  fwupd.service                                  loaded active running Firmware update daemon
+  getty@tty1.service                             loaded active running Getty on tty1
+  ib-gateway.service                             loaded active running IB Gateway Docker Container
+  ib-trading.service                             loaded active running IB Program Trading Bot
+  irqbalance.service                             loaded active running irqbalance daemon
+  ModemManager.service                           loaded active running Modem Manager
+  multipathd.service                             loaded active running Device-Mapper Multipath Device Controller
+  networkd-dispatcher.service                    loaded active running Dispatcher daemon for systemd-networkd
+  nginx.service                                  loaded active running A high performance web server and a reverse proxy server
+  polkit.service                                 loaded active running Authorization Manager
+  rsyslog.service                                loaded active running System Logging Service
+  serial-getty@ttyS0.service                     loaded active running Serial Getty on ttyS0
+  snap.amazon-ssm-agent.amazon-ssm-agent.service loaded active running Service for snap application amazon-ssm-agent.amazon-ssm-agent
+  snapd.service                                  loaded active running Snap Daemon
+  ssh.service                                    loaded active running OpenBSD Secure Shell server
+  systemd-journald.service                       loaded active running Journal Service
+  systemd-logind.service                         loaded active running User Login Management
+ 
+Restarting trademind-api... 
+   Main PID: 2224451 (python3)
+      Tasks: 1 (limit: 4443)
+     Memory: 116.0K (peak: 372.0K)
+        CPU: 1ms
+     CGroup: /system.slice/trademind-api.service
+             └─2224451 /usr/bin/python3 /home/ubuntu/tastywork-trading/tasty_api_server.py
+
+Apr 02 21:51:04 ip-172-31-34-178 systemd[1]: Started trademind-api.service - TradeMind API & WebSocket Server.
+ 
+=== Done === 

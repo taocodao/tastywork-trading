@@ -1,0 +1,6 @@
+CONTAINER ID   IMAGE                              COMMAND                  CREATED        STATUS                   PORTS                                         NAMES
+5c62001b73bd   ghcr.io/gnzsnz/ib-gateway:latest   "/home/ibgateway/scr…"   2 months ago   Up 7 weeks (unhealthy)   0.0.0.0:5900->5900/tcp, [::]:5900->5900/tcp   ib-program-trading-ib-gateway-1
+Error response from daemon: No such container: ib-gateway
+failed to start containers: ib-gateway
+Error response from daemon: No such container: ib-gateway-data
+failed to start containers: ib-gateway-data

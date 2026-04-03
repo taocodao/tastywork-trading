@@ -1,0 +1,39 @@
+2026-04-01 16:08:54,193 INFO === 1. Port 4004 check ===
+2026-04-01 16:08:54,194 INFO PORT 4004: OPEN ✅
+2026-04-01 16:08:54,194 INFO === 2. ib_insync connect ===
+2026-04-01 16:08:54,389 INFO Connecting to 127.0.0.1:4004 with clientId 88...
+2026-04-01 16:08:54,390 INFO Connected
+2026-04-01 16:08:54,396 INFO Logged on to server version 176
+2026-04-01 16:08:54,398 INFO Warning 2104, reqId -1: Market data farm connection is OK:usfarm
+2026-04-01 16:08:54,398 INFO Warning 2107, reqId -1: HMDS data farm connection is inactive but should be available upon demand.ushmds
+2026-04-01 16:08:54,398 INFO Warning 2158, reqId -1: Sec-def data farm connection is OK:secdefnj
+2026-04-01 16:08:54,398 INFO API connection ready
+2026-04-01 16:08:54,402 INFO position: Position(account='DUK782510', contract=Stock(conId=9579970, symbol='IWM', exchange='ARCA', currency='USD', localSymbol='IWM', tradingClass='IWM'), position=270.0, avgCost=245.78382035)
+2026-04-01 16:08:54,442 INFO position: Position(account='DUK782510', contract=Stock(conId=73128548, symbol='DIA', exchange='ARCA', currency='USD', localSymbol='DIA', tradingClass='DIA'), position=3308.0, avgCost=477.0044204)
+2026-04-01 16:08:54,702 INFO updatePortfolio: PortfolioItem(contract=Stock(conId=73128548, symbol='DIA', right='0', primaryExchange='ARCA', currency='USD', localSymbol='DIA', tradingClass='DIA'), position=3308.0, marketPrice=465.6060791, marketValue=1540224.91, averageCost=477.0044204, unrealizedPNL=-37705.71, realizedPNL=0.0, account='DUK782510')
+2026-04-01 16:08:54,702 INFO updatePortfolio: PortfolioItem(contract=Stock(conId=9579970, symbol='IWM', right='0', primaryExchange='ARCA', currency='USD', localSymbol='IWM', tradingClass='IWM'), position=270.0, marketPrice=249.6673889, marketValue=67410.2, averageCost=245.78382035, unrealizedPNL=1048.56, realizedPNL=0.0, account='DUK782510')
+2026-04-01 16:08:54,802 INFO Synchronization complete
+2026-04-01 16:08:54,802 INFO CONNECTED ✅  isConnected=True
+2026-04-01 16:08:54,802 INFO === 3. reqMarketDataType(4) — delayed frozen ===
+2026-04-01 16:08:54,802 INFO reqMktData FAILED ❌ — There is no current event loop in thread 'Thread-1 (fetch)'.
+2026-04-01 16:08:54,802 INFO Disconnecting from 127.0.0.1:4004, 118 B sent in 8 messages, 19.3 kB received in 400 messages, session time 413 ms.
+2026-04-01 16:08:54,802 INFO Disconnecting
+2026-04-01 16:08:54,802 INFO Disconnected
+2026-04-01 16:08:54,803 INFO === Result: {} ===
+2026-04-01 16:08:54,803 INFO === 4. yfinance 5-min intraday fallback ===
+2026-04-01 16:08:54,883 INFO NumExpr defaulting to 2 threads.
+/usr/local/lib/python3.12/dist-packages/pandas/core/computation/expressions.py:22: UserWarning: Pandas requires version '2.10.2' or newer of 'numexpr' (version '2.9.0' currently installed).
+  from pandas.core.computation.check import NUMEXPR_INSTALLED
+/usr/local/lib/python3.12/dist-packages/pandas/core/arrays/masked.py:56: UserWarning: Pandas requires version '1.4.2' or newer of 'bottleneck' (version '1.3.5' currently installed).
+  from pandas.core import (
+2026-04-01 16:08:55,343 INFO yfinance FAILED ❌ — float() argument must be a string or a real number, not 'Series'
+=== 1. Port 4004 check ===
+PORT 4004: OPEN ✅
+=== 2. ib_insync connect ===
+CONNECTED ✅  isConnected=True
+=== 3. reqMarketDataType(4) — delayed frozen ===
+reqMktData FAILED ❌ — There is no current event loop in thread 'Thread-1 (fetch)'.
+Disconnected
+=== Result: {} ===
+=== 4. yfinance 5-min intraday fallback ===
+yfinance FAILED ❌ — float() argument must be a string or a real number, not 'Series'

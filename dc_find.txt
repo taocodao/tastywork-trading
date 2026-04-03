@@ -1,0 +1,49 @@
+/home/ubuntu/ib-program-trading/docker-compose.yml
+/home/ubuntu/IB-program-trading/docker-compose.yml
+/home/ubuntu/app/docker-compose.yml
+AI-Indicators-Overbought-Oversold-Options-Deep-Research.md
+ASYMMETRIC OPTIONS P&L SYSTEM – IMPLEMENTATION PLA.md
+COMPLETE BACKTESTING FRAMEWORK.md
+DEPLOYMENT.md
+Dockerfile
+Options-Selection-Best-Practices-Deep-Research.md
+Options-Selection-Best-Practices-Deep-Research.pdf
+PRIVY_SETUP.md
+README.md
+RL enhence
+RL-Enhancement-Implementation-Plan.md
+Risk-Tolerance-Trade-Frequency-EOD-Strategies.md
+VCP Executive-Summary-Ready-for-Development.md
+VCP-SuperTrend-RSI-Implementation-Plan.md
+VCP-SuperTrend-RSI-Quick-Developer-Reference.md
+checkpoints
+comprehensive_implementation_plan.md
+create_rds_db.py
+data
+deploy.sh
+docker-compose.prod.yml
+docker-compose.yml
+docs
+exported-assets
+exported-assets (1)
+exported-assets (1).zip
+exported-assets.zip
+get-pip.py
+ib-trading.service
+ib_config
+install_log.txt
+install_tensorflow.bat
+logs
+migrations
+nginx
+requirements.txt
+scripts
+src
+stock screen process implementation plan 1.md
+stock screen process implementation plan 2.md
+tests
+tf_output.txt
+tradecoin-bot-key.pem
+trading_data.db
+trading_system.log
+watchlist.csv
