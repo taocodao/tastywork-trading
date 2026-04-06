@@ -36,15 +36,22 @@ from pricing import bs_call_price, bs_put_price, find_strike_for_delta, SLIPPAGE
 
 
 def _get_monthly_friday(ref_date: date, offset_days: int = 35) -> date:
-    """Returns the Friday of the week ~offset_days from ref_date."""
-    import pandas as pd
+    import pandas_market_calendars as mcal
+    nyse = mcal.get_calendar('NYSE')
+    
     target = pd.Timestamp(ref_date) + pd.Timedelta(days=offset_days)
     weekday = target.weekday()
     if weekday < 4:
         target += pd.Timedelta(days=4 - weekday)
     elif weekday > 4:
         target += pd.Timedelta(days=7 - weekday + 4)
-    return target.date()
+        
+    date_obj = target.date()
+    # Step backward if the target Friday is a market holiday.
+    while len(nyse.valid_days(start_date=date_obj, end_date=date_obj)) == 0:
+        date_obj -= timedelta(days=1)
+        
+    return date_obj
 
 
 def _get_standard_monthly_expiry(ref_date: date, min_dte: int = 30) -> date:
@@ -57,15 +64,24 @@ def _get_standard_monthly_expiry(ref_date: date, min_dte: int = 30) -> date:
     Using a weekly expiry can trigger 'Instrument not found in TT catalog'.
     """
     from calendar import monthcalendar
+    import pandas_market_calendars as mcal
+    nyse = mcal.get_calendar('NYSE')
+    
     y, m = ref_date.year, ref_date.month
     for _ in range(6):  # check up to 6 months ahead
         cal = monthcalendar(y, m)
         # All Fridays (weekday index 4) in month, skipping zeros (padding)
         fridays = [week[4] for week in cal if week[4] != 0]
         third_friday = date(y, m, fridays[2])  # 3rd Friday (0-indexed)
-        dte = (third_friday - ref_date).days
+        
+        # Step backward if the 3rd Friday is a market holiday (e.g., Good Friday, Juneteenth).
+        valid_date = third_friday
+        while len(nyse.valid_days(start_date=valid_date, end_date=valid_date)) == 0:
+            valid_date -= timedelta(days=1)
+            
+        dte = (valid_date - ref_date).days
         if dte >= min_dte:
-            return third_friday
+            return valid_date
         # Advance to next month
         m += 1
         if m > 12:
