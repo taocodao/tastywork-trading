@@ -82,6 +82,10 @@ def _get_option_tickers(
         log.info(f"Connecting to IB Gateway at {IB_HOST}:{IB_PORT} (clientId={IB_CLIENT})...")
         ib.connect(IB_HOST, IB_PORT, clientId=IB_CLIENT, timeout=5)
 
+        # Use delayed data (type 3) — works on paper accounts without live subscription.
+        # type 1 = live (requires paid subscription), type 3 = 15-min delayed (free).
+        ib.reqMarketDataType(3)
+
         contracts = []
         for strike in strikes:
             opt = Option(
@@ -100,15 +104,27 @@ def _get_option_tickers(
             log.warning(f"IB: no qualified contracts for {underlying} {expiry_str} {right}")
             return {}
 
-        # Request snapshot tickers
-        tickers = ib.reqTickers(*qualified)
+        # Stream market data then wait — reqTickers (snapshot) doesn't work with delayed data.
+        # reqMktData + sleep is the correct pattern for paper accounts.
+        tickers = [ib.reqMktData(c, '', False, False) for c in qualified]
+        ib.sleep(4)  # wait for delayed data to arrive
 
         for ticker in tickers:
             strike = int(ticker.contract.strike)
-            bid = ticker.bid if ticker.bid and ticker.bid > 0 else 0.0
-            ask = ticker.ask if ticker.ask and ticker.ask > 0 else 0.0
+            bid = 0.0
+            ask = 0.0
+            for val_pair in [(ticker.bid, ticker.ask), (ticker.last, ticker.last)]:
+                b, a = val_pair
+                try:
+                    if b and float(b) > 0:
+                        bid = float(b)
+                    if a and float(a) > 0:
+                        ask = float(a)
+                except (TypeError, ValueError):
+                    pass
             result[strike] = {"bid": bid, "ask": ask}
-            log.debug(f"IB tick: {underlying} {strike}{right} bid={bid} ask={ask}")
+            log.info(f"IB option tick: {underlying} ${strike}{right} bid={bid:.2f} ask={ask:.2f}")
+            ib.cancelMktData(ticker.contract)
 
     except Exception as e:
         log.warning(f"IB option data error: {e}")
