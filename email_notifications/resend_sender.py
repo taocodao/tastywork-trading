@@ -97,25 +97,28 @@ def notify_signal_subscribers(signal_data: dict, subscribers: List[Dict]) -> Non
 
     sent = failed = 0
     for sub in subscribers:
-        email      = sub.get("email")
+        raw_email  = sub.get("email")
         first_name = sub.get("first_name") or "Trader"
-        if not email:
+        if not raw_email:
             continue
-        try:
-            resend.Emails.send({
-                "from":    FROM_ADDRESS,
-                "to":      [email],
-                "subject": subject,
-                "html":    _html(first_name, strategy_label, regime, confidence,
-                                 action, legs, limit_price, capital_req, rationale),
-                "text":    _text(strategy_label, regime, confidence, action,
-                                 legs, limit_price, capital_req, rationale),
-            })
-            sent += 1
-            logger.info(f"[Resend] Sent to {email}")
-        except Exception as e:
-            failed += 1
-            logger.error(f"[Resend] Failed for {email}: {e}")
+            
+        emails = [e.strip() for e in raw_email.split(",") if '@' in e.strip()]
+        for email in emails:
+            try:
+                resend.Emails.send({
+                    "from":    FROM_ADDRESS,
+                    "to":      [email],
+                    "subject": subject,
+                    "html":    _html(first_name, strategy_label, regime, confidence,
+                                     action, legs, limit_price, capital_req, rationale),
+                    "text":    _text(strategy_label, regime, confidence, action,
+                                     legs, limit_price, capital_req, rationale),
+                })
+                sent += 1
+                logger.info(f"[Resend] Sent to {email}")
+            except Exception as e:
+                failed += 1
+                logger.error(f"[Resend] Failed for {email}: {e}")
 
     logger.info(f"[Resend] Done — sent={sent} failed={failed}")
 

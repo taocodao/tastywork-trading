@@ -160,7 +160,7 @@ def publish_turbocore_rebalance_signal(
                 import requests, os
                 logger.info(f"🤖 Firing Ghost Executor for Signal {data.get('id')}")
                 # Fallback to local host if dev
-                base_url = "https://trademind.app" if os.environ.get("FLASK_ENV") != "development" else "http://localhost:3000"
+                base_url = "https://trademind.bot" if os.environ.get("FLASK_ENV") != "development" else "http://localhost:3000"
                 secret_key = os.environ.get("INTERNAL_API_SECRET", "dev_secret_key")
                 res = requests.post(
                     f"{base_url}/api/internal/signals/{data.get('id', 'new')}/auto-execute",
