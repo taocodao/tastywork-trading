@@ -461,12 +461,10 @@ def _build_ccs_order(signal: dict, contracts: int) -> dict:
     rf       = signal['rf']
     T_ccs    = 45 / 365.0
 
-    # QQQ standard monthly options (35+ DTE) are listed in $5 increments by CBOE/TT.
-    # Near-term options use $1 increments but for Jun+ expirations only $5 strikes are listed.
-    # Using round() (nearest $1) produces strikes like $619/$637 that TT can't find.
-    def _round5(x): return int(round(x / 5.0) * 5)
-    short_strike = _round5(find_strike_for_delta(qqq_px, T_ccs, rf, iv_short, 0.30, 'call'))
-    long_strike  = _round5(find_strike_for_delta(qqq_px, T_ccs, rf, iv_short, 0.20, 'call'))
+    # QQQ options trade in $1 strike increments at all price levels (CBOE carve-out for QQQ/IWM/SPY).
+    # Use round() to nearest whole dollar — do NOT round to $5 which are not the correct intervals.
+    short_strike = round(find_strike_for_delta(qqq_px, T_ccs, rf, iv_short, 0.30, 'call'))
+    long_strike  = round(find_strike_for_delta(qqq_px, T_ccs, rf, iv_short, 0.20, 'call'))
 
     # Use the STANDARD MONTHLY (3rd Friday) expiry — guaranteed to be listed
     # in TT/CBOE catalog. Weekly expirations (~45 DTE) may not be listed yet
@@ -797,8 +795,8 @@ def _reconcile_open_orders(signal: dict, account_state: dict) -> dict:
             return _hold_order("Already have open CCS — no new entry")
         qqq_px   = signal['qqq_px']
         T_ccs    = 45 / 365.0
-        ss = int(round(find_strike_for_delta(qqq_px, T_ccs, signal['rf'], signal['iv_short'], 0.30, 'call') / 5.0) * 5)
-        ls = int(round(find_strike_for_delta(qqq_px, T_ccs, signal['rf'], signal['iv_short'], 0.20, 'call') / 5.0) * 5)
+        ss = round(find_strike_for_delta(qqq_px, T_ccs, signal['rf'], signal['iv_short'], 0.30, 'call'))
+        ls = round(find_strike_for_delta(qqq_px, T_ccs, signal['rf'], signal['iv_short'], 0.20, 'call'))
         margin_per = round((ls - ss) * 100, 2)
         contracts = size_ccs_trade(nav, margin_per)
         if contracts == 0:
