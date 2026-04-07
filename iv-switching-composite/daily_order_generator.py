@@ -187,6 +187,30 @@ def generate_daily_signal(trade_date: date) -> dict:
         except Exception as yf3_err:
             log.warning(f"yfinance fast_info fallback failed: {yf3_err}")
 
+    # Cross-check: ALWAYS verify QQQ with yfinance fast_info regardless of IB success.
+    # During fast market crashes, IB delayed data can lag by 30+ minutes.
+    # In a crash, the lower price is always safer (prevents OTM strikes that don't exist).
+    try:
+        import yfinance as yf
+        _yf_ticker = yf.Ticker("QQQ")
+        _yf_px = getattr(_yf_ticker.fast_info, 'last_price', None)
+        if _yf_px and float(_yf_px) > 0:
+            _yf_px = float(_yf_px)
+            _ib_px = live_prices.get("QQQ", qqq_px)
+            _diff = abs(_yf_px - _ib_px) / _ib_px
+            if _diff > 0.03:
+                # Prices differ by >3% — use the LOWER one to stay conservative
+                _chosen = min(_yf_px, _ib_px)
+                log.warning(
+                    f"QQQ price discrepancy: IB=${_ib_px:.2f} yfinance=${_yf_px:.2f} "
+                    f"(diff={_diff:.1%}) — using lower ${_chosen:.2f} to avoid stale strikes"
+                )
+                live_prices["QQQ"] = _chosen
+            else:
+                log.info(f"QQQ cross-check OK: IB=${_ib_px:.2f} yfinance=${_yf_px:.2f}")
+    except Exception as _xcheck_err:
+        log.debug(f"QQQ cross-check failed (non-fatal): {_xcheck_err}")
+
     # Apply live prices (log delta vs historical close)
     for sym, live_px in live_prices.items():
         if sym == "QQQ" and live_px > 0:
