@@ -206,8 +206,10 @@ def get_live_spot_prices(symbols: list) -> dict:
         ib = IB()
         try:
             ib.connect(IB_HOST, IB_PORT, clientId=IB_CLIENT + 1, timeout=5)
-            # Delayed frozen data — works without live market data subscription
-            ib.reqMarketDataType(4)  # 1=live, 2=frozen, 3=delayed, 4=delayed frozen
+            # Type 3 = delayed intraday (15-min delay, no subscription needed).
+            # Type 4 = delayed frozen (returns LAST CLOSE — stale after a crash).
+            # We need type 3 during market hours to get the actual current price.
+            ib.reqMarketDataType(3)  # 1=live, 2=frozen(close), 3=delayed(intraday), 4=delayed+frozen
             contracts = [Stock(sym, "SMART", "USD") for sym in symbols]
             qualified = ib.qualifyContracts(*contracts)
             if not qualified:
