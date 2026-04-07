@@ -74,11 +74,14 @@ def _get_standard_monthly_expiry(ref_date: date, min_dte: int = 30) -> date:
         fridays = [week[4] for week in cal if week[4] != 0]
         third_friday = date(y, m, fridays[2])  # 3rd Friday (0-indexed)
         
-        # Step backward if the 3rd Friday is a market holiday (e.g., Good Friday, Juneteenth).
+        # IMPORTANT: Do NOT adjust backward for market holidays.
+        # The OCC always registers standard monthly contracts on the 3rd Friday —
+        # even when markets are closed that day (e.g., June 19 Juneteenth, Good Friday).
+        # The *last trading day* shifts to Thursday, but the OCC contract symbol and
+        # TastyTrade's option chain always use the official Friday expiration date.
+        # Stepping back to Thursday produces symbols like 260618 that TT does not have.
         valid_date = third_friday
-        while len(nyse.valid_days(start_date=valid_date, end_date=valid_date)) == 0:
-            valid_date -= timedelta(days=1)
-            
+
         dte = (valid_date - ref_date).days
         if dte >= min_dte:
             return valid_date
