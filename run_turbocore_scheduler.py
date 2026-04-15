@@ -59,14 +59,35 @@ logging.basicConfig(
 )
 logger = logging.getLogger("TurboCoreScheduler")
 
+import json
+import pathlib
+SCAN_STATE_FILE = pathlib.Path('/home/ubuntu/tastywork-trading/data/last_scan_state.json')
+
 class TurboCoreScheduler:
+    def _load_last_scan_date(self):
+        if SCAN_STATE_FILE.exists():
+            try:
+                state = json.loads(SCAN_STATE_FILE.read_text())
+                d = state.get('last_scan_date')
+                return date.fromisoformat(d) if d else None
+            except Exception as e:
+                logger.error(f"Error loading scan state: {e}")
+        return None
+
+    def _save_last_scan_date(self, d: date):
+        try:
+            SCAN_STATE_FILE.parent.mkdir(parents=True, exist_ok=True)
+            SCAN_STATE_FILE.write_text(json.dumps({'last_scan_date': d.isoformat()}))
+        except Exception as e:
+            logger.error(f"Error saving scan state: {e}")
+
     def __init__(self):
         self.data_pipe = TurboCoreDataPipeline()
         self.regime_detector = TurboCoreRegimeDetector()
         self.scorer = TurboCoreSignalScorer()
         self.allocator = AllocationOptimizer()
         self.tz = pytz.timezone('US/Eastern')
-        self.last_scan_date = None
+        self.last_scan_date = self._load_last_scan_date()
         
     def run_daily_scan(self):
         logger.info("--- Starting TurboCore ML Daily Scan ---")
@@ -159,6 +180,7 @@ class TurboCoreScheduler:
                 if time_to_scan:
                     self.run_daily_scan()
                     self.last_scan_date = now.date()
+                    self._save_last_scan_date(self.last_scan_date)
                     
                 if is_open:
                     # Check every 1 minute to ensure we trigger cleanly at 3:00 PM

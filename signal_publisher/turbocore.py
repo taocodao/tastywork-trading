@@ -134,44 +134,53 @@ def publish_turbocore_rebalance_signal(
 
             # ── NEW: Notify email subscribers ─────────────────────────────
             try:
-                session = get_session()
-                # Determine tier filter based on strategy name
-                strategy = data.get("strategy", "")
-                tier_filter = (
-                    "('TURBOCORE_PRO', 'BOTH_BUNDLE', 'turbocore_pro', 'both_bundle')"
-                    if "PRO" in (strategy or "")
-                    else "('TURBOCORE', 'BOTH_BUNDLE', 'turbocore', 'both_bundle')"
-                )
-                
-                rows = session.execute(
-                    f"""SELECT email, first_name FROM user_settings
-                        WHERE subscription_tier IN {tier_filter}
-                          AND email IS NOT NULL
-                          AND email_signal_alerts = TRUE"""
-                ).fetchall()
-                session.close()
-                subscribers = [{"email": r[0], "first_name": r[1]} for r in rows]
-                notify_signal_subscribers(data, subscribers)
+                # Skip email for the intermediate "pending" publish that fires while the
+                # IV-Switching overlay is still computing. Only the final unified signal
+                # (iv_switching_pending=False) should notify subscribers.
+                if data.get("iv_switching_pending"):
+                    logger.info("[Email] Skipping email — iv_switching_pending=True (intermediate publish)")
+                else:
+                    session = get_session()
+                    # Determine tier filter based on strategy name
+                    strategy = data.get("strategy", "")
+                    tier_filter = (
+                        "('TURBOCORE_PRO', 'BOTH_BUNDLE', 'turbocore_pro', 'both_bundle')"
+                        if "PRO" in (strategy or "")
+                        else "('TURBOCORE', 'BOTH_BUNDLE', 'turbocore', 'both_bundle')"
+                    )
+                    
+                    rows = session.execute(
+                        f"""SELECT email, first_name FROM user_settings
+                            WHERE subscription_tier IN {tier_filter}
+                              AND email IS NOT NULL
+                              AND email_signal_alerts = TRUE"""
+                    ).fetchall()
+                    session.close()
+                    subscribers = [{"email": r[0], "first_name": r[1]} for r in rows]
+                    notify_signal_subscribers(data, subscribers)
             except Exception as email_err:
                 logger.warning(f"[Email] Signal notification failed (non-fatal): {email_err}")
                 
             # ── NEW: Fire Ghost Auto-Execution Webhook ────────────────────
             try:
-                import requests, os
-                logger.info(f"🤖 Firing Ghost Executor for Signal {data.get('id')}")
-                # Fallback to local host if dev
-                base_url = "https://trademind.bot" if os.environ.get("FLASK_ENV") != "development" else "http://localhost:3000"
-                secret_key = os.environ.get("INTERNAL_API_SECRET", "dev_secret_key")
-                res = requests.post(
-                    f"{base_url}/api/internal/signals/{data.get('id', 'new')}/auto-execute",
-                    json={"signal": data},
-                    headers={"Authorization": f"Bearer {secret_key}"},
-                    timeout=5
-                )
-                if res.status_code == 200:
-                    logger.info(f"✅ Ghost Executor verified: {res.json().get('processed', 0)} users executed.")
+                if data.get("iv_switching_pending"):
+                    logger.info("[Ghost] Skipping auto-execute — iv_switching_pending=True (intermediate publish)")
                 else:
-                    logger.warning(f"❌ Ghost Executor warning: status {res.status_code}")
+                    import requests, os
+                    logger.info(f"🤖 Firing Ghost Executor for Signal {data.get('id')}")
+                    # Fallback to local host if dev
+                    base_url = "https://trademind.bot" if os.environ.get("FLASK_ENV") != "development" else "http://localhost:3000"
+                    secret_key = os.environ.get("INTERNAL_API_SECRET", "dev_secret_key")
+                    res = requests.post(
+                        f"{base_url}/api/internal/signals/{data.get('id', 'new')}/auto-execute",
+                        json={"signal": data},
+                        headers={"Authorization": f"Bearer {secret_key}"},
+                        timeout=5
+                    )
+                    if res.status_code == 200:
+                        logger.info(f"✅ Ghost Executor verified: {res.json().get('processed', 0)} users executed.")
+                    else:
+                        logger.warning(f"❌ Ghost Executor warning: status {res.status_code}")
             except Exception as ghost_err:
                 logger.warning(f"[Ghost] Auto-execute trigger failed (non-fatal): {ghost_err}")
             # ── END NEW ───────────────────────────────────────────────────
