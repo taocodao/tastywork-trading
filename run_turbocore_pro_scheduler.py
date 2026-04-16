@@ -164,8 +164,10 @@ class TurboCoreProScheduler:
         logger.info("--- TurboCore Pro Scan Complete ---")
 
         # ── IV-Switching Composite Strategy — Unified Signal (equity + options) ──
-        # Publishes ONE combined signal with equity allocation legs AND options legs.
-        # Users see a single card and one "Execute All" button.
+        # Publishes ONE combined signal:
+        #   - equity legs: target_pct (generic, no absolute quantities)
+        #   - options_intent: mode/type/underlying/delta/dte + market data for per-user sizing
+        #   - legs_override: retained for backward compat with manual-approve UI card
         try:
             import sys as _sys, os as _os
             from datetime import date as _date
@@ -182,7 +184,31 @@ class TurboCoreProScheduler:
             _signal = generate_daily_signal(_date.today())
             _mode = _signal['mode']
 
-            # Reference account for sizing (scales to user's real account at execution)
+            # ── Build generic options_intent (Phase 1 output) ────────────────
+            _mode_map = {
+                'A':  {'type': 'CSP',   'underlying': 'TQQQ', 'delta': 0.12, 'dte': 7},
+                'B':  {'type': 'ZEBRA', 'underlying': 'QQQM', 'delta': 0.70, 'dte': 75},
+                'C':  {'type': 'CCS',   'underlying': 'QQQ',  'delta': 0.30, 'dte': 45},
+                'D2': {'type': 'SQQQ',  'underlying': 'SQQQ', 'delta': None, 'dte': None},
+                'D3': {'type': 'ZEBRA', 'underlying': 'QQQM', 'delta': 0.70, 'dte': 75},
+            }
+            _intent_base = _mode_map.get(_mode, {'type': None, 'underlying': None, 'delta': None, 'dte': None})
+            _options_intent = {
+                'mode':      _mode,
+                **_intent_base,
+                'qqq_px':    _signal.get('qqq_px'),
+                'qqqm_px':   _signal.get('qqqm_px'),
+                'tqqq_px':   _signal.get('tqqq_px'),
+                'sqqq_px':   _signal.get('sqqq_px'),
+                'iv_short':  _signal.get('iv_short'),
+                'iv_tqqq':   _signal.get('iv_tqqq_10d'),
+                'rf':        _signal.get('rf'),
+                'vix':       _signal.get('vix'),
+                'vix_vix3m': _signal.get('vix_vix3m'),
+            }
+
+            # ── Legacy: reference account for manual-approve UI card ─────────
+            # (Still needed so the approve-options route can show a preview card)
             _ref_account = {
                 'nlv': 25000, 'cash': 25000, 'buying_power': 25000,
                 'position_counts': {'zebra_units': 0, 'csp_count': 0,
@@ -194,11 +220,12 @@ class TurboCoreProScheduler:
                and _order.get('order_legs'):
                 _tc_signal = format_as_turbocore_signal(_signal, _order, order_db_id='')
 
-                # Build combined legs: equity first (target_pct), then options (OCC symbols)
+                # Equity legs (generic — no absolute quantities)
                 _equity_legs = [
                     {'symbol': sym, 'action': 'BUY', 'target_pct': float(pct), 'leg_type': 'equity'}
                     for sym, pct in target_allocation.items()
                 ]
+                # Legacy options legs retained for manual-approve UI card only
                 _options_legs = [
                     {**leg, 'leg_type': 'options'}
                     for leg in _tc_signal.get('legs', [])
@@ -216,15 +243,31 @@ class TurboCoreProScheduler:
                     legs_override=_combined_legs,
                     action_override=_order.get('signal_type'),
                     iv_switching_order_id='',
-                    cost_override=_tc_signal.get('cost', 0),  # Pass limit price to DB
+                    cost_override=_tc_signal.get('cost', 0),
+                    options_intent=_options_intent,   # ← Phase 1: generic intent for Ghost Executor
                 )
-                logger.info(f"✅ IV-Switching unified signal: Mode={_mode} → {_order.get('signal_type')} | {len(_equity_legs)} equity + {len(_options_legs)} options legs")
+                logger.info(
+                    f"✅ IV-Switching unified signal: Mode={_mode} → {_order.get('signal_type')} | "
+                    f"{len(_equity_legs)} equity legs + options_intent[type={_options_intent['type']}]"
+                )
+
+                # ── Trigger demo executor 15 min after signal ────────────────
+                # Runs as a background process so it doesn't block the scheduler
+                try:
+                    import subprocess
+                    subprocess.Popen(
+                        ['python3', 'run_demo_executor.py'],
+                        cwd=_os.path.dirname(_os.path.abspath(__file__)),
+                    )
+                    logger.info("🤖 Demo executor launched in background")
+                except Exception as _demo_e:
+                    logger.warning(f"Demo executor launch failed (non-fatal): {_demo_e}")
+
             else:
                 logger.info(f"IV-Switching HOLD (Mode={_mode}): {_order.get('skip_reason', '')}")
         except Exception as _e:
             logger.error(f"❌ IV-Switching signal publish failed (non-fatal): {_e}",
                          exc_info=True)
-
 
 
 

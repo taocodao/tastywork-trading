@@ -79,12 +79,13 @@ def publish_turbocore_rebalance_signal(
     sma200_gate: bool,
     strategy: str = "TQQQ_TURBOCORE",
     # ── IV-Switching options signal fields (optional) ─────────────────────
-    legs_override: list = None,          # Raw order legs for options signals
+    legs_override: list = None,          # Raw order legs (legacy / backward compat)
     action_override: str = None,         # e.g., OPEN_CSP, OPEN_ZEBRA, OPEN_CCS
     user_id_override: str = None,        # Per-user routing for options signals
     iv_switching_order_id: str = None,   # FK to user_daily_orders.id
-    cost_override: float = None,         # Limit price for options orders (overrides hardcoded 0.0)
+    cost_override: float = None,         # Limit price for options orders
     iv_switching_pending: bool = False,  # True when IV-Switching overlay is still computing
+    options_intent: dict = None,         # Generic options intent (Phase 1: replaces hardcoded legs)
 ):
     import logging
     logger = logging.getLogger(__name__)
@@ -117,6 +118,11 @@ def publish_turbocore_rebalance_signal(
     # FIX: Override the hardcoded cost=0.0 with the actual limit price for options orders
     if cost_override is not None:
         data["cost"] = cost_override
+
+    # ── Phase 1: Generic options intent (per-user sizing done at execution time) ──
+    if options_intent:
+        data["options_intent"] = options_intent
+        logger.info(f"[OptionsIntent] mode={options_intent.get('mode','?')} type={options_intent.get('type','?')} underlying={options_intent.get('underlying','?')}")
 
     # Attach options routing fields to the DB row
     if iv_switching_order_id:
