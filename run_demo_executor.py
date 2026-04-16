@@ -34,9 +34,13 @@ logging.basicConfig(
 log = logging.getLogger("DemoExecutor")
 
 # ── Config ────────────────────────────────────────────────────────────────────
+from dotenv import load_dotenv
+load_dotenv()
+
 VERCEL_URL      = os.getenv("NEXT_PUBLIC_APP_URL", "https://www.trademind.bot")
 INTERNAL_SECRET = os.getenv("INTERNAL_API_SECRET", "dev_secret_key")
 DB_URL          = os.getenv("DATABASE_URL")
+
 
 DEMO_ACCOUNTS = [
     {"user_id": "demo_turbocore_core", "strategy": "TQQQ_TURBOCORE"},
