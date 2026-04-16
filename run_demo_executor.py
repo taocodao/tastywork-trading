@@ -136,9 +136,9 @@ def snapshot_demo_nlv(user_id: str, strategy: str, trade_date: date, mode: Optio
                 [user_id, trade_date.isoformat()],
             )
             prev = cur.fetchone()
-            prev_nlv = float(prev["portfolio_nlv"]) if prev else (5000 if "core" in user_id else 25000)
+            prev_nlv = float(prev["portfolio_nlv"]) if prev else (25000.0 if "pro" in user_id else 5000.0)
 
-        starting_balance = 5000.0 if "core" in user_id else 25000.0
+        starting_balance = 25000.0 if "pro" in user_id else 5000.0
         day_pnl = nlv - prev_nlv
         pct_return = (nlv - starting_balance) / starting_balance
 
