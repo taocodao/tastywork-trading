@@ -59,7 +59,7 @@ class TurboCoreEntrySignal:
             # Pack custom TurboCore fields into JSON structure
             # (Matches DB schema 'legs' or dynamic 'cost' fields on Vercel)
             "legs": [
-                {"symbol": str(sym), "target_pct": float(pct)}
+                {"symbol": str(sym), "target_pct": float(pct), "leg_type": "equity"}
                 for sym, pct in self.allocations.items()
             ],
             "cost": 0.0,
