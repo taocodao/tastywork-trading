@@ -60,26 +60,35 @@ logging.basicConfig(
 logger = logging.getLogger("TurboCoreScheduler")
 
 import json
+import math
 import pathlib
 SCAN_STATE_FILE = pathlib.Path('/home/ubuntu/tastywork-trading/data/last_scan_state.json')
 
 class TurboCoreScheduler:
-    def _load_last_scan_date(self):
+    def _load_state(self) -> dict:
         if SCAN_STATE_FILE.exists():
             try:
-                state = json.loads(SCAN_STATE_FILE.read_text())
-                d = state.get('last_scan_date')
-                return date.fromisoformat(d) if d else None
+                return json.loads(SCAN_STATE_FILE.read_text())
             except Exception as e:
                 logger.error(f"Error loading scan state: {e}")
-        return None
+        return {}
 
-    def _save_last_scan_date(self, d: date):
+    def _save_state(self, state: dict):
         try:
             SCAN_STATE_FILE.parent.mkdir(parents=True, exist_ok=True)
-            SCAN_STATE_FILE.write_text(json.dumps({'last_scan_date': d.isoformat()}))
+            SCAN_STATE_FILE.write_text(json.dumps(state, default=str))
         except Exception as e:
             logger.error(f"Error saving scan state: {e}")
+
+    # Backward-compat helpers
+    def _load_last_scan_date(self):
+        d = self._load_state().get('last_scan_date')
+        return date.fromisoformat(d) if d else None
+
+    def _save_last_scan_date(self, d: date):
+        state = self._load_state()
+        state['last_scan_date'] = d.isoformat()
+        self._save_state(state)
 
     def __init__(self):
         self.data_pipe = TurboCoreDataPipeline()
@@ -90,51 +99,105 @@ class TurboCoreScheduler:
         self.last_scan_date = self._load_last_scan_date()
         
     def run_daily_scan(self):
-        logger.info("--- Starting TurboCore ML Daily Scan ---")
-        
-        # 1. Fetch & Prepare Data
-        self.data_pipe.fetch_data("2y")
+        logger.info("--- Starting TurboCore ML Daily Scan v2 ---")
+
+        # ── 0. Load persistent state (ATH, last trained date) ────────────────
+        state = self._load_state()
+
+        # ── 1. Quarterly HMM auto-retrain check ──────────────────────────────
+        if self.regime_detector.needs_retrain():
+            logger.info("HMM quarterly retrain triggered — fetching 5y data")
+            self.data_pipe.fetch_data("5y")
+        else:
+            self.data_pipe.fetch_data("2y")
+
         master_df = self.data_pipe.prepare_core_features()
-        
         if master_df.empty:
             logger.error("Data pipeline returned empty dataframe. Aborting.")
             return
-            
-        # 2. Base Rules + HMM + XGBoost Layers
+
+        # ── 2. Retrain HMM if needed (after fresh 5y data fetch) ─────────────
+        if self.regime_detector.needs_retrain():
+            logger.info("Retraining HMM v2 with 6-feature set...")
+            self.regime_detector.fit(master_df)
+
+        # ── 3. Base Rules → HMM → XGBoost ────────────────────────────────────
         base = BaseStrategy(master_df)
         df = base.evaluate()
-        
         df = self.regime_detector.predict_regimes(df)
         df = self.scorer.predict_confidence(df)
-        
-        # 3. Assess Today's Actionable Output
+
+        # ── 4. Extract today's signal row ────────────────────────────────────
         today_row = df.iloc[-1]
+
+        regime       = str(today_row.get('final_regime', 'SIDEWAYS'))
+        base_signal  = int(today_row.get('base_signal', 0))
+        confidence   = float(today_row.get('ml_confidence', 0.55))
+        if confidence == 0.0:
+            confidence = 0.55
+            
+        # v2.1: Disabling XGBoost p_loss as N<100 data starvation falsely vetoes early bull market rallies
+        p_loss       = 0.0 
         
-        regime = str(today_row['final_regime'])
-        base_signal = int(today_row.get('base_signal', 0))
-        confidence = float(today_row.get('ml_confidence', 0.5))
         is_sma_forced = bool(today_row.get('qqq_below_sma200_sell', False))
-        qqq_drawdown = float(today_row.get('qqq_drawdown_ath', 0.0))
-        
-        # BUG FIX: Override regime to BEAR_SMA_FORCED BEFORE allocator call.
-        # Previously is_sma_forced was only used in the rationale string, meaning
-        # the strongest risk-off gate never actually triggered 100% SGOV allocation.
+
+        # v2: dual-EMA confirmation modifiers
+        dual_confirm = bool(today_row.get('dual_ema_confirmed', False))
+        rsi_add      = bool(today_row.get('rsi_add_signal', False))
+        rsi_trim     = bool(today_row.get('rsi_trim_signal', False))
+
+        # SMA200 hard override
         if is_sma_forced:
             regime = "BEAR_SMA_FORCED"
-        
-        # 4. Determine Dynamic Allocation Matrix
+
+        # ── 5. Compute blended current_vol for vol-targeting ─────────────────
+        try:
+            qqq_rv = float(today_row.get('qqq_vol_20d', 0.0)) * math.sqrt(252)
+            vix_daily = float(today_row.get('vix_close', 20.0)) / 100.0
+            current_vol = round(0.6 * qqq_rv + 0.4 * vix_daily, 4)
+        except Exception:
+            current_vol = None
+
+        # ── 6. Compute portfolio drawdown from ATH ────────────────────────────
+        # ATH is persisted across runs in state file; approximated from TQQQ price
+        # for a simple proxy (a full virtual account tracker is the robust solution)
+        try:
+            tqqq_px = float(today_row.get('tqqq_close', 0))
+            stored_ath = float(state.get('portfolio_ath', tqqq_px))
+            if tqqq_px > stored_ath:
+                stored_ath = tqqq_px
+                state['portfolio_ath'] = stored_ath
+            drawdown_pct = max(0.0, (stored_ath - tqqq_px) / stored_ath)
+        except Exception:
+            drawdown_pct = 0.0
+
+        logger.info(
+            f"Signal: regime={regime} signal={base_signal} conf={confidence:.1%} "
+            f"p_loss={p_loss:.1%} dual={dual_confirm} rsi_add={rsi_add} rsi_trim={rsi_trim} "
+            f"drawdown={drawdown_pct:.1%} current_vol={current_vol}"
+        )
+
+        # ── 7. Determine Allocation Matrix (v2 with all modifiers) ────────────
         target_allocation = self.allocator.get_target_allocation(
             regime=regime,
             signal=base_signal,
-            ml_confidence=confidence
+            ml_confidence=confidence,
+            dual_confirm=dual_confirm,
+            rsi_add=rsi_add,
+            rsi_trim=rsi_trim,
+            portfolio_drawdown_pct=drawdown_pct,
+            current_vol=current_vol,
+            p_loss=p_loss,
         )
-        
-        logger.info(f"Generated Allocation: {target_allocation}")
-        
-        rationale = f"Regime: {regime} | Conf: {confidence:.0%} | SMA Drop: {is_sma_forced}"
-        
-        
-        # 5. Publish
+        logger.info(f"Target allocation: {target_allocation}")
+
+        rationale = (
+            f"Regime: {regime} | Conf: {confidence:.0%} | p_loss: {p_loss:.0%} | "
+            f"dual_confirm: {dual_confirm} | RSI2_add: {rsi_add} | RSI2_trim: {rsi_trim} | "
+            f"drawdown: {drawdown_pct:.1%} | vol: {current_vol}"
+        )
+
+        # ── 8. Publish ────────────────────────────────────────────────────────
         publish_turbocore_rebalance_signal(
             regime=regime,
             confidence=confidence,
@@ -144,8 +207,12 @@ class TurboCoreScheduler:
             sma200_gate=not is_sma_forced,
             strategy="TQQQ_TURBOCORE"
         )
-        
-        # 6. Notify trademind.bot Web Application via SSE Push
+
+        # ── 9. Persist updated state ─────────────────────────────────────────
+        state['last_scan_date'] = date.today().isoformat()
+        self._save_state(state)
+
+        # ── 10. SSE push to web app ───────────────────────────────────────────
         try:
             resp = requests.post(
                 "https://www.trademind.bot/api/signals/notify",
@@ -153,13 +220,13 @@ class TurboCoreScheduler:
                 timeout=10
             )
             if resp.status_code == 200:
-                logger.info("✅ Pushed SSE notification to trademind.bot frontend")
+                logger.info("SSE notification pushed to trademind.bot")
             else:
-                logger.warning(f"⚠️ SSE Push returned status {resp.status_code}")
+                logger.warning(f"SSE push returned status {resp.status_code}")
         except Exception as e:
-            logger.error(f"❌ Failed to notify trademind.bot SSE endpoint: {e}")
-        
-        logger.info("--- TurboCore Scan Complete ---")
+            logger.error(f"Failed to notify trademind.bot SSE: {e}")
+
+        logger.info("--- TurboCore v2 Scan Complete ---")
 
     def run_loop(self):
         """Main execution loop for continuous running."""

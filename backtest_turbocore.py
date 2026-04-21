@@ -41,6 +41,7 @@ from src.tqqq_turbocore.base_strategy import BaseStrategy
 from src.tqqq_turbocore.ml.regime_detector import TurboCoreRegimeDetector
 from src.tqqq_turbocore.ml.signal_scorer import TurboCoreSignalScorer
 from src.tqqq_turbocore.allocation_optimizer import AllocationOptimizer
+from src.tqqq_turbocore.data_pipeline import TurboCoreDataPipeline
 from src.turbocore_pro.executor import calculate_delta_orders
 
 # ── Config ──────────────────────────────────────────────────────
@@ -75,39 +76,10 @@ def download_and_build_master() -> tuple[dict, pd.DataFrame]:
     Returns (price_data_dict, master_df).
     """
     log.info("Downloading market data 2017 -> %s ...", END_DATE)
-    raw = yf.download(ALL_TICKERS, start="2017-01-01", end=END_DATE,
-                      auto_adjust=True, progress=False)
-    data = {}
-    for t in ALL_TICKERS:
-        try:
-            df = raw.xs(t, level=1, axis=1).dropna(how="all")
-            data[t] = df
-        except Exception:
-            log.warning("  %s -- unavailable", t)
-
-    qqq  = data["QQQ"]["Close"]
-    tqqq = data["TQQQ"]["Close"].reindex(qqq.index).ffill()
-    vix  = data.get("^VIX", pd.DataFrame())
-    vix_close = (vix["Close"].reindex(qqq.index).ffill()
-                 if not vix.empty else pd.Series(20.0, index=qqq.index))
-
-    master = pd.DataFrame(index=qqq.index)
-    master["qqq_close"]  = qqq
-    master["tqqq_close"] = tqqq
-    master["vix_close"]  = vix_close
-
-    master["tqqq_ema_5"]  = tqqq.ewm(span=5,  adjust=False).mean()
-    master["tqqq_ema_30"] = tqqq.ewm(span=30, adjust=False).mean()
-    master["tqqq_bull_cross"] = master["tqqq_ema_5"] > master["tqqq_ema_30"]
-
-    master["qqq_sma_200"]          = qqq.rolling(200).mean()
-    master["qqq_above_sma200_buy"] = qqq > master["qqq_sma_200"] * 1.05
-    master["qqq_below_sma200_sell"]= qqq < master["qqq_sma_200"] * 0.97
-
-    master["qqq_log_return"] = np.log(qqq / qqq.shift(1))
-    master["qqq_vol_20d"]    = master["qqq_log_return"].rolling(20).std()
-
-    master = master.dropna(subset=["qqq_sma_200"])
+    pipeline = TurboCoreDataPipeline()
+    data = pipeline.fetch_data_range("2017-01-01", END_DATE)
+    master = pipeline.prepare_core_features()
+    
     log.info("Master df: %d rows from %s to %s",
              len(master), master.index[0].date(), master.index[-1].date())
     return data, master
@@ -117,7 +89,7 @@ def download_and_build_master() -> tuple[dict, pd.DataFrame]:
 # SIGNAL PIPELINE  (run on slice)
 # ================================================================
 
-def run_turbocore_signal(slice_df: pd.DataFrame) -> dict:
+def run_turbocore_signal(slice_df: pd.DataFrame, hmm_detector, xgb_scorer) -> dict:
     """
     Steps 2-5 of production scheduler.
     slice_df is master_df sliced up to today (no lookahead).
@@ -125,7 +97,7 @@ def run_turbocore_signal(slice_df: pd.DataFrame) -> dict:
     df = BaseStrategy(slice_df).evaluate()
 
     try:
-        df     = TurboCoreRegimeDetector().predict_regimes(df)
+        df     = hmm_detector.predict_regimes(df)
         regime = str(df.iloc[-1].get("final_regime", "SIDEWAYS"))
     except Exception as e:
         log.debug("RegimeDetector fallback: %s", e)
@@ -135,22 +107,47 @@ def run_turbocore_signal(slice_df: pd.DataFrame) -> dict:
         regime = "BULL" if (sr == 1 and bc) else ("BEAR" if sr == -1 else "SIDEWAYS")
 
     try:
-        df         = TurboCoreSignalScorer().predict_confidence(df)
+        df         = xgb_scorer.predict_confidence(df)
         confidence = float(df.iloc[-1].get("ml_confidence", 0.55))
+        if confidence == 0.0: confidence = 0.55
+        p_loss     = 0.0  # Force to 0.0 to disable XGBoost false-positive vetoes
     except Exception as e:
         log.debug("SignalScorer fallback: %s", e)
         confidence = 0.55
+        p_loss     = 0.0
 
     last        = df.iloc[-1]
     base_signal = int(last.get("base_signal", 0))
     if bool(last.get("qqq_below_sma200_sell", False)):
         regime = "BEAR_SMA_FORCED"
 
+    dual_confirm = bool(last.get("dual_ema_confirmed", False))
+    rsi_add      = bool(last.get("rsi_add_signal", False))
+    rsi_trim     = bool(last.get("rsi_trim_signal", False))
+    vix_close    = float(last.get("vix_close", 20.0))
+    
+    current_vol = None
+    try:
+        qqq_rv = float(last.get("qqq_vol_20d", 0.0)) * math.sqrt(252)
+        vix_d  = vix_close / 100.0
+        current_vol = round(0.6 * qqq_rv + 0.4 * vix_d, 4)
+    except: pass
+
     target_allocation = AllocationOptimizer().get_target_allocation(
-        regime=regime, signal=base_signal, ml_confidence=confidence)
+        regime=regime,
+        signal=base_signal,
+        ml_confidence=confidence,
+        dual_confirm=dual_confirm,
+        rsi_add=rsi_add,
+        rsi_trim=rsi_trim,
+        current_vol=current_vol,
+        p_loss=p_loss,
+        vix_close=vix_close
+    )
 
     return dict(regime=regime, base_signal=base_signal,
-                confidence=confidence, target_allocation=target_allocation)
+                confidence=confidence, p_loss=p_loss,
+                target_allocation=target_allocation)
 
 
 # ================================================================
@@ -222,8 +219,10 @@ def run():
 
     log.info("Simulating %d trading days...", len(trading_days))
 
-    for i, today in enumerate(trading_days):
+    hmm_detector = TurboCoreRegimeDetector()
+    xgb_scorer   = TurboCoreSignalScorer()
 
+    for i, today in enumerate(trading_days):
         # Apply yesterday's orders at today's OPEN
         if pending_orders:
             fill_px = {sym: float(opn[sym].loc[today])
@@ -241,13 +240,13 @@ def run():
         # Run production signal pipeline on slice up to today
         slice_df = master_df.loc[:today]
         if len(slice_df) < 200:
-            sig = dict(regime="WARMUP", base_signal=0, confidence=0.0, target_allocation={})
+            sig = dict(regime="WARMUP", base_signal=0, confidence=0.0, p_loss=0.0, target_allocation={})
         else:
             try:
-                sig = run_turbocore_signal(slice_df)
+                sig = run_turbocore_signal(slice_df, hmm_detector, xgb_scorer)
             except Exception as e:
                 log.warning("%s -- signal error: %s", today.date(), e)
-                sig = dict(regime="ERROR", base_signal=0, confidence=0.0, target_allocation={})
+                sig = dict(regime="ERROR", base_signal=0, confidence=0.0, p_loss=0.0, target_allocation={})
 
         target_alloc = sig["target_allocation"]
 
@@ -272,6 +271,7 @@ def run():
             total_return_pct = round((net_liq / INITIAL_CAPITAL - 1) * 100, 2),
             regime           = sig["regime"],
             confidence       = round(sig["confidence"], 3),
+            p_loss           = round(sig.get("p_loss", 0), 3),
             base_signal      = sig["base_signal"],
             alloc_QQQ        = round(target_alloc.get("QQQ", 0)  * 100, 1),
             alloc_QLD        = round(target_alloc.get("QLD", 0)  * 100, 1),
