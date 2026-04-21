@@ -1,0 +1,21 @@
+[Unit]
+Description=QQQ LEAPS Live Scanner & Virtual Portfolio Tracker
+After=network.target postgresql.service
+Wants=network.target
+
+[Service]
+Type=simple
+User=ubuntu
+WorkingDirectory=/home/ubuntu/tastywork-trading
+Environment="PATH=/home/ubuntu/tastywork-trading/venv/bin:/usr/local/bin:/usr/bin:/bin"
+Environment="PYTHONPATH=/home/ubuntu/tastywork-trading"
+EnvironmentFile=/home/ubuntu/tastywork-trading/.env
+ExecStart=/home/ubuntu/tastywork-trading/venv/bin/python run_qqq_leaps_scheduler.py
+Restart=always
+RestartSec=30
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=qqq-leaps-scheduler
+
+[Install]
+WantedBy=multi-user.target
