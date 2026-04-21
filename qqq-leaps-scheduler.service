@@ -10,7 +10,7 @@ WorkingDirectory=/home/ubuntu/tastywork-trading
 Environment="PATH=/home/ubuntu/tastywork-trading/venv/bin:/usr/local/bin:/usr/bin:/bin"
 Environment="PYTHONPATH=/home/ubuntu/tastywork-trading"
 EnvironmentFile=/home/ubuntu/tastywork-trading/.env
-ExecStart=/home/ubuntu/tastywork-trading/venv/bin/python run_qqq_leaps_scheduler.py
+ExecStart=/usr/bin/python3 run_qqq_leaps_scheduler.py
 Restart=always
 RestartSec=30
 StandardOutput=journal
