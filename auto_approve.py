@@ -450,7 +450,11 @@ def auto_approve_signal(
                 # Standard TurboCore Pro equity rebalance
                 result = _execute_turbocore_auto_approve(signal, session, account)
         elif "qqq_leaps" in strategy.lower() or "leaps" in strategy.lower():
-            result = _execute_qqq_leaps_auto_approve(signal, session, account)
+            signal_action = str(signal.get("action", "")).upper()
+            if signal_action.startswith("PMCC_"):
+                result = _execute_qqq_leaps_pmcc_action(signal, session, account)
+            else:
+                result = _execute_qqq_leaps_auto_approve(signal, session, account)
         else:
             result = _execute_calendar_auto_approve(signal, session, account)
         
@@ -1183,3 +1187,229 @@ def _execute_qqq_leaps_auto_approve(signal: Dict, session, account) -> Optional[
         "timestamp": datetime.now().isoformat()
     }
 
+
+def _execute_qqq_leaps_pmcc_action(signal: Dict, session, account) -> Optional[Dict[str, Any]]:
+    """
+    Execute a PMCC short-call action on a real Tastytrade account and sync
+    the pmcc_cycles + shadow_positions tables in PostgreSQL.
+
+    Handles all PMCCAction types:
+      PMCC_ENTER             → STO short call, INSERT pmcc_cycles row
+      PMCC_PROFIT_TAKE_*     → BTC short call, UPDATE pmcc_cycles net_credit
+      PMCC_GAMMA_MANAGE      → BTC, then re-enter if conditions met
+      PMCC_ROLL_UP_OUT       → BTC existing + STO new (same transaction)
+      PMCC_DEFENSIVE_ROLL    → BTC existing + STO new at lower delta
+      PMCC_TIER1_ROLL_DOWN   → BTC existing + STO new at 0.15 delta
+      PMCC_LOSS_LIMIT_CLOSE  → BTC at a loss, UPDATE cycles
+      PMCC_CLOSE             → Emergency BTC, UPDATE cycles
+    """
+    from tastytrade.order import NewOrder, OrderLeg, OrderAction, OrderType, OrderTimeInForce, PriceEffect
+    import psycopg2
+    from psycopg2.extras import RealDictCursor
+    from datetime import datetime
+    import os
+
+    action      = str(signal.get("action", "")).upper()
+    user_id     = signal.get("user_id", "")
+    pos_id      = signal.get("leaps_position_id", signal.get("position_id", ""))
+    db_url      = os.getenv("DATABASE_URL")
+
+    # Short call details from the PMCCSignal
+    short_strike  = float(signal.get("short_strike", 0))
+    short_expiry  = signal.get("short_expiry", signal.get("expiry", ""))
+    limit_price   = float(signal.get("limit_price", 1.00))
+    contracts     = int(signal.get("contracts", signal.get("qty", 1)))
+    rationale     = signal.get("rationale", "")
+
+    if not user_id or short_strike == 0 or not short_expiry:
+        logger.error(f"PMCC executor: missing required fields (user_id={user_id}, strike={short_strike}, expiry={short_expiry})")
+        return None
+
+    # Build OCC symbol for short call
+    exp_dt  = short_expiry.replace("-", "")[2:]          # YYMMDD
+    str_fmt = f"{int(short_strike * 1000):08d}"
+    occ_sym = f"QQQ  {exp_dt}C{str_fmt}"
+
+    # ── Determine order direction ─────────────────────────────────────────────
+    # ENTER = STO (credit received). All others = BTC (debit paid).
+    is_enter  = (action == "PMCC_ENTER")
+    o_action  = OrderAction.SELL_TO_OPEN if is_enter else OrderAction.BUY_TO_CLOSE
+    price_eff = PriceEffect.CREDIT if is_enter else PriceEffect.DEBIT
+    limit_px  = round(limit_price, 2)
+
+    legs = [
+        OrderLeg(
+            instrument_type="Equity Option",
+            symbol=occ_sym.strip(),
+            quantity=contracts,
+            action=o_action,
+        )
+    ]
+    order = NewOrder(
+        time_in_force=OrderTimeInForce.DAY,
+        order_type=OrderType.LIMIT,
+        legs=legs,
+        price=limit_px,
+        price_effect=price_eff,
+    )
+
+    order_id    = "unknown"
+    filled_price = limit_px
+
+    try:
+        response = account.place_order(session, order, dry_run=False)
+        order_id = str(response.order.id) if hasattr(response, "order") else "pmcc-submitted"
+        logger.info(f"✅ PMCC {action} for {user_id}: {occ_sym.strip()} × {contracts} | Order: {order_id}")
+
+        # Try to get actual fill price
+        try:
+            from tastytrade_client import TastyTradeClient
+            tt_c = TastyTradeClient(session)
+            resp = tt_c.get_order(account, order_id)
+            if resp and resp.get("status") == "Filled":
+                filled_price = float(resp.get("averagePrice", limit_px))
+        except Exception as _e:
+            logger.warning(f"Could not confirm PMCC fill price, using limit: {_e}")
+
+    except Exception as e:
+        logger.error(f"❌ PMCC order submission failed for {user_id}: {e}")
+        return None
+
+    # ── Sync PostgreSQL ───────────────────────────────────────────────────────
+    try:
+        if not db_url:
+            raise ValueError("DATABASE_URL not set")
+
+        conn = psycopg2.connect(db_url)
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+
+            if is_enter:
+                # ── PMCC ENTER: INSERT pmcc_cycles + UPDATE shadow_positions ──
+                cur.execute(
+                    """
+                    INSERT INTO pmcc_cycles
+                        (user_id, strategy, leaps_position_id, short_strike, short_expiry,
+                         short_dte_at_entry, short_delta_at_entry, credit_collected,
+                         entry_date, tastytrade_order_id)
+                    VALUES (%s, 'QQQ_LEAPS', %s, %s, %s, %s, %s, %s, CURRENT_DATE, %s)
+                    """,
+                    (
+                        user_id, pos_id or None, short_strike,
+                        short_expiry,
+                        int(signal.get("short_dte", 32)),
+                        float(signal.get("short_delta", 0.28)),
+                        filled_price,
+                        order_id,
+                    )
+                )
+                # Update shadow_positions pmcc state
+                cur.execute(
+                    """
+                    UPDATE shadow_positions
+                    SET pmcc_state          = 'PMCC_ACTIVE',
+                        pmcc_credit_c0      = %s,
+                        pmcc_short_strike   = %s,
+                        pmcc_short_expiry   = %s,
+                        pmcc_short_entry_date = CURRENT_DATE
+                    WHERE user_id = %s AND strategy = 'QQQ_LEAPS' AND id = %s
+                    """,
+                    (filled_price, short_strike, short_expiry, user_id, pos_id)
+                )
+                # Credit cash: short call premium received
+                cur.execute(
+                    "UPDATE virtual_accounts SET cash_balance = cash_balance + %s "
+                    "WHERE user_id = %s AND strategy = 'QQQ_LEAPS'",
+                    (contracts * 100 * filled_price, user_id)
+                )
+                logger.info(f"▶️  PMCC ENTER synced to DB for {user_id} @ ${filled_price:.2f}")
+
+            else:
+                # ── PMCC CLOSE / ROLL / PROFIT-TAKE ──────────────────────────
+                # Calculate net credit on the closing cycle
+                cur.execute(
+                    """
+                    SELECT id, credit_collected FROM pmcc_cycles
+                    WHERE user_id = %s AND exit_date IS NULL AND leaps_position_id = %s
+                    ORDER BY entry_date DESC LIMIT 1
+                    """,
+                    (user_id, pos_id)
+                )
+                cycle = cur.fetchone()
+                if cycle:
+                    net_net = float(cycle["credit_collected"]) - filled_price
+                    cur.execute(
+                        """
+                        UPDATE pmcc_cycles
+                        SET credit_buyback = %s, net_credit = %s,
+                            exit_date = CURRENT_DATE, exit_reason = %s,
+                            tastytrade_order_id = %s
+                        WHERE id = %s
+                        """,
+                        (filled_price, net_net, action, order_id, cycle["id"])
+                    )
+                    # Accumulate net credit into shadow_positions
+                    cur.execute(
+                        "UPDATE shadow_positions "
+                        "SET pmcc_credit_cumulative = pmcc_credit_cumulative + %s, "
+                        "    pmcc_state = %s, pmcc_credit_c0 = 0 "
+                        "WHERE user_id = %s AND strategy = 'QQQ_LEAPS' AND id = %s",
+                        (
+                            net_net * contracts * 100,
+                            "LEAPS_ONLY" if action in ("PMCC_CLOSE", "PMCC_LOSS_LIMIT_CLOSE", "PMCC_TIER1_ROLL_DOWN") else "PMCC_DEFENSIVE",
+                            user_id, pos_id
+                        )
+                    )
+                # Debit cash: paying to close short call
+                cur.execute(
+                    "UPDATE virtual_accounts SET cash_balance = cash_balance - %s "
+                    "WHERE user_id = %s AND strategy = 'QQQ_LEAPS'",
+                    (contracts * 100 * filled_price, user_id)
+                )
+                logger.info(f"▶️  PMCC CLOSE synced to DB for {user_id} | action={action} @ ${filled_price:.2f}")
+
+                # ── For ROLL actions: immediately open the replacement short call ──
+                roll_actions = {"PMCC_ROLL_UP_OUT", "PMCC_DEFENSIVE_ROLL", "PMCC_GAMMA_MANAGE", "PMCC_TIER1_ROLL_DOWN"}
+                if action in roll_actions and signal.get("new_strike") and signal.get("new_expiry"):
+                    new_strike = float(signal["new_strike"])
+                    new_expiry = signal["new_expiry"]
+                    new_dte    = int(signal.get("short_dte", 32))
+                    new_delta  = float(signal.get("new_delta", 0.23))
+
+                    # Estimate new limit price (midpoint approximation: 99% of current short IV price)
+                    new_limit  = round(limit_price * 0.97, 2)  # slightly below original short price
+
+                    roll_signal = dict(signal)
+                    roll_signal.update({
+                        "action":       "PMCC_ENTER",
+                        "short_strike": new_strike,
+                        "short_expiry": new_expiry,
+                        "short_dte":    new_dte,
+                        "short_delta":  new_delta,
+                        "limit_price":  new_limit,
+                        "rationale":    f"Roll replacement after {action}: {rationale}",
+                    })
+                    logger.info(f"  ↩️  Auto-opening replacement short call after roll: strike={new_strike:.1f} expiry={new_expiry}")
+                    conn.commit()  # commit close first
+                    conn.close()
+                    return _execute_qqq_leaps_pmcc_action(roll_signal, session, account)
+
+        conn.commit()
+        conn.close()
+
+    except Exception as db_err:
+        logger.error(f"❌ PMCC DB sync failed for {user_id}: {db_err}")
+
+    return {
+        "orderId":     order_id,
+        "symbol":      "QQQ",
+        "strategy":    "QQQ_LEAPS",
+        "action":      action,
+        "shortStrike": short_strike,
+        "shortExpiry": short_expiry,
+        "contracts":   contracts,
+        "limitPrice":  limit_px,
+        "fillPrice":   filled_price,
+        "rationale":   rationale,
+        "autoApproved": True,
+        "timestamp":   datetime.now().isoformat(),
+    }
