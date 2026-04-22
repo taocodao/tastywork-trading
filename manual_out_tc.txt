@@ -1,0 +1,26 @@
+/usr/local/lib/python3.12/dist-packages/pandas/core/computation/expressions.py:22: UserWarning: Pandas requires version '2.10.2' or newer of 'numexpr' (version '2.9.0' currently installed).
+  from pandas.core.computation.check import NUMEXPR_INSTALLED
+/usr/local/lib/python3.12/dist-packages/pandas/core/arrays/masked.py:56: UserWarning: Pandas requires version '1.4.2' or newer of 'bottleneck' (version '1.3.5' currently installed).
+  from pandas.core import (
+2026-04-08 15:29:54,641 - src.tqqq_turbocore.ml.regime_detector - WARNING - hmmlearn is not installed. TurboCoreRegimeDetector will degrade.
+/usr/lib/python3/dist-packages/sklearn/base.py:376: InconsistentVersionWarning: Trying to unpickle estimator _SigmoidCalibration from version 1.7.2 when using version 1.4.1.post1. This might lead to breaking code or invalid results. Use at your own risk. For more info please refer to:
+https://scikit-learn.org/stable/model_persistence.html#security-maintainability-limitations
+  warnings.warn(
+/usr/lib/python3/dist-packages/sklearn/base.py:376: InconsistentVersionWarning: Trying to unpickle estimator CalibratedClassifierCV from version 1.7.2 when using version 1.4.1.post1. This might lead to breaking code or invalid results. Use at your own risk. For more info please refer to:
+https://scikit-learn.org/stable/model_persistence.html#security-maintainability-limitations
+  warnings.warn(
+2026-04-08 15:29:54,681 - TurboCoreScheduler - INFO - --- Starting TurboCore ML Daily Scan ---
+2026-04-08 15:29:54,681 - src.tqqq_turbocore.data_pipeline - INFO - Fetching 2y data for ['QQQ', 'TQQQ', 'SQQQ', 'QLD', 'SGOV', '^VIX', 'TLT', 'DX-Y.NYB']
+2026-04-08 15:29:55,798 - src.tqqq_turbocore.base_strategy - INFO - Evaluating Base Strategy rules...
+2026-04-08 15:29:55,836 - src.tqqq_turbocore.ml.regime_detector - WARNING - HMM not trained or unavailable, defaulting ML regime to SIDEWAYS
+2026-04-08 15:29:55,912 - TurboCoreScheduler - INFO - Generated Allocation: {'QQQ': 0.66, 'QLD': 0.15, 'TQQQ': 0.0, 'SGOV': 0.19}
+2026-04-08 15:29:55,913 - signal_publisher.turbocore - INFO - Publishing TurboCore Signal: SIDEWAYS | Conf: 0.68 | Legs: ['QQQ', 'QLD', 'TQQQ', 'SGOV']
+2026-04-08 15:29:56,423 - signal_publisher.turbocore - INFO - DB Save success: TurboCore Rebalance
+2026-04-08 15:29:56,630 - email_notifications.resend_sender - INFO - [Resend] Sent to Erichuang2005@gmail.com
+2026-04-08 15:29:56,943 - email_notifications.resend_sender - INFO - [Resend] Sent to eric@trademind.bot
+2026-04-08 15:29:57,111 - email_notifications.resend_sender - INFO - [Resend] Sent to web3aistore@gmail.com
+2026-04-08 15:29:57,111 - email_notifications.resend_sender - INFO - [Resend] Done — sent=3 failed=0
+2026-04-08 15:29:57,111 - signal_publisher.turbocore - INFO - 🤖 Firing Ghost Executor for Signal cb3b7c0a-485f-468b-a879-3cd93f6894a3
+2026-04-08 15:29:57,334 - signal_publisher.turbocore - WARNING - ❌ Ghost Executor warning: status 401
+2026-04-08 15:29:57,440 - TurboCoreScheduler - INFO - ✅ Pushed SSE notification to trademind.bot frontend
+2026-04-08 15:29:57,440 - TurboCoreScheduler - INFO - --- TurboCore Scan Complete ---

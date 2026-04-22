@@ -1,0 +1,22 @@
+INFO - Market closed. Sleeping for 0.1 hours.
+2026-03-20 13:26:03,633 - TurboCoreProScheduler - INFO - Market closed. Sleeping for 0.1 hours.
+2026-03-20 13:26:03,633 - TurboCoreProScheduler - INFO - Market closed. Sleeping for 0.1 hours.
+2026-03-20 13:26:03,633 - TurboCoreProScheduler - INFO - Market closed. Sleeping for 0.1 hours.
+2026-03-20 13:26:03,633 - TurboCoreProScheduler - INFO - Market closed. Sleeping for 0.1 hours.
+2026-03-20 13:26:03,633 - TurboCoreProScheduler - INFO - Market closed. Sleeping for 0.1 hours.
+2026-03-20 13:26:03,633 - TurboCoreProScheduler - INFO - Market closed. Sleeping for 0.1 hours.
+2026-03-20 13:26:03,634 - TurboCoreProScheduler - INFO - Market closed. Sleeping for 0.1 hours.
+2026-03-20 13:26:03,634 - TurboCoreProScheduler - INFO - Market closed. Sleeping for 0.1 hours.
+2026-03-20 13:26:03,634 - TurboCoreProScheduler - INFO - Market closed. Sleeping for 0.1 hours.
+2026-03-20 13:26:03,634 - TurboCoreProScheduler - INFO - Market closed. Sleeping for 0.1 hours.
+2026-03-20 13:26:03,634 - TurboCoreProScheduler - INFO - Market closed. Sleeping for 0.1 hours.
+2026-03-20 13:26:03,634 - TurboCoreProScheduler - INFO - Market closed. Sleeping for 0.1 hours.
+2026-03-20 13:26:03,634 - TurboCoreProScheduler - INFO - Market closed. Sleeping for 0.1 hours.
+2026-03-20 13:26:03,634 - TurboCoreProScheduler - INFO - Market closed. Sleeping for 0.1 hours.
+2026-03-20 13:26:03,634 - TurboCoreProScheduler - INFO - Market closed. Sleeping for 0.1 hours.
+2026-03-20 13:26:03,634 - TurboCoreProScheduler - INFO - Market closed. Sleeping for 0.1 hours.
+2026-03-20 13:26:03,634 - TurboCoreProScheduler - INFO - Market closed. Sleeping for 0.1 hours.
+2026-03-20 13:26:03,634 - TurboCoreProScheduler - INFO - Market closed. Sleeping for 0.1 hours.
+2026-03-20 13:26:03,635 - TurboCoreProScheduler - INFO - Market closed. Sleeping for 0.1 hours.
+2026-03-20 13:26:03,635 - TurboCoreProScheduler - INFO - Market closed. Sleeping for 0.1 hours.
+2026-03-20 13:26:03,635 - TurboCor

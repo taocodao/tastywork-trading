@@ -16,7 +16,7 @@ sys.path.insert(0, "/home/ubuntu/tastywork-trading/iv-switching-composite")
 # ── Test 1: Live spot price ──────────────────────────────────────────────────
 print("\n=== TEST 1: IB Gateway Spot Price (QQQ) ===")
 try:
-    from ib_options_pricing import get_live_spot_prices
+    from ib_options_pricing import get_live_spot_prices  # type: ignore
     prices = get_live_spot_prices(["QQQ", "TQQQ", "SQQQ"])
     if prices and prices.get("QQQ", 0) > 0:
         print("PASS - IB spot prices returned:")
@@ -30,7 +30,7 @@ except Exception as e:
 # ── Test 2: Option contract qualification ────────────────────────────────────
 print("\n=== TEST 2: Option Contract Qualification (QQQ Call) ===")
 try:
-    from ib_options_pricing import get_option_spread_quote
+    from ib_options_pricing import get_option_spread_quote  # type: ignore
     # Use a nearby strike — adjust if QQQ has moved significantly
     # This just tests connectivity and contract lookup, not exact pricing
     quote = get_option_spread_quote("QQQ", 480, 500, "260522", "C")

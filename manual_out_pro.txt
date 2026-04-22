@@ -1,0 +1,89 @@
+/usr/local/lib/python3.12/dist-packages/pandas/core/computation/expressions.py:22: UserWarning: Pandas requires version '2.10.2' or newer of 'numexpr' (version '2.9.0' currently installed).
+  from pandas.core.computation.check import NUMEXPR_INSTALLED
+/usr/local/lib/python3.12/dist-packages/pandas/core/arrays/masked.py:56: UserWarning: Pandas requires version '1.4.2' or newer of 'bottleneck' (version '1.3.5' currently installed).
+  from pandas.core import (
+2026-04-08 14:27:17,867 - src.turbocore_pro.ml.regime_detector - WARNING - hmmlearn not installed. TurboCoreRegimeDetector degraded.
+/usr/lib/python3/dist-packages/sklearn/base.py:376: InconsistentVersionWarning: Trying to unpickle estimator IsotonicRegression from version 1.7.2 when using version 1.4.1.post1. This might lead to breaking code or invalid results. Use at your own risk. For more info please refer to:
+https://scikit-learn.org/stable/model_persistence.html#security-maintainability-limitations
+  warnings.warn(
+/usr/lib/python3/dist-packages/sklearn/base.py:376: InconsistentVersionWarning: Trying to unpickle estimator CalibratedClassifierCV from version 1.7.2 when using version 1.4.1.post1. This might lead to breaking code or invalid results. Use at your own risk. For more info please refer to:
+https://scikit-learn.org/stable/model_persistence.html#security-maintainability-limitations
+  warnings.warn(
+/usr/lib/python3/dist-packages/sklearn/base.py:376: InconsistentVersionWarning: Trying to unpickle estimator _SigmoidCalibration from version 1.7.2 when using version 1.4.1.post1. This might lead to breaking code or invalid results. Use at your own risk. For more info please refer to:
+https://scikit-learn.org/stable/model_persistence.html#security-maintainability-limitations
+  warnings.warn(
+2026-04-08 14:27:18,023 - TurboCoreProScheduler - INFO - --- Starting TurboCore Pro ML Daily Scan ---
+2026-04-08 14:27:18,025 - src.turbocore_pro.data_pipeline - INFO - Fetching 2y data for ['QQQ', 'TQQQ', 'SQQQ', 'QLD', 'SGOV', '^VIX', '^VIX3M', 'HYG', 'TLT']
+2026-04-08 14:27:19,529 - src.turbocore_pro.data_pipeline - INFO - HY OAS fallback: using inverted HYG z-score as proxy
+2026-04-08 14:27:19,544 - src.turbocore_pro.base_strategy - INFO - Evaluating Base Strategy rules...
+2026-04-08 14:27:19,582 - src.turbocore_pro.ml.regime_detector - WARNING - HMM not trained — defaulting to SIDEWAYS
+2026-04-08 14:27:19,794 - TurboCoreProScheduler - INFO - Generated Allocation: {'QQQ': 0.55, 'QLD': 0.1, 'QQQ_LEAPS': 0.3, 'SGOV': 0.05}
+2026-04-08 14:27:19,794 - signal_publisher.turbocore - INFO - Publishing TurboCore Signal: SIDEWAYS | Conf: 0.44 | Legs: ['QQQ', 'QLD', 'QQQ_LEAPS', 'SGOV']
+2026-04-08 14:27:20,387 - signal_publisher.turbocore - INFO - DB Save success: TurboCore Rebalance
+2026-04-08 14:27:20,639 - email_notifications.resend_sender - INFO - [Resend] Sent to Erichuang2005@gmail.com
+2026-04-08 14:27:20,867 - email_notifications.resend_sender - INFO - [Resend] Sent to eric@trademind.bot
+2026-04-08 14:27:21,052 - email_notifications.resend_sender - INFO - [Resend] Sent to web3aistore@gmail.com
+2026-04-08 14:27:21,052 - email_notifications.resend_sender - INFO - [Resend] Done — sent=3 failed=0
+2026-04-08 14:27:21,052 - signal_publisher.turbocore - INFO - 🤖 Firing Ghost Executor for Signal bcc8c6c4-cb1e-4bf1-8450-03baaed0a42f
+2026-04-08 14:27:21,364 - signal_publisher.turbocore - WARNING - ❌ Ghost Executor warning: status 401
+2026-04-08 14:27:21,520 - TurboCoreProScheduler - INFO - ✅ Pushed SSE notification to trademind.bot frontend
+2026-04-08 14:27:21,520 - TurboCoreProScheduler - INFO - --- TurboCore Pro Scan Complete ---
+2026-04-08 14:27:21,527 - IVS.DailyOrders - INFO - Building feature set for 2026-04-08...
+2026-04-08 14:27:21,527 - DataFeatures - INFO - Downloading market data (2025-03-04 -> 2026-04-08)...
+2026-04-08 14:27:22,895 - DataFeatures - INFO - Building features...
+2026-04-08 14:27:22,934 - ib_insync.client - INFO - Connecting to 127.0.0.1:4004 with clientId 251...
+2026-04-08 14:27:22,935 - ib_insync.client - INFO - Connected
+2026-04-08 14:27:22,941 - ib_insync.client - INFO - Logged on to server version 176
+2026-04-08 14:27:22,943 - ib_insync.wrapper - INFO - Warning 2104, reqId -1: Market data farm connection is OK:usfarm
+2026-04-08 14:27:22,943 - ib_insync.wrapper - INFO - Warning 2107, reqId -1: HMDS data farm connection is inactive but should be available upon demand.ushmds
+2026-04-08 14:27:22,943 - ib_insync.wrapper - INFO - Warning 2158, reqId -1: Sec-def data farm connection is OK:secdefnj
+2026-04-08 14:27:22,944 - ib_insync.client - INFO - API connection ready
+2026-04-08 14:27:22,953 - ib_insync.wrapper - INFO - position: Position(account='DUK782510', contract=Stock(conId=9579970, symbol='IWM', exchange='ARCA', currency='USD', localSymbol='IWM', tradingClass='IWM'), position=270.0, avgCost=245.78382035)
+2026-04-08 14:27:22,953 - ib_insync.wrapper - INFO - position: Position(account='DUK782510', contract=Stock(conId=73128548, symbol='DIA', exchange='ARCA', currency='USD', localSymbol='DIA', tradingClass='DIA'), position=3308.0, avgCost=477.0044204)
+2026-04-08 14:27:23,054 - ib_insync.wrapper - INFO - updatePortfolio: PortfolioItem(contract=Stock(conId=73128548, symbol='DIA', right='0', primaryExchange='ARCA', currency='USD', localSymbol='DIA', tradingClass='DIA'), position=3308.0, marketPrice=477.86724855, marketValue=1580784.86, averageCost=477.0044204, unrealizedPNL=2854.24, realizedPNL=0.0, account='DUK782510')
+2026-04-08 14:27:23,054 - ib_insync.wrapper - INFO - updatePortfolio: PortfolioItem(contract=Stock(conId=9579970, symbol='IWM', right='0', primaryExchange='ARCA', currency='USD', localSymbol='IWM', tradingClass='IWM'), position=270.0, marketPrice=259.78601075, marketValue=70142.22, averageCost=245.78382035, unrealizedPNL=3780.59, realizedPNL=0.0, account='DUK782510')
+2026-04-08 14:27:23,062 - ib_insync.ib - INFO - Synchronization complete
+2026-04-08 14:27:23,384 - ib_insync.wrapper - INFO - Warning 10167, reqId 7: Requested market data is not subscribed. Displaying delayed market data., contract: Stock(conId=320227571, symbol='QQQ', exchange='SMART', primaryExchange='NASDAQ', currency='USD', localSymbol='QQQ', tradingClass='NMS')
+2026-04-08 14:27:23,389 - ib_insync.wrapper - INFO - Warning 10167, reqId 8: Requested market data is not subscribed. Displaying delayed market data., contract: Stock(conId=449738108, symbol='QQQM', exchange='SMART', primaryExchange='NASDAQ', currency='USD', localSymbol='QQQM', tradingClass='NMS')
+2026-04-08 14:27:23,392 - ib_insync.wrapper - INFO - Warning 10167, reqId 9: Requested market data is not subscribed. Displaying delayed market data., contract: Stock(conId=72539702, symbol='TQQQ', exchange='SMART', primaryExchange='NASDAQ', currency='USD', localSymbol='TQQQ', tradingClass='NMS')
+2026-04-08 14:27:23,632 - ib_insync.wrapper - INFO - Warning 10167, reqId 10: Requested market data is not subscribed. Displaying delayed market data., contract: Stock(conId=831082828, symbol='SQQQ', exchange='SMART', primaryExchange='NASDAQ', currency='USD', localSymbol='SQQQ', tradingClass='NMS')
+2026-04-08 14:27:27,199 - ib_options_pricing - INFO - IB spot QQQ: $607.05
+2026-04-08 14:27:27,199 - ib_options_pricing - INFO - IB spot QQQM: $249.93
+2026-04-08 14:27:27,199 - ib_options_pricing - INFO - IB spot TQQQ: $48.26
+2026-04-08 14:27:27,199 - ib_options_pricing - INFO - IB spot SQQQ: $68.85
+2026-04-08 14:27:27,199 - ib_insync.ib - INFO - Disconnecting from 127.0.0.1:4004, 636 B sent in 21 messages, 25.3 kB received in 456 messages, session time 4.27 s.
+2026-04-08 14:27:27,199 - ib_insync.client - INFO - Disconnecting
+2026-04-08 14:27:27,200 - IVS.DailyOrders - INFO - IB batch spot prices: {'QQQ': 607.05, 'QQQM': 249.93, 'TQQQ': 48.26, 'SQQQ': 68.85}
+2026-04-08 14:27:27,391 - IVS.DailyOrders - INFO - QQQ cross-check OK: IB=$607.05 yfinance=$605.47
+2026-04-08 14:27:27,391 - IVS.DailyOrders - INFO - QQQ live $607.05 vs close $588.59 — using live for strikes
+2026-04-08 14:27:27,391 - IVS.DailyOrders - INFO - Daily signal: Mode=C, VIX=25.8, QQQ=$607.05, QQQM=$249.93
+2026-04-08 14:27:27,603 - ib_options_pricing - INFO - Connecting to IB Gateway at 127.0.0.1:4004 (clientId=250)...
+2026-04-08 14:27:27,603 - ib_insync.client - INFO - Connecting to 127.0.0.1:4004 with clientId 250...
+2026-04-08 14:27:27,604 - ib_insync.client - INFO - Connected
+2026-04-08 14:27:27,609 - ib_insync.client - INFO - Logged on to server version 176
+2026-04-08 14:27:27,612 - ib_insync.wrapper - INFO - Warning 2104, reqId -1: Market data farm connection is OK:usfarm
+2026-04-08 14:27:27,613 - ib_insync.wrapper - INFO - Warning 2107, reqId -1: HMDS data farm connection is inactive but should be available upon demand.ushmds
+2026-04-08 14:27:27,613 - ib_insync.wrapper - INFO - Warning 2158, reqId -1: Sec-def data farm connection is OK:secdefnj
+2026-04-08 14:27:27,613 - ib_insync.client - INFO - API connection ready
+2026-04-08 14:27:27,620 - ib_insync.wrapper - INFO - position: Position(account='DUK782510', contract=Stock(conId=9579970, symbol='IWM', exchange='ARCA', currency='USD', localSymbol='IWM', tradingClass='IWM'), position=270.0, avgCost=245.78382035)
+2026-04-08 14:27:27,620 - ib_insync.wrapper - INFO - position: Position(account='DUK782510', contract=Stock(conId=73128548, symbol='DIA', exchange='ARCA', currency='USD', localSymbol='DIA', tradingClass='DIA'), position=3308.0, avgCost=477.0044204)
+2026-04-08 14:27:27,929 - ib_insync.wrapper - INFO - updatePortfolio: PortfolioItem(contract=Stock(conId=73128548, symbol='DIA', right='0', primaryExchange='ARCA', currency='USD', localSymbol='DIA', tradingClass='DIA'), position=3308.0, marketPrice=477.86724855, marketValue=1580784.86, averageCost=477.0044204, unrealizedPNL=2854.24, realizedPNL=0.0, account='DUK782510')
+2026-04-08 14:27:27,930 - ib_insync.wrapper - INFO - updatePortfolio: PortfolioItem(contract=Stock(conId=9579970, symbol='IWM', right='0', primaryExchange='ARCA', currency='USD', localSymbol='IWM', tradingClass='IWM'), position=270.0, marketPrice=259.78601075, marketValue=70142.22, averageCost=245.78382035, unrealizedPNL=3780.59, realizedPNL=0.0, account='DUK782510')
+2026-04-08 14:27:28,020 - ib_insync.ib - INFO - Synchronization complete
+2026-04-08 14:27:28,100 - ib_insync.wrapper - ERROR - Error 200, reqId 3: No security definition has been found for the request, contract: Option(symbol='QQQ', lastTradeDateOrContractMonth='20260619', strike=645.0, right='C', exchange='SMART', currency='USD')
+2026-04-08 14:27:28,190 - ib_insync.wrapper - ERROR - Error 200, reqId 4: No security definition has been found for the request, contract: Option(symbol='QQQ', lastTradeDateOrContractMonth='20260619', strike=665.0, right='C', exchange='SMART', currency='USD')
+2026-04-08 14:27:28,190 - ib_insync.ib - WARNING - Unknown contract: Option(symbol='QQQ', lastTradeDateOrContractMonth='20260619', strike=645.0, right='C', exchange='SMART', currency='USD')
+2026-04-08 14:27:28,191 - ib_insync.ib - WARNING - Unknown contract: Option(symbol='QQQ', lastTradeDateOrContractMonth='20260619', strike=665.0, right='C', exchange='SMART', currency='USD')
+2026-04-08 14:27:28,191 - ib_options_pricing - WARNING - IB: no qualified contracts for QQQ 260619 C
+2026-04-08 14:27:28,191 - ib_insync.ib - INFO - Disconnecting from 127.0.0.1:4004, 242 B sent in 11 messages, 19.4 kB received in 402 messages, session time 588 ms.
+2026-04-08 14:27:28,191 - ib_insync.client - INFO - Disconnecting
+2026-04-08 14:27:28,194 - IVS.DailyOrders - INFO - B-S CCS: short=645 sc=10.72, long=665 lc=6.37, net_credit=4.35
+2026-04-08 14:27:28,195 - signal_publisher.turbocore - INFO - Publishing TurboCore Signal: OPEN_CCS | Conf: 0.57 | Legs: ['QQQ', 'QLD', 'QQQ_LEAPS', 'SGOV', 'QQQ   260619C00645000', 'QQQ   260619C00665000']
+2026-04-08 14:27:28,205 - signal_publisher.turbocore - INFO - DB Save success: TurboCore Rebalance
+2026-04-08 14:27:28,379 - email_notifications.resend_sender - INFO - [Resend] Sent to Erichuang2005@gmail.com
+2026-04-08 14:27:28,566 - email_notifications.resend_sender - INFO - [Resend] Sent to eric@trademind.bot
+2026-04-08 14:27:28,801 - email_notifications.resend_sender - INFO - [Resend] Sent to web3aistore@gmail.com
+2026-04-08 14:27:28,801 - email_notifications.resend_sender - INFO - [Resend] Done — sent=3 failed=0
+2026-04-08 14:27:28,801 - signal_publisher.turbocore - INFO - 🤖 Firing Ghost Executor for Signal 8739bfa4-3086-46e4-8135-87f3227a6958
+2026-04-08 14:27:29,038 - signal_publisher.turbocore - WARNING - ❌ Ghost Executor warning: status 401
+2026-04-08 14:27:29,045 - TurboCoreProScheduler - INFO - ✅ IV-Switching unified signal: Mode=C → OPEN_CCS | 4 equity + 2 options legs

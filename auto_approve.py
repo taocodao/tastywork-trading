@@ -292,7 +292,19 @@ def should_auto_approve(signal: Dict[str, Any], user_refresh_token: str = None) 
         if not env_token:
             logger.debug("Auto-approve: No OAuth credentials available")
             return False
-    
+
+    # ── EXIT / Protective bypass ──────────────────────────────────────────────
+    # Protective exits (DrawdownGuard, PMCC rolls/closes) carry confidence=0.0
+    # by design — they must NEVER be blocked by confidence or capital gates.
+    # Only the credentials and master-switch checks above apply to them.
+    _protective_actions = {"EXIT", "ROLL", "PMCC_CLOSE", "PMCC_ROLL", "PMCC_DEFENSIVE_ROLL"}
+    signal_action = str(signal.get("action", "")).upper()
+    signal_type   = str(signal.get("type", "")).upper()
+    if signal_action in _protective_actions or signal_type in _protective_actions:
+        logger.info(f"✅ Auto-approve: Protective action '{signal_action}' bypasses confidence/capital gate")
+        return True
+
+
     # Check daily limit
     if _daily_auto_approve_count >= settings.get("max_daily_trades", 5):
         logger.info(f"Auto-approve: Daily limit reached ({_daily_auto_approve_count})")
