@@ -48,7 +48,7 @@ from .entry_classifier import LeapsEntryClassifier
 from .entry_classifier_v2 import LeapsEntryClassifierV2
 from .strike_optimizer import bs_call_price, bs_call_delta, find_call_strike
 from .drawdown_guard import DrawdownGuard, DrawdownAction
-from .pmcc_manager import PMCCManager
+from .pmcc_manager import PMCCManager, PMCCSignal, PMCCAction
 
 
 # ── Persistent scan state (between runs) ──────────────────────────────────────
@@ -384,6 +384,34 @@ def run_qqq_leaps_scan(config: QQQLeapsConfig = None) -> Optional[ScanResult]:
         nav = pm.leaps_daily_mtm(spot, iv_long, rf)
         logger.info(f"  Existing positions MTM: nav=${nav:.0f}")
 
+        # ── Layer D: PMCC management on open positions ────────────────────────
+        if config.pmcc_enabled:
+            pmcc_mgr = PMCCManager(config)
+            for pos in open_leaps:
+                try:
+                    pmcc_signal = pmcc_mgr.evaluate(
+                        position=pos,
+                        today_row=today_row,
+                        regime=regime,
+                        spot=spot,
+                        vix=vix_v,
+                        iv_short=iv_short,
+                        rf=rf,
+                    )
+                    if pmcc_signal:
+                        logger.info(
+                            f"  PMCC signal for {pmcc_signal.user_id}: "
+                            f"{pmcc_signal.action} | {pmcc_signal.rationale}"
+                        )
+                        # Publish to DB → triggers auto_approve if auto_execute=True
+                        try:
+                            from signal_publisher.qqq_leaps import publish_qqq_leaps_pmcc_signal
+                            publish_qqq_leaps_pmcc_signal(pmcc_signal)
+                        except Exception as e:
+                            logger.warning(f"  PMCC signal publish failed (non-fatal): {e}")
+                except Exception as e:
+                    logger.warning(f"  PMCC evaluation error for position {pos.get('id')}: {e}")
+
     # ── 5. Entry signal evaluation ────────────────────────────────────────────
     leaps_params = REGIME_PARAMS.get(regime, REGIME_PARAMS["CHOPPY"])
     n_open = len(open_leaps)
@@ -501,6 +529,7 @@ def run_qqq_leaps_scan(config: QQQLeapsConfig = None) -> Optional[ScanResult]:
                 entry_px=entry_px,
                 contracts=contracts,
                 delta=l_delta,
+                leaps_entry_qqq=spot,
                 rationale=rationale,
             )
         except Exception as e:

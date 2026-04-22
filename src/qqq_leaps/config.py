@@ -20,8 +20,8 @@ class QQQLeapsConfig:
     # ── Entry Gates ───────────────────────────────────────────────────────────
     entry_rsi14_max: float = 35.0          # RSI(14) must be below this (oversold)
     entry_rsi2_max: float = 20.0           # RSI(2) must be below this for strongest signal
-    entry_gap_down_min: float = 0.005      # Gap-down >= 0.5%  (soft gate, ML replaces)
-    entry_ml_confidence_min: float = 0.50  # Layer B gate (0.50 = moderately confident)
+    entry_gap_down_min: float = 0.003      # Gap-down >= 0.3%  (was 0.5%; lowered to capture moderate dips)
+    entry_ml_confidence_min: float = 0.45  # Layer B gate (0.45 = matches regime-specialist thresholds)
     entry_vix_max: float = 40.0            # No entries above VIX 40 (panic mode)
     entry_sma100_gate: bool = True         # Must be above 100-DMA (primary regime gate)
 
@@ -38,14 +38,32 @@ class QQQLeapsConfig:
     roll_trigger_dte_min: int = 180        # Signal B: < 180 DTE → roll out
     roll_trigger_price_up: float = 0.20    # Signal C: underlying up 20%+ from entry → roll
 
-    # ── Layer D: PMCC Short Call Management ───────────────────────────────────
+    # ── Layer D: PMCC Short Call Management (v2 ruleset) ─────────────────────
     pmcc_enabled: bool = True
-    pmcc_target_delta: float = 0.30        # Target short call delta
-    pmcc_max_delta: float = 0.40           # Hard ceiling — never sell > 0.40 delta
-    pmcc_dte: int = 35                     # ~35 DTE for short leg
-    pmcc_profit_target: float = 0.50       # Close at 50% profit (Tastylive rule)
-    pmcc_force_close_gap_pct: float = 0.03 # Close if QQQ within 3% of short strike
-    pmcc_min_leaps_dte: int = 60           # Don't add PMCC if LEAPS has < 60 DTE
+    # Regime-conditional short call deltas
+    pmcc_delta_bull_strong: float = 0.28    # Target delta in BULL_STRONG
+    pmcc_delta_bull_moderate: float = 0.23  # Target delta in BULL_MODERATE
+    pmcc_delta_defensive: float = 0.15      # Defensive/rolldown target delta
+    pmcc_target_delta: float = 0.28         # Default target (backwards compat)
+    pmcc_max_delta: float = 0.40            # Hard ceiling — never sell > 0.40 delta
+    pmcc_min_delta: float = 0.15            # Hard floor — below this, skip (not worth it)
+    pmcc_dte: int = 32                      # 30–35 DTE target (peak theta decay)
+    # Exit / profit rules (v2: BCI 20%/10% instead of simple 50%)
+    pmcc_profit_target: float = 0.50        # Kept for backwards compat (50% midpoint)
+    pmcc_profit_take_early_pct: float = 0.20  # Close at 20% of credit (early in cycle: <10 days)
+    pmcc_profit_take_late_pct: float = 0.10   # Close at 10% of credit (late in cycle: >10 days)
+    pmcc_early_cycle_days: int = 10          # Threshold between early/late profit-take
+    pmcc_gamma_manage_dte: int = 21          # Force management if DTE falls to ≤21
+    pmcc_loss_limit_multiple: float = 2.0    # Buy back if price >= 2× credit collected
+    pmcc_force_close_gap_pct: float = 0.03   # Close if QQQ within 3% of short strike
+    pmcc_roll_delta_trigger: float = 0.40    # Roll if short call delta >= 0.40 (before assignment)
+    pmcc_min_leaps_dte: int = 60             # Don't add PMCC if LEAPS has < 60 DTE
+    pmcc_min_leaps_age_days: int = 5         # LEAPS must be held ≥ 5 days before PMCC
+    pmcc_qqq_recovery_pct: float = 0.02      # QQQ must recover ≥ 2% from LEAPS entry before opening short
+    pmcc_min_vix: float = 16.0               # Don't sell calls in crushingly low IV
+    pmcc_max_vix: float = 35.0               # Don't sell calls in extreme panic (VIX > 35)
+    pmcc_min_premium: float = 0.50           # Min credit per contract ($50 total) to be worthwhile
+    pmcc_roll_new_expiry_days: int = 21      # When rolling out, add 21 days to expiry
 
     # ── Layer E: Drawdown Guard ───────────────────────────────────────────────
     dd_delta_rolldown_trigger: float = 0.65  # LEAPS delta < 0.65 -> roll short call down

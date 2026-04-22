@@ -172,10 +172,86 @@ def run_morning_exit_scan():
         logger.error(f"Morning exit scan failed: {e}", exc_info=True)
 
 
+def _should_retrain() -> bool:
+    """Returns True if 63+ trading days have elapsed since last model retrain (≈ 3 months)."""
+    state = _load_state()
+    last_str = state.get("last_model_retrain_date", "2000-01-01")
+    try:
+        last_dt = date.fromisoformat(last_str)
+        return (date.today() - last_dt).days >= 63
+    except Exception:
+        return True
+
+
+def _run_model_retrain():
+    """Quarterly retrain: pulls 4 years of data and re-fits LightGBM v2 specialist models."""
+    logger.info("⏳ Quarterly model retraining triggered...")
+    try:
+        import yfinance as yf
+        import pandas as pd
+        from src.qqq_leaps.leaps_feature_engineering import build_leaps_features
+        from src.qqq_leaps.regime_classifier import LeapsRegimeClassifier
+        from src.qqq_leaps.entry_classifier_v2 import LeapsEntryClassifierV2
+        from src.qqq_leaps.config import QQQLeapsConfig
+
+        cfg = QQQLeapsConfig()
+        end_dt   = date.today().isoformat()
+        start_dt = (date.today() - timedelta(days=1500)).isoformat()  # ~4 years
+
+        logger.info(f"  Fetching data {start_dt} → {end_dt} for retrain...")
+        qqq  = yf.download("QQQ",   start=start_dt, end=end_dt, auto_adjust=True, progress=False)
+        vix  = yf.download("^VIX",  start=start_dt, end=end_dt, progress=False)
+        vix3m= yf.download("^VIX3M",start=start_dt, end=end_dt, progress=False)
+        irx  = yf.download("^IRX",  start=start_dt, end=end_dt, progress=False)
+
+        def _sq(df):
+            if isinstance(df.columns, pd.MultiIndex): df.columns = df.columns.droplevel(1)
+            return df
+
+        qqq = _sq(qqq); vix = _sq(vix); vix3m = _sq(vix3m); irx = _sq(irx)
+
+        qqq_close = qqq["Close"].squeeze()
+        qqq_open  = qqq["Open"].squeeze()
+        vix_s     = vix["Close"].reindex(qqq_close.index).ffill().fillna(20.0).squeeze()
+        vix3m_s   = vix3m["Close"].reindex(qqq_close.index).ffill().fillna(21.0).squeeze()
+        rf_s      = (irx["Close"] / 100.0).reindex(qqq_close.index).ffill().fillna(0.045).squeeze()
+
+        master = build_leaps_features(qqq_close, qqq_open, vix_s, vix3m_s, rf_s)
+
+        # Add regime labels
+        regime_clf = LeapsRegimeClassifier(cfg)
+        master = regime_clf.apply_to_master(master)
+
+        # Add forward labels (4% gain in 30 days)
+        forward_ret = qqq_close.pct_change(cfg.ml_label_forward_days).shift(-cfg.ml_label_forward_days)
+        master["label_bounce"] = (forward_ret >= cfg.ml_label_target_gain).astype(int)
+
+        # Train LightGBM v2 specialists
+        clf = LeapsEntryClassifierV2()
+        if "label_bounce" in master.columns and "leaps_regime" in master.columns:
+            clf.fit(master)
+            if clf.is_trained:
+                state = _load_state()
+                state["last_model_retrain_date"] = date.today().isoformat()
+                _save_state(state)
+                logger.info(f"✅ Model retrained successfully. Stats: {clf.training_stats}")
+            else:
+                logger.warning("Model fit returned is_trained=False — check data quality")
+        else:
+            logger.error("label_bounce or leaps_regime column missing — retrain aborted")
+
+    except Exception as e:
+        logger.error(f"Model retrain failed (non-fatal): {e}", exc_info=True)
+
+
 def run_daily_scan():
     logger.info("=" * 60)
     logger.info("Starting QQQ LEAPS Daily Scan")
     logger.info("=" * 60)
+
+    # 0. Quarterly model retraining check
+    if _should_retrain():
+        _run_model_retrain()
 
     # 1. Run QQQ LEAPS scanner
     try:
@@ -188,6 +264,7 @@ def run_daily_scan():
             logger.warning("Scanner returned None — market data issue?")
     except Exception as e:
         logger.error(f"QQQ LEAPS scanner failed: {e}", exc_info=True)
+
 
     # 2. Update TurboCore ETF MTM (daily mark)
     _update_turbocore_mtm()
