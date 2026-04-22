@@ -93,6 +93,156 @@ def _save_scan_state(state: dict):
     SCAN_STATE_FILE.write_text(json.dumps(state, indent=2))
 
 
+def run_exit_only_scan(config: QQQLeapsConfig = None) -> Optional[ScanResult]:
+    """
+    Lightweight 9:45 AM exit-only scanner.
+
+    ONLY evaluates DrawdownGuard on existing open positions using the live
+    intraday price.  Never fires an ENTER signal.  No ML inference, no full
+    feature rebuild — finishes in < 2 seconds.
+
+    Returns ScanResult with action='EXIT' if a guard triggers, otherwise None.
+    """
+    config = config or QQQLeapsConfig()
+
+    logger.info("=" * 60)
+    logger.info("QQQ LEAPS Morning Exit-Only Scan (9:45 AM)")
+    logger.info("=" * 60)
+
+    # ── 1. Fetch live spot price only ────────────────────────────────────────
+    try:
+        import yfinance as yf
+        tick = yf.Ticker("QQQ")
+        hist = tick.history(period="5d", interval="5m", auto_adjust=True)
+        if hist.empty:
+            logger.warning("Exit scan: could not fetch intraday QQQ data — aborting")
+            return None
+        spot = float(hist["Close"].iloc[-1])
+
+        # VIX for IV proxy (daily is fine — doesn't change much intraday)
+        vix_hist = yf.Ticker("^VIX").history(period="5d", interval="1d")
+        vix_v = float(vix_hist["Close"].iloc[-1]) if not vix_hist.empty else 20.0
+
+        # IRX for risk-free rate (daily)
+        irx_hist = yf.Ticker("^IRX").history(period="5d", interval="1d")
+        rf = float(irx_hist["Close"].iloc[-1]) / 100.0 if not irx_hist.empty else 0.045
+
+    except Exception as e:
+        logger.error(f"Exit scan: market data fetch failed: {e}")
+        return None
+
+    iv_mult = 1.30 if vix_v < 18 else (1.22 if vix_v < 25 else (1.10 if vix_v < 35 else 0.65))
+    iv_long = (vix_v / 100.0) * iv_mult
+
+    logger.info(f"  Live spot: QQQ={spot:.2f}  VIX={vix_v:.1f}  IV={iv_long:.2%}")
+
+    # ── 2. Fetch 52-week low from recent daily close data ────────────────────
+    try:
+        qqq_daily = yf.Ticker("QQQ").history(period="252d", interval="1d", auto_adjust=True)
+        qqq_52w = float(qqq_daily["Close"].min()) if not qqq_daily.empty else 0.0
+    except Exception:
+        qqq_52w = 0.0
+
+    # ── 3. Check open positions via virtual portfolio ────────────────────────
+    try:
+        from virtual_portfolio_manager import get_portfolio_manager
+        pm = get_portfolio_manager()
+        vp = pm.get("QQQ_LEAPS")
+    except Exception as e:
+        logger.error(f"Exit scan: portfolio manager failed: {e}")
+        return None
+
+    open_leaps = [p for p in vp.positions if p.get("type") == "LEAPS_CALL"]
+
+    if not open_leaps:
+        logger.info("  Exit scan: no open LEAPS positions — nothing to protect")
+        return None
+
+    # ── 4. Evaluate DrawdownGuard on each open position ──────────────────────
+    dd_guard = DrawdownGuard(config)
+    actions_taken = []
+
+    for pos in open_leaps:
+        try:
+            expiry_dt = date.fromisoformat(pos["expiry"])
+            l_dte = (expiry_dt - date.today()).days
+            T = max(l_dte / 365.0, 1 / 365.0)
+            l_delta = bs_call_delta(spot, pos["strike"], T, rf, iv_long)
+
+            action = dd_guard.evaluate(
+                l_delta, l_dte, spot, qqq_52w,
+                regime="BULL_STRONG",   # Conservative: assume bull so guard uses real delta/dte thresholds
+                has_short_call=False,
+            )
+            logger.info(
+                f"  Position: strike={pos['strike']:.1f} expiry={pos['expiry']} "
+                f"delta={l_delta:.2f} dte={l_dte} → {action.value}"
+            )
+            actions_taken.append(action)
+        except Exception as e:
+            logger.warning(f"  DrawdownGuard eval error on position {pos}: {e}")
+
+    # ── 5. Fire EXIT if any trigger is active ────────────────────────────────
+    exit_triggers = (DrawdownAction.EXIT_POSITION, DrawdownAction.CLOSE_52W_LOW)
+    if not any(a in exit_triggers for a in actions_taken):
+        logger.info("  Exit scan: all positions healthy — no protective action needed")
+        return None
+
+    # Build exit signal
+    first_pos = open_leaps[0]
+    expiry_dt = date.fromisoformat(first_pos["expiry"])
+    l_dte = max((expiry_dt - date.today()).days, 1)
+    exit_px = bs_call_price(spot, first_pos["strike"], l_dte / 365.0, rf, iv_long)
+    exit_reason = (
+        "DRAWDOWN_GUARD_52W_LOW"
+        if any(a == DrawdownAction.CLOSE_52W_LOW for a in actions_taken)
+        else "STRUCTURAL_IMPAIRMENT_MORNING"
+    )
+
+    logger.warning(f"  ⚠️  EXIT TRIGGERED by morning scan: {exit_reason} | px=${exit_px:.2f}")
+
+    # Update virtual portfolio
+    vp.leaps_exit(exit_px, reason=exit_reason)
+    pm.leaps_daily_mtm(spot, iv_long, rf)
+    pm.publish_public_snapshot()
+
+    _save_scan_state({
+        "last_scan_date": date.today().isoformat(),
+        "action": "EXIT",
+        "reason": exit_reason,
+        "exit_px": exit_px,
+        "source": "morning_exit_scan",
+    })
+
+    # Publish EXIT signal to DB + Ghost Executor
+    try:
+        from signal_publisher.qqq_leaps import publish_qqq_leaps_signal
+        publish_qqq_leaps_signal(
+            action="EXIT",
+            regime="UNKNOWN",        # No full regime classification in morning scan
+            confidence=0.0,
+            spot=spot,
+            exit_px=exit_px,
+            exit_reason=exit_reason,
+            rationale=f"Morning DrawdownGuard: {exit_reason} | spot={spot:.2f} | vix={vix_v:.1f}",
+        )
+    except Exception as e:
+        logger.warning(f"  Exit signal DB publish failed (non-fatal): {e}")
+
+    return ScanResult(
+        action="EXIT",
+        regime="UNKNOWN",
+        confidence=0.0,
+        spot=spot,
+        vix=vix_v,
+        iv_long=iv_long,
+        signal_date=date.today().isoformat(),
+        exit_px=exit_px,
+        exit_reason=exit_reason,
+        rationale=f"Morning DrawdownGuard triggered: {exit_reason}",
+    )
+
+
 def run_qqq_leaps_scan(config: QQQLeapsConfig = None) -> Optional[ScanResult]:
     """
     Production scanner — orchestrates all ML layers and updates virtual portfolio.

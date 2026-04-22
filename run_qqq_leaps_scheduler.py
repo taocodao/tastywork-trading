@@ -2,14 +2,18 @@
 """
 QQQ LEAPS Scheduler
 ====================
-Runs the QQQ LEAPS live scanner at 3:00 PM ET on every trading day.
+Runs two scans per trading day:
+  • 9:45 AM ET  — Lightweight exit-only scan (DrawdownGuard protection)
+  • 3:00 PM ET  — Full ML entry+exit scan (signal generation)
+
 Managed as a separate systemd service: qqq-leaps-scheduler.service
 
 Responsibilities:
-  1. Run daily scan at 3:00 PM ET
-  2. Update virtual portfolio (cash + MTM)
-  3. Also do daily ETF MTM for TurboCore and TurboCore Pro virtual accounts
-  4. Push 5-day-delayed snapshot to Vercel landing page
+  1. Morning exit scan at 9:45 AM ET — protect open positions from intraday crashes
+  2. Full daily scan at 3:00 PM ET
+  3. Update virtual portfolio (cash + MTM)
+  4. Also do daily ETF MTM for TurboCore and TurboCore Pro virtual accounts
+  5. Push 5-day-delayed snapshot to Vercel landing page
 """
 import os
 import sys
@@ -132,7 +136,42 @@ def _update_turbocore_mtm():
         logger.warning(f"TurboCore MTM update failed (non-fatal): {e}")
 
 
-# ── Main scan function ────────────────────────────────────────────────────────
+# ── Main scan functions ───────────────────────────────────────────────────────
+def run_morning_exit_scan():
+    """9:45 AM lightweight DrawdownGuard exit-only scan."""
+    logger.info("=" * 60)
+    logger.info("Starting QQQ LEAPS Morning Exit-Only Scan")
+    logger.info("=" * 60)
+
+    try:
+        from src.qqq_leaps.scanner import run_exit_only_scan
+        result = run_exit_only_scan()
+
+        if result and result.action == "EXIT":
+            logger.warning(
+                f"⚠️  Morning exit fired: reason={result.exit_reason} "
+                f"px=${result.exit_px:.2f} spot={result.spot:.2f}"
+            )
+            # Notify Vercel SSE immediately so users see the EXIT signal
+            try:
+                import requests
+                base_url   = os.environ.get("VERCEL_URL", "https://trademind.bot")
+                secret_key = os.environ.get("INTERNAL_API_SECRET", "dev_secret_key")
+                requests.post(
+                    f"{base_url}/api/signals/notify",
+                    json={"strategy": "QQQ_LEAPS"},
+                    headers={"Authorization": f"Bearer {secret_key}"},
+                    timeout=10,
+                )
+            except Exception as e:
+                logger.warning(f"Morning SSE push failed (non-fatal): {e}")
+        else:
+            logger.info("Morning exit scan: all positions healthy.")
+
+    except Exception as e:
+        logger.error(f"Morning exit scan failed: {e}", exc_info=True)
+
+
 def run_daily_scan():
     logger.info("=" * 60)
     logger.info("Starting QQQ LEAPS Daily Scan")
@@ -182,44 +221,94 @@ def run_daily_scan():
     logger.info("Daily scan complete.")
 
 
-# ── Scheduler loop ────────────────────────────────────────────────────────────
+# ── Scheduler class ───────────────────────────────────────────────────────────
 class QQQLEAPSScheduler:
-    def __init__(self):
-        self.tz             = pytz.timezone("US/Eastern")
-        self.last_scan_date = None
-        state = _load_state()
-        d = state.get("last_scan_date")
-        if d:
-            try:
-                self.last_scan_date = date.fromisoformat(d)
-            except Exception:
-                pass
+    """
+    Two-window daily scheduler:
+      • 9:45 AM ET  — exit-only DrawdownGuard check (protects open positions)
+      • 3:00 PM ET  — full ML entry + exit scan
+    Each window runs exactly once per trading day, tracked independently.
+    """
 
-    def _should_scan(self) -> bool:
+    MORNING_EXIT_HOUR   = 9
+    MORNING_EXIT_MINUTE = 45
+    FULL_SCAN_HOUR      = 15   # 3:00 PM ET
+
+    def __init__(self):
+        self.tz = pytz.timezone("US/Eastern")
+        self.last_scan_date         = None   # tracks 3 PM full scan
+        self.last_exit_scan_date    = None   # tracks 9:45 AM exit scan
+
+        state = _load_state()
+        try:
+            d = state.get("last_scan_date")
+            if d:
+                self.last_scan_date = date.fromisoformat(d)
+        except Exception:
+            pass
+        try:
+            d = state.get("last_exit_scan_date")
+            if d:
+                self.last_exit_scan_date = date.fromisoformat(d)
+        except Exception:
+            pass
+
+    def _should_run_morning_exit(self) -> bool:
+        """True once per day after 9:45 AM ET, before we have already run it today."""
+        now = datetime.now(self.tz)
+        after_945 = (now.hour > self.MORNING_EXIT_HOUR) or (
+            now.hour == self.MORNING_EXIT_HOUR and now.minute >= self.MORNING_EXIT_MINUTE
+        )
+        return (
+            is_market_day()
+            and after_945
+            and self.last_exit_scan_date != now.date()
+        )
+
+    def _should_run_full_scan(self) -> bool:
+        """True once per day after 3:00 PM ET, before we have already run it today."""
         now = datetime.now(self.tz)
         return (
             is_market_day()
-            and now.hour >= 15           # After 3:00 PM ET
+            and now.hour >= self.FULL_SCAN_HOUR
             and self.last_scan_date != now.date()
         )
 
+    def _save_combined_state(self):
+        _save_state({
+            "last_scan_date":      self.last_scan_date.isoformat() if self.last_scan_date else None,
+            "last_exit_scan_date": self.last_exit_scan_date.isoformat() if self.last_exit_scan_date else None,
+        })
+
     def run_loop(self):
-        logger.info("QQQ LEAPS Scheduler daemon started.")
+        logger.info("QQQ LEAPS Scheduler daemon started. (Two-window: 9:45 AM exit + 3:00 PM full)")
         while True:
             try:
-                if self._should_scan():
+                now = datetime.now(self.tz)
+
+                # ── Window 1: 9:45 AM exit-only scan ─────────────────────────
+                if self._should_run_morning_exit():
+                    run_morning_exit_scan()
+                    self.last_exit_scan_date = now.date()
+                    self._save_combined_state()
+                    time.sleep(60)
+
+                # ── Window 2: 3:00 PM full scan ───────────────────────────────
+                elif self._should_run_full_scan():
                     run_daily_scan()
-                    self.last_scan_date = datetime.now(self.tz).date()
-                    _save_state({"last_scan_date": self.last_scan_date.isoformat()})
-                    time.sleep(60)   # Brief pause after scan
+                    self.last_scan_date = now.date()
+                    self._save_combined_state()
+                    time.sleep(60)
+
+                # ── Idle ──────────────────────────────────────────────────────
                 elif is_market_day():
-                    time.sleep(60)   # Check every minute during market hours
+                    time.sleep(60)   # Poll every minute during market hours
                 else:
                     secs = time_until_next_open()
                     logger.info(f"Market closed. Sleeping {secs / 3600:.1f} hours until next open.")
-                    # Sleep in 5-min chunks so we can catch manual signals
-                    for _ in range(int(secs / 300)):
+                    for _ in range(max(1, int(secs / 300))):
                         time.sleep(300)
+
             except Exception as e:
                 logger.error(f"Scheduler loop error: {e}", exc_info=True)
                 time.sleep(60)
@@ -227,12 +316,15 @@ class QQQLEAPSScheduler:
 
 if __name__ == "__main__":
     import argparse
-    parser = argparse.ArgumentParser(description="QQQ LEAPS Scheduler")
-    parser.add_argument("--once", action="store_true", help="Run one scan and exit")
+    parser = argparse.ArgumentParser(description="QQQ LEAPS Dual-Window Scheduler")
+    parser.add_argument("--once",       action="store_true", help="Run the full 3 PM scan once and exit")
+    parser.add_argument("--exit-once",  action="store_true", help="Run the morning exit-only scan once and exit")
     args = parser.parse_args()
 
     scheduler = QQQLEAPSScheduler()
-    if args.once:
+    if args.exit_once:
+        run_morning_exit_scan()
+    elif args.once:
         run_daily_scan()
     else:
         scheduler.run_loop()
