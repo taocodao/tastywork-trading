@@ -157,7 +157,7 @@ class TurboCoreDataPipeline:
         if 'XLK' in self.data and 'XLV' in self.data:
             xlk = self.data['XLK']['Close'].reindex(master.index).ffill()
             xlv = self.data['XLV']['Close'].reindex(master.index).ffill()
-            xlk_xlv = (xlk / xlv.replace(0, np.nan)).fillna(method='ffill')
+            xlk_xlv = (xlk / xlv.replace(0, np.nan)).ffill()
             master['xlk_xlv_ratio_20d'] = xlk_xlv.pct_change(20)
         else:
             master['xlk_xlv_ratio_20d'] = 0.0
