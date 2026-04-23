@@ -163,7 +163,7 @@ def _html(first_name, strategy_label, regime, confidence,
             expiry       = leg.get("expiry", "—")
             delta        = leg.get("delta", 0)
             contracts    = leg.get("contracts", 0)
-            entry_px     = leg.get("entry_px", 0) or signal_data_entry_px if False else leg.get("entry_px", 0)
+            entry_px     = leg.get("entry_px", 0)
             rows += f"""
             <tr style="border-bottom:1px solid #e5e7eb">
               <td style="padding:10px 16px">
