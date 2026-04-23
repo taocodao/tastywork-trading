@@ -84,9 +84,31 @@ def publish_qqq_leaps_signal(
         try:
             repo.save_signal(data)
             logger.info(f"[QQQ_LEAPS] Signal saved: {action} | regime={regime} | conf={confidence:.2f}")
+
+            # ── Notify email subscribers ────────────────────────────────────
+            try:
+                from email_notifications.resend_sender import notify_signal_subscribers
+                session = get_session()
+                rows = session.execute(
+                    """SELECT email, first_name FROM user_settings
+                       WHERE subscription_tier IN ('TURBOCORE_PRO', 'BOTH_BUNDLE', 'turbocore_pro', 'both_bundle')
+                         AND email IS NOT NULL
+                         AND email_signal_alerts = TRUE"""
+                ).fetchall()
+                session.close()
+                subscribers = [{"email": r[0], "first_name": r[1]} for r in rows]
+                # Override strategy_label in the signal data so email header reads correctly
+                email_data = dict(data)
+                email_data["strategy"] = "TQQQ_TURBOCORE_PRO"   # triggers "TurboCore Pro" label
+                notify_signal_subscribers(email_data, subscribers)
+                logger.info(f"[QQQ_LEAPS] Email sent to {len(subscribers)} subscriber(s)")
+            except Exception as email_err:
+                logger.warning(f"[QQQ_LEAPS] Email notification failed (non-fatal): {email_err}")
+
         finally:
             repo.session.close()
     except Exception as e:
         logger.error(f"[QQQ_LEAPS] DB save failed: {e}")
+
 
     return data

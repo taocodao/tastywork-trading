@@ -60,6 +60,10 @@ ACTION_LABELS = {
     "SELL_TO_CLOSE": ("STC", "sell"),
     "BUY":           ("BUY", "buy"),
     "SELL":          ("SELL","sell"),
+    # QQQ LEAPS actions
+    "ENTER":         ("ENTER", "buy"),
+    "EXIT":          ("EXIT",  "sell"),
+    "HOLD":          ("HOLD",  "neutral"),
 }
 
 
@@ -132,14 +136,71 @@ ACTION_DISPLAY = {
     "OPEN_SQQQ":       "Crash Hedge (SQQQ)",
     "CLOSE_POSITIONS": "Exit — Close Position",
     "NO_ACTION":       "Hold — No Action Required",
+    # QQQ LEAPS actions
+    "ENTER":          "Enter LEAPS Position",
+    "EXIT":           "Exit LEAPS Position",
+    "HOLD":           "Hold — No LEAPS Action",
 }
 
 def _html(first_name, strategy_label, regime, confidence,
           action, legs, limit_price, capital_req, rationale) -> str:
 
     action_display  = ACTION_DISPLAY.get(action, action.replace("_", " ").title())
-    equity_legs     = [l for l in legs if not _is_options_leg(l)]
-    options_legs    = [l for l in legs if _is_options_leg(l)]
+    leaps_legs      = [l for l in legs if l.get("leg_type") == "leaps_call"]
+    equity_legs     = [l for l in legs if not _is_options_leg(l) and l.get("leg_type") != "leaps_call"]
+    options_legs    = [l for l in legs if _is_options_leg(l) and l.get("leg_type") != "leaps_call"]
+
+    # ── QQQ LEAPS dedicated block ─────────────────────────────────────────────
+    leaps_block = ""
+    if leaps_legs:
+        rows = ""
+        for leg in leaps_legs:
+            leg_action   = (leg.get("action") or action).upper()
+            badge, side  = ACTION_LABELS.get(leg_action, (leg_action[:5], "neutral"))
+            badge_bg     = "#d1fae5" if side == "buy" else ("#fee2e2" if side == "sell" else "#f3f4f6")
+            badge_color  = "#065f46" if side == "buy" else ("#991b1b" if side == "sell" else "#374151")
+            strike       = leg.get("strike", 0)
+            expiry       = leg.get("expiry", "—")
+            delta        = leg.get("delta", 0)
+            contracts    = leg.get("contracts", 0)
+            entry_px     = leg.get("entry_px", 0) or signal_data_entry_px if False else leg.get("entry_px", 0)
+            rows += f"""
+            <tr style="border-bottom:1px solid #e5e7eb">
+              <td style="padding:10px 16px">
+                <span style="background:{badge_bg};color:{badge_color};
+                             font-size:10px;font-weight:700;padding:3px 8px;border-radius:4px;
+                             font-family:monospace">{badge}</span>
+              </td>
+              <td style="padding:10px 8px">
+                <p style="margin:0;color:#111827;font-weight:600;font-size:14px">
+                  QQQ ${strike:.0f} Call (LEAPS)
+                </p>
+                <p style="margin:3px 0 0;color:#6b7280;font-family:monospace;font-size:11px">
+                  Exp {expiry} &middot; Delta {delta:.2f}
+                </p>
+              </td>
+              <td style="padding:10px 16px;text-align:right;white-space:nowrap">
+                <p style="margin:0;color:#111827;font-weight:600;font-size:13px">{contracts} contracts</p>
+                {f'<p style="margin:3px 0 0;color:#9ca3af;font-family:monospace;font-size:10px">${entry_px:.2f}/contract</p>' if entry_px else ''}
+              </td>
+            </tr>"""
+        leaps_block = f"""
+        <p style="color:#374151;font-size:11px;font-weight:700;text-transform:uppercase;
+                  letter-spacing:0.07em;margin:0 0 8px">QQQ LEAPS — Call Option</p>
+        <table width="100%" cellpadding="0" cellspacing="0"
+               style="border:1px solid #d1d5db;border-radius:8px;overflow:hidden;margin-bottom:24px;border-collapse:collapse">
+          <thead>
+            <tr style="background:#f9fafb">
+              <th style="padding:8px 16px;color:#6b7280;font-size:11px;text-transform:uppercase;
+                         letter-spacing:0.06em;text-align:left;border-bottom:1px solid #d1d5db">Action</th>
+              <th style="padding:8px 8px;color:#6b7280;font-size:11px;text-transform:uppercase;
+                         letter-spacing:0.06em;text-align:left;border-bottom:1px solid #d1d5db">Contract</th>
+              <th style="padding:8px 16px;color:#6b7280;font-size:11px;text-transform:uppercase;
+                         letter-spacing:0.06em;text-align:right;border-bottom:1px solid #d1d5db">Qty / Price</th>
+            </tr>
+          </thead>
+          <tbody>{rows}</tbody>
+        </table>"""
 
     # ── Equity allocation table ───────────────────────────────────────────────
     equity_block = ""
@@ -308,6 +369,7 @@ def _html(first_name, strategy_label, regime, confidence,
         </tr>
       </table>
 
+      {leaps_block}
       {equity_block}
       {options_block}
       {rationale_block}
@@ -347,8 +409,9 @@ def _html(first_name, strategy_label, regime, confidence,
 
 def _text(strategy_label, regime, confidence, action,
           legs, limit_price, capital_req, rationale) -> str:
-    equity_legs  = [l for l in legs if not _is_options_leg(l)]
-    options_legs = [l for l in legs if _is_options_leg(l)]
+    leaps_legs   = [l for l in legs if l.get("leg_type") == "leaps_call"]
+    equity_legs  = [l for l in legs if not _is_options_leg(l) and l.get("leg_type") != "leaps_call"]
+    options_legs = [l for l in legs if _is_options_leg(l) and l.get("leg_type") != "leaps_call"]
     action_display = ACTION_DISPLAY.get(action, action.replace("_", " ").title())
 
     lines = [
@@ -360,6 +423,20 @@ def _text(strategy_label, regime, confidence, action,
         f"Capital Required: ${capital_req:,.0f}",
         "",
     ]
+
+    if leaps_legs:
+        lines += ["QQQ LEAPS — CALL OPTION", "-" * 22]
+        for leg in leaps_legs:
+            leg_action = (leg.get("action") or action).upper()
+            strike     = leg.get("strike", 0)
+            expiry     = leg.get("expiry", "—")
+            delta      = leg.get("delta", 0)
+            contracts  = leg.get("contracts", 0)
+            entry_px   = leg.get("entry_px", 0)
+            lines.append(f"  {leg_action:<8} QQQ ${strike:.0f} Call | Exp {expiry} | Delta {delta:.2f} | {contracts} contracts")
+            if entry_px:
+                lines.append(f"           Entry price: ${entry_px:.2f}/contract")
+        lines.append("")
 
     if equity_legs:
         lines += ["TARGET ALLOCATION", "-" * 22]
