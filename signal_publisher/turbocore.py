@@ -191,6 +191,12 @@ def publish_turbocore_rebalance_signal(
                 logger.warning(f"[Ghost] Auto-execute trigger failed (non-fatal): {ghost_err}")
             # ── END NEW ───────────────────────────────────────────────────
 
+            # ── Post to Whop Signal Alerts channel (non-fatal) ────────────
+            try:
+                _post_signal_to_whop(data)
+            except Exception as whop_err:
+                logger.warning(f"[Whop] Channel post failed (non-fatal): {whop_err}")
+
         finally:
             repo.session.close()
     except Exception as e:
@@ -198,3 +204,55 @@ def publish_turbocore_rebalance_signal(
 
     return data
 
+
+def _post_signal_to_whop(signal_data: dict) -> None:
+    """Post a formatted signal summary to the Whop Signal Alerts channel."""
+    import os, requests
+
+    api_key    = os.getenv("WHOP_API_KEY", "")
+    channel_id = os.getenv("WHOP_SIGNAL_CHANNEL_ID", "")
+    if not api_key or not channel_id:
+        logger.warning("[Whop] WHOP_API_KEY or WHOP_SIGNAL_CHANNEL_ID not set — skipping")
+        return
+
+    regime     = signal_data.get("regime", "UNKNOWN")
+    confidence = int(float(signal_data.get("confidence", 0)) * 100)
+    action     = signal_data.get("action", "")
+    legs       = signal_data.get("legs", [])
+    rationale  = signal_data.get("rationale", "")
+
+    # Build allocation string from equity legs
+    equity_legs = [l for l in legs if l.get("target_pct") is not None]
+    if equity_legs:
+        alloc_str = " | ".join(
+            f"{l.get('symbol','').replace('_','')} {int(float(l.get('target_pct', 0)) * 100)}%"
+            for l in equity_legs
+        )
+    else:
+        alloc_str = action.replace("_", " ").title()
+
+    # Regime emoji
+    regime_emoji = "🐂" if regime == "BULL" else ("🐻" if regime == "BEAR" else "↔️")
+
+    content = (
+        f"{regime_emoji} **TurboCore Signal — {regime}**\n"
+        f"Confidence: **{confidence}%** | Allocation: {alloc_str}\n"
+        f"_Execute within 2 min of 3 PM ET. Full brief in-app._"
+    )
+    if rationale:
+        content += f"\n\n> {rationale[:200]}{'...' if len(rationale) > 200 else ''}"
+    content += "\n\n*Educational analysis only. Not personalized investment advice.*"
+
+    try:
+        res = requests.post(
+            f"https://api.whop.com/v5/channels/{channel_id}/messages",
+            json={"content": content},
+            headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
+            timeout=8,
+        )
+        if res.ok:
+            logger.info(f"[Whop] ✅ Signal posted to channel ({res.status_code})")
+        else:
+            logger.warning(f"[Whop] Channel post failed: {res.status_code} — {res.text[:200]}")
+    except Exception as e:
+        logger.warning(f"[Whop] Request error: {e}")
