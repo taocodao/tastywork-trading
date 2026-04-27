@@ -197,6 +197,45 @@ def publish_turbocore_rebalance_signal(
             except Exception as whop_err:
                 logger.warning(f"[Whop] Channel post failed (non-fatal): {whop_err}")
 
+            # ── Vercel bridge: push notifications + audit log ───────────────
+            # Calls /api/internal/publish-to-whop to send push notifications
+            # to all paid experience IDs and write to whop_posts audit table.
+            if not data.get("iv_switching_pending"):
+                try:
+                    import requests as _rq, os as _os
+                    from datetime import datetime as _dt, timezone as _tz
+                    _base = "https://trademind.bot"
+                    _sec  = _os.environ.get("INTERNAL_API_SECRET", "dev_secret_key")
+                    _legs = {
+                        leg.get("symbol", ""): leg.get("target_pct", 0)
+                        for leg in data.get("legs", [])
+                        if leg.get("target_pct") is not None
+                    }
+                    _payload = {
+                        "regime":     data.get("regime", "SIDEWAYS"),
+                        "confidence": int(float(data.get("confidence", 0.5)) * 100),
+                        "allocation": {
+                            "QQQ":  int(_legs.get("QQQ",  _legs.get("qqq",  0))),
+                            "QLD":  int(_legs.get("QLD",  _legs.get("qld",  0))),
+                            "TQQQ": int(_legs.get("TQQQ", _legs.get("tqqq", 0))),
+                            "SGOV": int(_legs.get("SGOV", _legs.get("sgov", 0))),
+                        },
+                        "reasoning": data.get("rationale", "")[:500],
+                        "date":      _dt.now(_tz.utc).strftime("%Y-%m-%d"),
+                    }
+                    _r = _rq.post(
+                        f"{_base}/api/internal/publish-to-whop",
+                        json=_payload,
+                        headers={{"Authorization": f"Bearer {_sec}", "Content-Type": "application/json"}},
+                        timeout=8,
+                    )
+                    if _r.ok:
+                        logger.info(f"[Whop Bridge] Push + audit done ({_r.status_code})")
+                    else:
+                        logger.warning(f"[Whop Bridge] {_r.status_code}: {_r.text[:200]}")
+                except Exception as _be:
+                    logger.warning(f"[Whop Bridge] Non-fatal: {_be}")
+            
         finally:
             repo.session.close()
     except Exception as e:
