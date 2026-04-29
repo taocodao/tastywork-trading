@@ -29,6 +29,7 @@ INITIAL_PRINCIPALS = {
     "TQQQ_TURBOCORE": 5_000.0,
     "TURBOCORE_PRO":  25_000.0,
     "QQQ_LEAPS":      25_000.0,
+    "OTM_NAKED":      50_000.0,
 }
 
 # How many calendar days old the public JSON is (landing page delay)
@@ -186,6 +187,33 @@ class VirtualPortfolio:
                 logger.warning(f"MTM pricing error: {e}")
         return total_mv
 
+    # ── General Operations (Used by OTM Naked) ─────────────────────────────────
+    def open_position(self, pos_dict: dict) -> bool:
+        """Open a generic position (e.g., naked option)."""
+        # For naked sell, entry_price is credit received
+        credit = pos_dict.get("contracts", 0) * 100 * pos_dict.get("entry_price", 0.0)
+        self.cash += credit
+        self.positions.append(pos_dict)
+        self.trade_count += 1
+        logger.info(f"[{self.strategy}] OPEN POSITION | {pos_dict.get('symbol')} {pos_dict.get('type')} | credit=${credit:.0f}")
+        return True
+
+    def close_position(self, symbol: str, exit_price: float, reason: str = "") -> float:
+        """Close a generic position by symbol."""
+        cost = 0.0
+        remaining = []
+        for pos in self.positions:
+            if pos.get("symbol") == symbol:
+                # Assuming buy to close
+                cost = pos.get("contracts", 0) * 100 * exit_price
+                self.cash -= cost
+                pnl = (pos.get("entry_price", 0.0) * pos.get("contracts", 0) * 100) - cost
+                logger.info(f"[{self.strategy}] CLOSE POSITION | {symbol} | px=${exit_price:.2f} cost=${cost:.0f} pnl=${pnl:.0f} reason={reason}")
+            else:
+                remaining.append(pos)
+        self.positions = remaining
+        return cost
+
     # ── TurboCore / ETF Rebalance Operations ──────────────────────────────────
     def etf_rebalance(self, alloc_dict: Dict[str, float], prices: Dict[str, float]):
         """
@@ -341,6 +369,7 @@ class PortfolioManager:
                 "TQQQ_TURBOCORE": "TurboCore",
                 "TURBOCORE_PRO":  "TurboCore Pro",
                 "QQQ_LEAPS":      "QQQ LEAPS",
+                "OTM_NAKED":      "OTM Naked Options",
             }
 
             public_accounts.append({
