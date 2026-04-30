@@ -116,6 +116,25 @@ def _make_objective(
     return objective
 
 
+import multiprocessing as mp
+
+def _optuna_worker(db_path: str, study_name: str, window: int, worker_idx: int, n_trials_chunk: int, sbb_paths: list, warmup_days: int):
+    """Worker process function for parallel Optuna trials via SQLite."""
+    # Create an independent study instance per process attached to the same DB
+    local_study = optuna.load_study(
+        study_name=study_name,
+        storage=db_path,
+        sampler=optuna.samplers.TPESampler(seed=window * 100 + worker_idx),
+        pruner=optuna.pruners.MedianPruner(n_warmup_steps=10),
+    )
+    
+    local_study.optimize(
+        _make_objective(sbb_paths, [0], warmup_days=warmup_days),
+        n_trials=n_trials_chunk,
+        show_progress_bar=False,
+    )
+
+
 # ---------------------------------------------------------------------------
 # Walk-Forward Optimization
 # ---------------------------------------------------------------------------
@@ -202,18 +221,42 @@ def run_walk_forward_optimization(
         sbb_paths = sbb.generate()
 
         # ── Run Optuna study ─────────────────────────────────────────────────
-        trial_count = [0]
+        db_path = f"sqlite:///mc_window_{window}.db"
+        if os.path.exists(f"mc_window_{window}.db"):
+            os.remove(f"mc_window_{window}.db")
+            
+        study_name = f"mc_window_{window}"
         study = optuna.create_study(
+            storage=db_path,
+            study_name=study_name,
             direction="maximize",
             sampler=optuna.samplers.TPESampler(seed=window * 100),
             pruner=optuna.pruners.MedianPruner(n_warmup_steps=10),
         )
-        study.optimize(
-            _make_objective(sbb_paths, trial_count, warmup_days=warmup_days),
-            n_trials=n_trials,
-            n_jobs=n_jobs,
-            show_progress_bar=False,
-        )
+
+        if n_jobs > 1:
+            chunk_size = n_trials // n_jobs
+            chunks = [chunk_size] * n_jobs
+            chunks[-1] += n_trials % n_jobs
+            
+            processes = []
+            for i, chunk in enumerate(chunks):
+                if chunk > 0:
+                    p = mp.Process(target=_optuna_worker, args=(db_path, study_name, window, i, chunk, sbb_paths, warmup_days))
+                    p.start()
+                    processes.append(p)
+                    
+            for p in processes:
+                p.join()
+                
+            # Reload to get the aggregated results
+            study = optuna.load_study(study_name=study_name, storage=db_path)
+        else:
+            study.optimize(
+                _make_objective(sbb_paths, [0], warmup_days=warmup_days),
+                n_trials=n_trials,
+                show_progress_bar=False,
+            )
 
         # ── Get best trial (guard against all-pruned scenario) ──────────────
         completed = [t for t in study.trials if t.value is not None]
