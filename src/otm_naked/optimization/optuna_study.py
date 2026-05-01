@@ -1,32 +1,39 @@
 """
-Bayesian Optimization Study (Optuna)
-=======================================
-Finds the optimal OTMParams for the naked put selling strategy using
-the Tree-structured Parzen Estimator (TPE) algorithm.
+Bayesian Optimization Study (Optuna) — v2: Multi-Objective NSGA-II
+=====================================================================
+Finds the optimal OTMParams for the naked put selling strategy.
+
+v2 changes vs v1:
+  - Switched from single-objective TPE → multi-objective NSGA-II (NSGAIISampler)
+  - Objective 1: Sortino + log-barrier drawdown penalty (smooth gradient, no cliff)
+  - Objective 2: Log-scale trade frequency penalty (eliminates degenerate 0-trade solution)
+  - Anti-paradox guard: penalizes highly-selective entries paired with tight stop-losses
+  - Pareto front selection: picks best Sortino among trials with >= min_trades_per_year
+  - Removed MedianPruner (incompatible with NSGA-II)
 
 Architecture:
   1. OUTER loop: Walk-Forward windows (IS train / OOS test)
-  2. INNER loop per IS window: Optuna study over SBB paths
-     - Each Optuna trial samples one OTMParams from the search space
-     - Objective = Sortino ratio on the bootstrapped IS paths
-     - DSR filter rejects curve-fit solutions
-  3. Best IS params → evaluated on the OOS window (unseen data)
+  2. INNER loop per IS window: Optuna NSGA-II Pareto study over SBB paths
+     - Each trial samples OTMParams and returns (sortino_obj, frequency_obj)
+     - DSR filter still applied post-hoc to reject curve-fit Pareto solutions
+  3. Best Pareto trial → evaluated on OOS window (unseen data)
   4. All OOS metrics aggregated for final parameter reporting
 
 EC2 Usage:
-    python -m src.otm_naked.optimization.optuna_study \
-        --start 2018-01-01 --end 2025-12-31 \
-        --n-trials 300 --n-paths 200 --n-jobs 4
+    python -m src.otm_naked.optimization.optuna_study \\
+        --start 2018-01-01 --end 2025-12-31 \\
+        --n-trials 300 --n-paths 100 --n-jobs 16
 
 Local quick test:
-    python -m src.otm_naked.optimization.optuna_study \
-        --start 2022-01-01 --end 2025-12-31 \
-        --n-trials 50 --n-paths 20 --n-jobs 1
+    python -m src.otm_naked.optimization.optuna_study \\
+        --start 2022-01-01 --end 2025-12-31 \\
+        --n-trials 50 --n-paths 10 --n-jobs 1
 """
 
 import os
 import sys
 import json
+import math
 import logging
 import argparse
 import warnings
@@ -58,78 +65,142 @@ from src.otm_naked.optimization.validation import DeflatedSharpeRatio, WalkForwa
 
 
 # ---------------------------------------------------------------------------
-# Optuna objective function
+# Log-barrier drawdown penalty (replaces hard -25% gate)
+# ---------------------------------------------------------------------------
+def _log_barrier_drawdown(max_dd: float, dd_limit: float = -0.25,
+                           mu: float = 5.0) -> float:
+    """
+    Smooth log-barrier penalty for drawdown constraint.
+
+    Returns a small penalty when max_dd is well within the limit,
+    escalating asymptotically as max_dd approaches dd_limit.
+    Returns 1000.0 (hard but finite) for constraint violations.
+
+    Why finite (not infinite): allows TPE surrogate to learn a gradient
+    near the constraint boundary rather than encountering a discontinuous cliff.
+
+    Args:
+        max_dd:   Realized max drawdown (negative number, e.g. -0.15)
+        dd_limit: Drawdown limit (negative number, e.g. -0.25)
+        mu:       Barrier sharpness (higher = steeper near limit)
+    """
+    slack = max_dd - dd_limit   # positive when within limit, negative when violated
+    if slack <= 0:
+        return 1000.0           # Hard violation — catastrophic but finite
+    return -(1.0 / mu) * math.log(slack)
+
+
+# ---------------------------------------------------------------------------
+# Optuna multi-objective function (v2: NSGA-II compatible)
 # ---------------------------------------------------------------------------
 def _make_objective(
     sbb_paths: List[Dict[str, pd.DataFrame]],
-    trial_count_ref: list,     # Mutable list[int] to track n_trials for DSR
+    trial_count_ref: list,
     warmup_days: int = 252,
+    test_years: float = 3.0,          # IS window size in years (756d / 252 ≈ 3)
+    target_trades_per_year: float = 8.0,  # Capital deployment target
+    min_trades_threshold: float = 1.0,    # Early exit if median < this after 5 paths
 ):
     """
-    Returns an Optuna objective function.
-    Each call = one Bayesian trial.
+    Returns an Optuna multi-objective function for NSGA-II.
+
+    Returns (obj1, obj2):
+      obj1 = -(Sortino) + log_barrier_drawdown  → minimize (higher Sortino = lower obj1)
+      obj2 = log-frequency-penalty              → minimize (more trades = lower obj2)
+
+    Both objectives are minimized; Optuna finds the Pareto front.
     """
-    def objective(trial: optuna.Trial) -> float:
+    def objective(trial: optuna.Trial) -> Tuple[float, float]:
         trial_count_ref[0] += 1
 
-        # ── Sample the parameter space ────────────────────────────────────────
+        # ── Anti-paradox guard ────────────────────────────────────────────────
+        # Highly selective entries (high iv_pct) + tight stops = optimizer avoids
+        # all trades and paradoxically achieves 0 drawdown with 0 return.
+        iv_pct_threshold = trial.suggest_float("iv_pct_threshold", 0.25, 0.70)
+        stop_mult        = trial.suggest_float("stop_loss_mult", 1.5, 4.0)
+        if iv_pct_threshold > 0.65 and stop_mult < 2.0:
+            return 50.0, 1000.0   # Immediately penalized — signal to NSGA-II
+
+        # ── Sample full parameter space ────────────────────────────────────────
         params = OTMParams(
             dte                  = trial.suggest_int("dte", 21, 60),
-            put_delta            = trial.suggest_float("put_delta", 0.05, 0.20),
-            min_iv_rank          = trial.suggest_float("min_iv_rank", 0.10, 0.50),
-            pct_from_52w_high    = trial.suggest_float("pct_from_52w_high", 0.05, 0.30),
-            rsi_oversold         = trial.suggest_float("rsi_oversold", 20.0, 50.0),
-            profit_take_pct      = trial.suggest_float("profit_take_pct", 0.25, 0.75),
-            stop_loss_mult       = trial.suggest_float("stop_loss_mult", 1.5, 4.0),
+            put_delta            = trial.suggest_float("put_delta", 0.08, 0.20),
+            pct_from_52w_high    = trial.suggest_float("pct_from_52w_high", 0.05, 0.25),
+            iv_pct_threshold     = iv_pct_threshold,
+            iv_hv_min            = trial.suggest_float("iv_hv_min", 1.0, 1.5),
+            vix_slope_threshold  = trial.suggest_float("vix_slope_threshold", -0.10, 0.05),
+            profit_take_pct      = trial.suggest_float("profit_take_pct", 0.40, 0.80),
+            stop_loss_mult       = stop_mult,
             time_exit_dte        = trial.suggest_int("time_exit_dte", 3, 14),
             max_risk_pct         = trial.suggest_float("max_risk_pct", 0.005, 0.03),
-            max_positions        = trial.suggest_int("max_positions", 2, 10),
-            vix_crisis_threshold = trial.suggest_float("vix_crisis_threshold", 25.0, 50.0),
+            max_positions        = trial.suggest_int("max_positions", 2, 8),
         )
 
-        # ── Run simulation on all SBB paths ──────────────────────────────────
-        sortinos    = []
-        drawdowns   = []
-        for path_features in sbb_paths:
+        # ── Run simulation on all SBB paths ───────────────────────────────────
+        sortinos     = []
+        drawdowns    = []
+        trade_counts = []
+
+        for path_idx, path_features in enumerate(sbb_paths):
             sim     = FastOTMSimulator(path_features, warmup_days=warmup_days)
             metrics = sim.simulate(params)
-            # Prune unpromising trials early
-            if metrics["n_trades"] < 1:
-                raise optuna.exceptions.TrialPruned()
             sortinos.append(metrics["sortino"])
             drawdowns.append(metrics["max_drawdown"])
+            trade_counts.append(metrics["n_trades"])
 
-        mean_sortino = float(np.mean(sortinos))
-        mean_dd      = float(np.mean(drawdowns))
+            # Early exit: after 5 paths, if median trades < 1, this config never trades
+            if path_idx == 4:
+                if float(np.median(trade_counts)) < min_trades_threshold:
+                    return 50.0, 1000.0   # Ghost strategy — penalize hard
 
-        # Store all attributes for later DSR filtering
-        trial.set_user_attr("sortino",      mean_sortino)
-        trial.set_user_attr("max_drawdown", mean_dd)
-        trial.set_user_attr("n_paths",      len(sortinos))
+        # Use median (robust to outlier Monte Carlo paths) + p95 drawdown (worst-case path)
+        median_sortino = float(np.median(sortinos))
+        p95_drawdown   = float(np.percentile(drawdowns, 95))  # Worst 5% path
+        median_trades  = float(np.median(trade_counts))
 
-        # Penalize extreme drawdown harshly (risk management constraint)
-        if mean_dd < -0.25:
-            return -99.0
+        # ── Objective 1: Risk-adjusted return with log-barrier ────────────────
+        # Negated because Optuna minimizes; log-barrier replaces hard -25% gate
+        barrier = _log_barrier_drawdown(p95_drawdown, dd_limit=-0.25, mu=5.0)
+        obj1 = -median_sortino + barrier
 
-        return mean_sortino
+        # ── Objective 2: Trade frequency penalty (log-scale) ──────────────────
+        # Log scale: penalizes 0→1 more harshly than 10→11
+        # Target: target_trades_per_year × is_window_years
+        target_total = target_trades_per_year * test_years
+        if median_trades < 1.0:
+            obj2 = 1000.0   # Catastrophic: zero trades = degenerate solution
+        else:
+            obj2 = (math.log(max(target_total, 1)) - math.log(median_trades)) ** 2
+
+        # Store for Pareto selection logic
+        trial.set_user_attr("median_sortino", median_sortino)
+        trial.set_user_attr("p95_drawdown",   p95_drawdown)
+        trial.set_user_attr("median_trades",  median_trades)
+
+        return obj1, obj2
 
     return objective
 
 
 import multiprocessing as mp
 
-def _optuna_worker(db_path: str, study_name: str, window: int, worker_idx: int, n_trials_chunk: int, sbb_paths: list, warmup_days: int):
-    """Worker process function for parallel Optuna trials via SQLite."""
-    # Create an independent study instance per process attached to the same DB
+
+def _optuna_worker_nsga2(db_path: str, study_name: str, window: int,
+                          worker_idx: int, n_trials_chunk: int,
+                          sbb_paths: list, warmup_days: int,
+                          test_years: float, target_trades_per_year: float):
+    """Worker process for parallel NSGA-II trials via SQLite shared storage."""
     local_study = optuna.load_study(
         study_name=study_name,
         storage=db_path,
-        sampler=optuna.samplers.TPESampler(seed=window * 100 + worker_idx),
-        pruner=optuna.pruners.MedianPruner(n_warmup_steps=10),
     )
-    
     local_study.optimize(
-        _make_objective(sbb_paths, [0], warmup_days=warmup_days),
+        _make_objective(
+            sbb_paths, [0],
+            warmup_days=warmup_days,
+            test_years=test_years,
+            target_trades_per_year=target_trades_per_year,
+        ),
         n_trials=n_trials_chunk,
         show_progress_bar=False,
     )
@@ -150,13 +221,14 @@ def run_walk_forward_optimization(
     warmup_days: int = 252,
 ) -> WalkForwardReport:
     """
-    Full Monte Carlo Walk-Forward Optimization.
+    Full Monte Carlo Walk-Forward Optimization (v2: NSGA-II multi-objective).
 
     For each IS window:
       1. Generate SBB paths from IS feature data
-      2. Run Optuna Bayesian optimization to find best params
-      3. Apply DSR filter to reject false positives
-      4. Evaluate best params on OOS window (unseen)
+      2. Run NSGA-II Pareto study — optimizes (Sortino + barrier, frequency)
+      3. Select best Pareto trial with >= 4 trades/year minimum deployment
+      4. Apply DSR filter to reject false positives
+      5. Evaluate best params on OOS window (unseen)
 
     Args:
         features_dict:  {symbol: feature_df} from build_all_features()
@@ -172,6 +244,16 @@ def run_walk_forward_optimization(
     Returns:
         WalkForwardReport with all OOS results and the recommended params
     """
+    # Population size: scale with n_jobs but maintain minimum genetic diversity
+    # NSGA-II requires population_size >= n_jobs for proper parallel evolution
+    population_size = max(50, n_jobs * 3)
+
+    # IS window duration in years (for frequency penalty calibration)
+    test_years = is_days / 252.0
+    # Minimum acceptable trades: 4 per year (conservative capital deployment)
+    min_trades_per_window = 4 * test_years
+    target_trades_per_year = 8.0
+
     # Build the common date grid
     all_dates = sorted(set.intersection(
         *[set(df.index) for df in features_dict.values() if not df.empty]
@@ -180,10 +262,13 @@ def run_walk_forward_optimization(
     n_total   = len(all_dates)
 
     logger.info("=" * 65)
-    logger.info("OTM Naked Options — Monte Carlo Walk-Forward Optimization")
+    logger.info("OTM Naked Options — Monte Carlo Walk-Forward Optimization v2")
     logger.info(f"  Universe: {len(features_dict)} symbols | {n_total} trading days")
     logger.info(f"  IS={is_days}d / OOS={oos_days}d / step={step_days}d")
     logger.info(f"  Trials/window={n_trials} | SBB paths/trial={n_sbb_paths}")
+    logger.info(f"  Sampler: NSGA-II | population_size={population_size}")
+    logger.info(f"  Objective: (Sortino+barrier, log-freq-penalty)")
+    logger.info(f"  Min capital deployment: {min_trades_per_window:.0f} trades/window")
     logger.info("=" * 65)
 
     oos_results = []
@@ -220,67 +305,97 @@ def run_walk_forward_optimization(
         )
         sbb_paths = sbb.generate()
 
-        # ── Run Optuna study ─────────────────────────────────────────────────
+        # ── Run NSGA-II Pareto study ─────────────────────────────────────────
         db_path = f"sqlite:///mc_window_{window}.db"
         if os.path.exists(f"mc_window_{window}.db"):
             os.remove(f"mc_window_{window}.db")
-            
+
         study_name = f"mc_window_{window}"
         study = optuna.create_study(
             storage=db_path,
             study_name=study_name,
-            direction="maximize",
-            sampler=optuna.samplers.TPESampler(seed=window * 100),
-            pruner=optuna.pruners.MedianPruner(n_warmup_steps=10),
+            directions=["minimize", "minimize"],  # obj1=Sortino+barrier, obj2=frequency
+            sampler=optuna.samplers.NSGAIISampler(
+                seed=window * 100,
+                population_size=population_size,
+            ),
         )
 
         if n_jobs > 1:
             chunk_size = n_trials // n_jobs
             chunks = [chunk_size] * n_jobs
             chunks[-1] += n_trials % n_jobs
-            
+
             processes = []
             for i, chunk in enumerate(chunks):
                 if chunk > 0:
-                    p = mp.Process(target=_optuna_worker, args=(db_path, study_name, window, i, chunk, sbb_paths, warmup_days))
+                    p = mp.Process(
+                        target=_optuna_worker_nsga2,
+                        args=(db_path, study_name, window, i, chunk,
+                              sbb_paths, warmup_days, test_years, target_trades_per_year)
+                    )
                     p.start()
                     processes.append(p)
-                    
+
             for p in processes:
                 p.join()
-                
-            # Reload to get the aggregated results
+
+            # Reload to get aggregated Pareto front
             study = optuna.load_study(study_name=study_name, storage=db_path)
         else:
             study.optimize(
-                _make_objective(sbb_paths, [0], warmup_days=warmup_days),
+                _make_objective(
+                    sbb_paths, [0],
+                    warmup_days=warmup_days,
+                    test_years=test_years,
+                    target_trades_per_year=target_trades_per_year,
+                ),
                 n_trials=n_trials,
                 show_progress_bar=False,
             )
 
-        # ── Get best trial (guard against all-pruned scenario) ──────────────
-        completed = [t for t in study.trials if t.value is not None]
-        if not completed:
-            logger.warning(f"  Window {window}: all trials pruned. Using defaults.")
+        # ── Select best trial from Pareto front ──────────────────────────────
+        pareto_trials = study.best_trials   # All non-dominated (Pareto optimal) trials
+        if not pareto_trials:
+            logger.warning(f"  Window {window}: empty Pareto front. Using defaults.")
             pos += step_days
             continue
 
-        best_trial = study.best_trial
-        best_sortino_is = best_trial.value
+        # Filter: require minimum trade deployment (>= 4 trades/year)
+        valid_trials = [
+            t for t in pareto_trials
+            if t.user_attrs.get("median_trades", 0) >= min_trades_per_window
+        ]
+
+        if not valid_trials:
+            # Relax: pick least-bad frequency from Pareto front
+            logger.warning(
+                f"  Window {window}: no Pareto trial meets min_trades={min_trades_per_window:.0f}. "
+                f"Selecting least-sparse from front."
+            )
+            valid_trials = sorted(pareto_trials, key=lambda t: t.values[1])[:5]
+
+        # Among valid trials, pick the one with best Sortino (lowest obj1)
+        best_trial       = min(valid_trials, key=lambda t: t.values[0])
         best_params_dict = best_trial.params
+        best_median_sortino = best_trial.user_attrs.get("median_sortino", 0.0)
+        best_median_trades  = best_trial.user_attrs.get("median_trades", 0)
+        best_p95_dd         = best_trial.user_attrs.get("p95_drawdown", -1.0)
 
         logger.info(
-            f"  IS best: Sortino={best_sortino_is:.2f} | "
+            f"  IS best (Pareto): Sortino={best_median_sortino:.2f} | "
+            f"Trades={best_median_trades:.0f} | p95_DD={best_p95_dd:.1%} | "
             f"params={best_params_dict}"
         )
 
-        # ── DSR filter ───────────────────────────────────────────────────────
+        # ── DSR filter (applied to median Sortino across Pareto front) ──────
         all_sortinos = [
-            t.value for t in study.trials
-            if t.value is not None and t.value > -99
+            t.user_attrs.get("median_sortino", -99)
+            for t in study.trials
+            if t.user_attrs.get("median_sortino", -99) > -99
         ]
         dsr = DeflatedSharpeRatio.compute(
-            observed_sharpe=best_sortino_is,
+            observed_sharpe=best_median_sortino,
             n_trials=len(all_sortinos),
             skewness=-0.5,       # Short puts have negative skew
             kurtosis=4.0,        # Leptokurtic
@@ -298,7 +413,7 @@ def run_walk_forward_optimization(
         oos_sim     = FastOTMSimulator(oos_features, warmup_days=0)
         oos_metrics = oos_sim.simulate(best_params)
         oos_metrics["window"]      = window
-        oos_metrics["is_sortino"]  = best_sortino_is
+        oos_metrics["is_sortino"]  = best_median_sortino
         oos_metrics["dsr"]         = dsr
         oos_metrics["params"]      = best_params_dict
         oos_metrics["is_start"]    = str(is_start.date())
@@ -329,11 +444,17 @@ def _dict_to_params(d: dict) -> OTMParams:
 def _default_params_dict() -> dict:
     """Conservative default params when DSR filter rejects the IS best."""
     return {
-        "dte": 35, "put_delta": 0.10, "min_iv_rank": 0.30,
-        "pct_from_52w_high": 0.15, "rsi_oversold": 30.0,
-        "profit_take_pct": 0.50, "stop_loss_mult": 2.0,
-        "time_exit_dte": 7, "max_risk_pct": 0.01,
-        "max_positions": 5, "vix_crisis_threshold": 35.0,
+        "dte": 35,
+        "put_delta": 0.12,
+        "pct_from_52w_high": 0.12,
+        "iv_pct_threshold": 0.40,
+        "iv_hv_min": 1.10,
+        "vix_slope_threshold": -0.03,
+        "profit_take_pct": 0.50,
+        "stop_loss_mult": 2.5,
+        "time_exit_dte": 7,
+        "max_risk_pct": 0.012,
+        "max_positions": 4,
     }
 
 
@@ -343,7 +464,7 @@ def _default_params_dict() -> dict:
 if __name__ == "__main__":
     import yfinance as yf
 
-    parser = argparse.ArgumentParser(description="OTM Naked Monte Carlo Optimizer")
+    parser = argparse.ArgumentParser(description="OTM Naked Monte Carlo Optimizer v2")
     parser.add_argument("--start",     default="2018-01-01", help="Start date YYYY-MM-DD")
     parser.add_argument("--end",       default="2025-12-31", help="End date YYYY-MM-DD")
     parser.add_argument("--n-trials",  type=int, default=200, help="Optuna trials per window")
@@ -351,7 +472,7 @@ if __name__ == "__main__":
     parser.add_argument("--n-jobs",    type=int, default=1,   help="Parallel workers")
     parser.add_argument("--is-days",   type=int, default=756, help="In-sample window (trading days)")
     parser.add_argument("--oos-days",  type=int, default=126, help="OOS window (trading days)")
-    parser.add_argument("--output",    default="mc_optimization_results.json")
+    parser.add_argument("--output",    default="mc_results/mc_production_run.json")
     args = parser.parse_args()
 
     logger.info(f"Downloading data: {args.start} → {args.end}")
@@ -412,5 +533,6 @@ if __name__ == "__main__":
     )
 
     out = {"summary": report.summary_dict(), "windows": report.oos_results}
+    Path(args.output).parent.mkdir(exist_ok=True, parents=True)
     Path(args.output).write_text(json.dumps(out, indent=2, default=str))
     logger.info(f"Results saved to {args.output}")

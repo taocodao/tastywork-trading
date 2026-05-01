@@ -12,6 +12,12 @@ Key design:
 - Returns only scalar performance metrics (Sortino, max drawdown, etc.)
   to minimize memory overhead when running thousands of trials
 
+Entry Filter Architecture (Perplexity-validated, v2):
+- VIX Term Structure Slope replaces flat VIX threshold (orthogonal to pullback)
+- IV/HV Ratio replaces RSI (direct measure of premium edge)
+- IV Percentile replaces IV Rank (robust to outlier spikes)
+- Pullback depth retained (relaxed bounds)
+
 This simulator is NOT a replacement for backtest_engine.py (which has
 full logging, trade records, and position detail). It is specifically
 for Bayesian optimization search.
@@ -33,36 +39,41 @@ ANNUAL_FACTOR = math.sqrt(252)
 
 
 # ---------------------------------------------------------------------------
-# Optuna Search Space — all tunable parameters
+# Optuna Search Space — all tunable parameters (v2: regime-aware filters)
 # ---------------------------------------------------------------------------
 @dataclass
 class OTMParams:
     """
-    The complete Bayesian optimization search space.
+    The complete Bayesian optimization search space (v2).
     One instance = one trial in Optuna.
+
+    Key changes from v1:
+    - Removed: rsi_oversold, vix_crisis_threshold, min_iv_rank
+    - Added:   vix_slope_threshold, iv_hv_min, iv_pct_threshold
     """
     # ── DTE ──────────────────────────────────────────────────────────────────
     dte: int = 35                       # Target days-to-expiry (21–60)
 
     # ── Strike selection ─────────────────────────────────────────────────────
-    put_delta: float = 0.10             # Target delta for put selling (0.05–0.20)
+    put_delta: float = 0.12             # Target delta for put selling (0.08–0.20)
 
-    # ── Entry filters ────────────────────────────────────────────────────────
-    min_iv_rank: float = 0.25           # IV Rank threshold (0.10–0.50)
-    pct_from_52w_high: float = 0.15     # Required drawdown from 52W high (0.05–0.30)
-    rsi_oversold: float = 30.0          # RSI upper bound for PUT entry (20–45)
+    # ── Entry filters ─────────────────────────────────────────────────────────
+    pct_from_52w_high: float = 0.12     # Required drawdown from 52W high (0.05–0.25)
+    iv_pct_threshold: float = 0.40      # IV Percentile threshold (0.25–0.70)
+    iv_hv_min: float = 1.10             # Min IV/HV ratio — premium quality gate (1.0–1.5)
+    vix_slope_threshold: float = -0.03  # Min VIX term structure slope (VIX3M-VIX)/VIX
+                                        # Positive = contango (favorable), negative = backwardation
 
-    # ── Exit rules ────────────────────────────────────────────────────────────
-    profit_take_pct: float = 0.50       # Close at X% of max credit (0.25–0.75)
-    stop_loss_mult: float = 2.0         # Close at X× credit received (1.5–4.0)
+    # ── Exit rules ─────────────────────────────────────────────────────────────
+    profit_take_pct: float = 0.50       # Close at X% of max credit (0.40–0.80)
+    stop_loss_mult: float = 2.5         # Close at X× credit received (1.5–4.0)
     time_exit_dte: int = 7              # Force close at X DTE remaining (3–14)
 
-    # ── Risk management ───────────────────────────────────────────────────────
-    max_risk_pct: float = 0.01          # Max risk per trade as % of NAV (0.005–0.03)
-    max_positions: int = 5              # Max concurrent positions (2–10)
-    vix_crisis_threshold: float = 35.0  # VIX level above which no new trades
+    # ── Risk management ────────────────────────────────────────────────────────
+    max_risk_pct: float = 0.012         # Max risk per trade as % of NAV (0.005–0.03)
+    max_positions: int = 4              # Max concurrent positions (2–8)
 
-    # ── Portfolio ─────────────────────────────────────────────────────────────
+    # ── Portfolio ──────────────────────────────────────────────────────────────
     initial_capital: float = 50_000.0
 
 
@@ -151,11 +162,19 @@ def _empty_metrics() -> Dict[str, float]:
 # ---------------------------------------------------------------------------
 class FastOTMSimulator:
     """
-    High-throughput OTM naked put simulator.
+    High-throughput OTM naked put simulator (v2 — regime-aware filters).
 
     Designed to be called thousands of times by Optuna with different
     OTMParams. Each call runs a complete backtest over the provided
     feature dictionary and returns scalar performance metrics.
+
+    Entry filter stack (v2):
+      Layer 1 (Regime): VIX term structure slope — (VIX3M - VIX) / VIX
+                        Positive = contango (harvest vol premium)
+                        Negative = backwardation (tail-risk, avoid new entries)
+      Layer 2 (Signal): IV Percentile >= threshold (options expensive vs history)
+      Layer 3 (Signal): IV/HV ratio >= threshold (IV overpriced vs realized vol)
+      Layer 4 (Signal): Pullback depth from 52W high (stock oversold)
     """
 
     def __init__(self, features_dict: Dict[str, pd.DataFrame],
@@ -180,13 +199,15 @@ class FastOTMSimulator:
                 continue
             cols = {
                 "close":             df.get("close",              df.get("Close",    np.nan)),
-                "iv_rank":           df.get("iv_rank",            pd.Series(0.3, index=df.index)),
                 "hv_20":             df.get("hv_20",              pd.Series(0.2, index=df.index)),
                 "vix":               df.get("vix",                pd.Series(18, index=df.index)),
-                "rsi_14":            df.get("rsi_14",             pd.Series(50, index=df.index)),
                 "pct_from_52w_high": df.get("pct_from_52w_high",  pd.Series(0, index=df.index)),
-                "pct_b":             df.get("pct_b",              pd.Series(0.5, index=df.index)),
-                "rf":                df.get("rf",                 pd.Series(0.045, index=df.index)),
+                "rf":                df.get("rf",                  pd.Series(0.045, index=df.index)),
+                # v2 feature filters (already computed by feature_engineering.py)
+                "vix_term_slope":    df.get("vix_term_slope",      pd.Series(0.05, index=df.index)),
+                "iv_hv_ratio":       df.get("iv_hv_ratio",         pd.Series(1.1,  index=df.index)),
+                "iv_rank":           df.get("iv_rank",             pd.Series(0.4,  index=df.index)),
+                # iv_rank is used as IV Percentile proxy (same 0–1 scale)
             }
             idx = df.index
             all_indices.append(idx)
@@ -225,7 +246,7 @@ class FastOTMSimulator:
         n_days       = len(self._dates)
         cash         = params.initial_capital
         nav_series   = np.zeros(n_days)
-        open_pos     = []   # List of dicts: {symbol, strike, entry_px, dte_entry, T, sigma, rf, contracts}
+        open_pos     = []   # List of dicts: {symbol, strike, entry_px, dte_entry, contracts}
         closed_trades = []
 
         for i, today in enumerate(self._dates):
@@ -302,13 +323,16 @@ class FastOTMSimulator:
 
             nav_series[i] = cash - liability
 
-            # ── 3. Entry scan (all symbols, sorted by 52W pullback) ───────────
+            # ── 3. Entry scan (regime-aware v2 filter stack) ──────────────────
             if len(open_pos) >= params.max_positions:
                 continue
 
-            vix_today = self._get_vix(i)
-            if vix_today > params.vix_crisis_threshold:
-                continue
+            # Layer 1 (Regime): VIX Term Structure Slope
+            # Positive slope = contango = favorable for short-vol premium harvesting
+            # Negative slope = backwardation = panic/crisis, skip new entries
+            vix_slope = self._get_vix_slope(i)
+            if vix_slope < params.vix_slope_threshold:
+                continue   # Market in backwardation — avoid new naked puts
 
             candidates = []
             existing_syms = {p["symbol"] for p in open_pos}
@@ -320,32 +344,36 @@ class FastOTMSimulator:
                 if sym_i is None:
                     continue
 
-                iv_rank   = float(cache["iv_rank"][sym_i])
-                rsi_14    = float(cache["rsi_14"][sym_i])
+                iv_pct    = float(cache["iv_rank"][sym_i])       # 0–1 IV percentile proxy
+                iv_hv     = float(cache["iv_hv_ratio"][sym_i])   # IV / HV ratio
                 pct_52w   = float(cache["pct_from_52w_high"][sym_i])  # ≤ 0
-                pct_b     = float(cache["pct_b"][sym_i])
                 spot      = float(cache["close"][sym_i])
                 hv_20     = float(cache["hv_20"][sym_i])
                 rf_       = float(cache["rf"][sym_i])
+                vix_      = float(cache["vix"][sym_i])
 
-                # Entry filter (the Optuna-tunable conditions)
-                if iv_rank < params.min_iv_rank:
+                # Layer 2 (Signal): IV Percentile — options must be historically expensive
+                if iv_pct < params.iv_pct_threshold:
                     continue
-                if pct_52w > -params.pct_from_52w_high:
-                    continue   # Not enough pullback from 52W high
-                if rsi_14 > params.rsi_oversold:
-                    continue   # Not oversold enough
 
-                # Strike selection
-                sigma    = self._estimate_iv(hv_20, vix_today)
+                # Layer 3 (Signal): IV/HV ratio — premium must exceed realized vol
+                if iv_hv < params.iv_hv_min:
+                    continue
+
+                # Layer 4 (Signal): Required pullback from 52-week high
+                if pct_52w > -params.pct_from_52w_high:
+                    continue   # Not enough pullback — stock not oversold enough
+
+                # Strike selection via Black-Scholes binary search
+                sigma    = self._estimate_iv(hv_20, vix_)
                 T_years  = params.dte / 365.0
                 try:
-                    strike = find_put_strike(spot, T_years, rf_, sigma, params.put_delta)
+                    strike  = find_put_strike(spot, T_years, rf_, sigma, params.put_delta)
                     premium = bs_put_price(spot, strike, T_years, rf_, sigma)
                 except Exception:
                     continue
 
-                if premium < 0.20:   # Minimum credit filter
+                if premium < 0.20:   # Minimum credit filter ($0.20/share = $20/contract)
                     continue
 
                 candidates.append({
@@ -358,18 +386,18 @@ class FastOTMSimulator:
                     "pct_52w":   pct_52w,   # Sort key
                 })
 
-            # Sort by most extreme pullback
-            candidates.sort(key=lambda x: x["pct_52w"])  # Most negative = best
+            # Sort by most extreme pullback (most negative = deepest dip = best entry)
+            candidates.sort(key=lambda x: x["pct_52w"])
 
             nav_now = nav_series[i] if nav_series[i] > 0 else params.initial_capital
             for cand in candidates:
                 if len(open_pos) >= params.max_positions:
                     break
-                # Size position: risk 1% of NAV (max risk = strike * contracts * 100)
+                # Size position by risk budget: max_risk_pct% of NAV
                 risk_budget = nav_now * params.max_risk_pct
                 contracts   = max(1, int(risk_budget / (cand["strike"] * 100)))
                 credit       = cand["entry_px"] * contracts * 100
-                cash        += credit  # Credit received
+                cash        += credit  # Credit received upfront
 
                 open_pos.append({
                     "symbol":    cand["symbol"],
@@ -403,6 +431,21 @@ class FastOTMSimulator:
             if sym_i is not None:
                 return float(cache["vix"][sym_i])
         return 18.0
+
+    def _get_vix_slope(self, common_i: int) -> float:
+        """
+        Get VIX term structure slope: (VIX3M - VIX) / VIX.
+        Positive = contango (normal, premium-selling favorable).
+        Negative = backwardation (crisis/panic, avoid new short-vol positions).
+        Default 0.05 = slight contango (historically average ~84% of the time).
+        """
+        for sym, cache in self._cache.items():
+            if sym.startswith("__"):
+                continue
+            sym_i = self._get_sym_idx(sym, common_i)
+            if sym_i is not None and "vix_term_slope" in cache:
+                return float(cache["vix_term_slope"][sym_i])
+        return 0.05   # Default: slight contango
 
     @staticmethod
     def _estimate_iv(hv_20: float, vix: float) -> float:
