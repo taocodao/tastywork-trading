@@ -123,16 +123,12 @@ def run():
     vix3m = _series("^VIX3M")
     rf    = _series("^IRX") / 100.0
 
-    from src.otm_naked.feature_engineering import build_all_features
-    features = build_all_features(price_data, vix, vix3m, rf)
-
     engine = OTMNakedBacktestEngine(cfg)
     results = engine.run(
-        features     = features,
+        price_data   = price_data,
         vix          = vix,
+        vix3m        = vix3m,
         rf           = rf,
-        start_date   = args.start,
-        end_date     = args.end,
         initial_capital = args.capital,
         use_ml       = not args.no_ml,
     )
