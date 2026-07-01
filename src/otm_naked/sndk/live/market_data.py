@@ -5,6 +5,7 @@ from ib_insync import IB, Stock, Option, Index, util
 from datetime import datetime, timedelta
 
 logger = logging.getLogger(__name__)
+logger.setLevel(logging.DEBUG)
 
 class SNDKMarketDataProvider:
     """Provides real market data and option chains from IB."""
@@ -44,15 +45,24 @@ class SNDKMarketDataProvider:
         return df
 
     def subscribe_5min_bars(self, ticker: str, callback):
-        """Subscribe to keepUpToDate 5-min bars for intraday triggers."""
+        """Initialize polling subscription for 5-min bars."""
         ib = self._get_ib()
         contract = Stock(ticker, 'SMART', 'USD')
         ib.qualifyContracts(contract)
         
-        self.bar_update_callbacks.append(callback)
+        if callback not in self.bar_update_callbacks:
+            self.bar_update_callbacks.append(callback)
+            
+        self.live_bars = []
+        logger.info(f"Initialized polling 5-min bars for {ticker}.")
         
-        # Open persistent subscription
-        self.live_bars = ib.reqHistoricalData(
+    def poll_5min_bars(self, ticker: str):
+        """Polls for new bars and triggers callbacks if a new bar closed."""
+        ib = self._get_ib()
+        contract = Stock(ticker, 'SMART', 'USD')
+        ib.qualifyContracts(contract)
+        
+        bars = ib.reqHistoricalData(
             contract,
             endDateTime='',
             durationStr='1 D',
@@ -60,15 +70,24 @@ class SNDKMarketDataProvider:
             whatToShow='TRADES',
             useRTH=True,
             formatDate=1,
-            keepUpToDate=True
+            keepUpToDate=False
         )
         
-        # Bind the update event
-        ib.barUpdateEvent += self._on_bar_update
-        logger.info(f"Subscribed to live 5-min bars for {ticker}.")
+        if not bars:
+            return
+            
+        has_new_bar = False
+        if not self.live_bars or len(self.live_bars) == 0 or bars[-1].date > self.live_bars[-1].date:
+            has_new_bar = True
+            
+        self.live_bars = bars
+        
+        if has_new_bar:
+            self._on_bar_update(bars, True)
         
     def _on_bar_update(self, bars, has_new_bar):
         """Internal callback for ib_insync barUpdateEvent."""
+        logger.debug(f"_on_bar_update fired. has_new_bar={has_new_bar}, total_bars={len(bars)}")
         if has_new_bar:
             # Trigger our custom callbacks
             for cb in self.bar_update_callbacks:
@@ -76,12 +95,8 @@ class SNDKMarketDataProvider:
                 
     def unsubscribe_5min_bars(self):
         """Cleanup subscription."""
-        ib = self._get_ib()
-        if self.live_bars:
-            ib.cancelHistoricalData(self.live_bars)
-            ib.barUpdateEvent -= self._on_bar_update
-            self.live_bars = None
-            self.bar_update_callbacks = []
+        self.live_bars = None
+        self.bar_update_callbacks = []
             
     def get_intraday_move(self, ticker: str) -> float:
         """Calculate today's move from open to current price using live bars."""

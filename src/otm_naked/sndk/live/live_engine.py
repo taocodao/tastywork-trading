@@ -79,6 +79,7 @@ class LiveTradingEngine:
         self.md.subscribe_5min_bars(ticker, callback=self._on_new_bar)
         
         # 3. Main loop: ib.sleep() until market close
+        last_poll_time = datetime.min
         while True:
             try:
                 if not self._is_market_hours():
@@ -99,7 +100,12 @@ class LiveTradingEngine:
                     self.md.subscribe_5min_bars(ticker, callback=self._on_new_bar)
                     self.ib.needs_reconnect = False
                     
-                self.ib.get_ib().sleep(30)
+                now = datetime.now()
+                if (now - last_poll_time).total_seconds() >= 60:
+                    self.md.poll_5min_bars(ticker)
+                    last_poll_time = now
+                    
+                self.ib.get_ib().sleep(5)
                 
             except Exception as e:
                 logger.error(f"Error in main loop: {e}", exc_info=True)
