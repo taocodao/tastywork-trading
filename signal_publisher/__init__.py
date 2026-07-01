@@ -71,6 +71,12 @@ from .turbobounce import (
     publish_turbobounce_entry_signal
 )
 
+# EMA-CCI-MACD signals
+from .ema_cci_macd import (
+    EMACCIMACDEntrySignal,
+    publish_ema_cci_macd_signal
+)
+
 # Base classes
 from .base import BaseSignal
 
@@ -114,6 +120,10 @@ __all__ = [
     # TurboBounce
     'TurboBounceEntrySignal',
     'publish_turbobounce_entry_signal',
+    
+    # EMA-CCI-MACD
+    'EMACCIMACDEntrySignal',
+    'publish_ema_cci_macd_signal',
     
     # Base
     'BaseSignal',

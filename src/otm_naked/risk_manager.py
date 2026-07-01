@@ -25,12 +25,13 @@ class OTMNakedRiskManager:
     Risk gate for new naked option entries.
 
     Hard rules (no ML override):
-    - Max 1% capital at risk per position
-    - Max 5% total portfolio heat (all naked positions)
+    - Max 2.5% capital at risk per position (quarter-Kelly), 0.5x for high-beta symbols
+    - Max 20% total portfolio heat (8 concurrent 2.5% positions)
     - No trades when VIX >= 35 (crisis gate)
     - IV rank must be >= min_iv_rank to enter
     - Stop-loss at 2x credit received
-    - No more than max_concurrent_positions open
+    - No more than max_concurrent_positions open (8 default)
+    - No more than max_sector_positions in any single sector (2 default)
     - No earnings within 21 days
     """
 
@@ -126,27 +127,33 @@ class OTMNakedRiskManager:
         premium:      float,
         strike:       float,
         account_nav:  Optional[float] = None,
+        symbol:       str = "",
     ) -> int:
         """
-        Kelly-fractional position sizing (capped at 1% risk).
+        Quarter-Kelly position sizing (capped at 2.5% risk, 0.5x for high-beta).
 
         Args:
             premium:     Credit per share
             strike:      Strike price (notional basis for naked put)
             account_nav: Current account NAV (uses account_size if None)
+            symbol:      Underlying symbol (used for high-beta multiplier)
 
         Returns:
             Number of contracts to sell
         """
         nav  = account_nav or self.account_size
-        max_credit_risk = nav * self.config.max_risk_per_trade_pct
+        # Apply 0.5x multiplier for high-beta names (tail risk exceeds IV rank signal)
+        is_high_beta = symbol.upper() in [s.upper() for s in self.config.high_beta_symbols]
+        size_mult = self.config.high_beta_size_mult if is_high_beta else 1.0
+
+        max_credit_risk = nav * self.config.max_risk_per_trade_pct * size_mult
         # 2x credit stop means max loss ≈ 2x premium collected
         max_contracts_by_risk = max_credit_risk / max(premium * 2 * 100, 1)
         # Also cap by heat (notional)
         heat_remaining  = self.max_portfolio_heat - self.current_heat
         max_by_heat     = heat_remaining / max(strike * 100, 1)
         contracts = int(min(max_contracts_by_risk, max_by_heat))
-        return max(0, min(contracts, 5))    # Hard cap at 5 contracts
+        return max(0, min(contracts, 10))   # Hard cap at 10 contracts
 
     def check_stop_loss(
         self,

@@ -55,7 +55,7 @@ SSH commands via PowerShell or `cmd /c ssh ...` return exit 0 but produce **no v
 - `powershell -Command "& ssh ..."` → same issue
 
 ### EC2 Connection Details
-- **Host**: `ubuntu@34.235.119.67`
+- **Host**: `ubuntu@54.80.47.153`
 - **PEM**: `D:\Projects\IB-program-trading\tradecoin-bot-key.pem`
 - **Project dir**: `~/tastywork-trading`
 - **Logs dir**: `~/tastywork-trading/logs/`
@@ -63,28 +63,28 @@ SSH commands via PowerShell or `cmd /c ssh ...` return exit 0 but produce **no v
 ### Pattern: Run a job on EC2 and check output
 ```powershell
 # Step 1 — Launch the job detached (exits immediately, job runs in background)
-ssh -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" -o StrictHostKeyChecking=no ubuntu@34.235.119.67 "cd ~/tastywork-trading && nohup /usr/bin/python3 <script.py> --once >> logs/<script>.log 2>&1 &"
+ssh -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" -o StrictHostKeyChecking=no ubuntu@54.80.47.153 "cd ~/tastywork-trading && nohup /usr/bin/python3 <script.py> --once >> logs/<script>.log 2>&1 &"
 
 # Step 2 — After waiting (e.g., 2 min), read the log back on EC2
 # Note: stdout still invisible, so write to /tmp and use a second ssh for /tmp read
-ssh -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" -o StrictHostKeyChecking=no ubuntu@34.235.119.67 "tail -20 ~/tastywork-trading/logs/<script>.log > /tmp/out.txt && cat /tmp/out.txt"
+ssh -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" -o StrictHostKeyChecking=no ubuntu@54.80.47.153 "tail -20 ~/tastywork-trading/logs/<script>.log > /tmp/out.txt && cat /tmp/out.txt"
 # (still may not show — just verify via dashboard or DB)
 ```
 
 ### Pattern: Git pull + service restart on EC2
 ```powershell
 # Git pull
-ssh -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" -o StrictHostKeyChecking=no ubuntu@34.235.119.67 "cd ~/tastywork-trading && git pull origin main"
+ssh -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" -o StrictHostKeyChecking=no ubuntu@54.80.47.153 "cd ~/tastywork-trading && git pull origin main"
 
 # Restart API service (if running as systemd)
-ssh -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" -o StrictHostKeyChecking=no ubuntu@34.235.119.67 "sudo systemctl restart trademind-api"
+ssh -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" -o StrictHostKeyChecking=no ubuntu@54.80.47.153 "sudo systemctl restart trademind-api"
 ```
 Both return exit 0 on success even though stdout is invisible.
 
 ### Generate TurboCore + TurboCore Pro Signals (both at once)
 The cron runs at 3:00 PM ET Mon–Fri. To run manually:
 ```powershell
-ssh -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" -o StrictHostKeyChecking=no ubuntu@34.235.119.67 "cd ~/tastywork-trading && nohup /usr/bin/python3 run_turbocore_scheduler.py --once >> logs/run_turbocore_scheduler.log 2>&1 & nohup /usr/bin/python3 run_turbocore_pro_scheduler.py --once >> logs/run_turbocore_pro_scheduler.log 2>&1 &"
+ssh -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" -o StrictHostKeyChecking=no ubuntu@54.80.47.153 "cd ~/tastywork-trading && nohup /usr/bin/python3 run_turbocore_scheduler.py --once >> logs/run_turbocore_scheduler.log 2>&1 & nohup /usr/bin/python3 run_turbocore_pro_scheduler.py --once >> logs/run_turbocore_pro_scheduler.log 2>&1 &"
 ```
 - Takes ~2 minutes to complete (ML pipeline + IV-Switching composite)
 - Confirm via the live dashboard at trademind.bot

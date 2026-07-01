@@ -63,7 +63,7 @@ from .regime_classifier import LeapsRegimeClassifier, REGIME_PARAMS
 from .entry_classifier import LeapsEntryClassifier          # v1: heuristic fallback
 from .entry_classifier_v2 import LeapsEntryClassifierV2     # v2: LightGBM specialists
 from .strike_optimizer import StrikeOptimizer, bs_call_price, bs_call_delta, find_call_strike
-from .pmcc_manager import PMCCManager, _next_monthly_friday
+from .pmcc_manager_old import PMCCManager, _next_monthly_friday
 from .drawdown_guard import DrawdownGuard, DrawdownAction
 from .liquidity_scorer import estimate_qqq_leaps_liquidity
 

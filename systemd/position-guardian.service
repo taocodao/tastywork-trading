@@ -1,0 +1,17 @@
+[Unit]
+Description=Position Guardian — Auto-close dangerous TastyTrade option positions
+After=network.target
+
+[Service]
+Type=simple
+User=ubuntu
+WorkingDirectory=/home/ubuntu/tastywork-trading
+EnvironmentFile=/home/ubuntu/.env
+ExecStart=/home/ubuntu/tastywork-trading/venv/bin/python position_guardian.py --daemon
+Restart=always
+RestartSec=60
+StandardOutput=append:/home/ubuntu/tastywork-trading/logs/position_guardian.log
+StandardError=append:/home/ubuntu/tastywork-trading/logs/position_guardian.log
+
+[Install]
+WantedBy=multi-user.target

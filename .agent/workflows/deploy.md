@@ -18,7 +18,7 @@ git push
 2. SSH to EC2 — git pull + restart TQQQ scheduler:
 ```powershell
 $PEM = "D:\Projects\IB-program-trading\tradecoin-bot-key.pem"
-$HOST = "ubuntu@34.235.119.67"
+$HOST = "ubuntu@54.80.47.153"
 ssh -i $PEM -o StrictHostKeyChecking=no $HOST "cd ~/tastywork-trading ; git pull ; sudo systemctl restart tqqq-scheduler 2>/dev/null || (pkill -f run_tqqq_scheduler || true) ; sleep 1 ; nohup python3 run_tqqq_scheduler.py > logs/tqqq_scheduler.log 2>&1 &"
 ```
 
@@ -26,7 +26,7 @@ ssh -i $PEM -o StrictHostKeyChecking=no $HOST "cd ~/tastywork-trading ; git pull
 3. (First-time only) Install TQQQ scheduler as a permanent systemd service:
 ```powershell
 $PEM = "D:\Projects\IB-program-trading\tradecoin-bot-key.pem"
-$HOST = "ubuntu@34.235.119.67"
+$HOST = "ubuntu@54.80.47.153"
 $SVC = "[Unit]`nDescription=TurboBounce TQQQ Scheduler`nAfter=network.target`n`n[Service]`nUser=ubuntu`nWorkingDirectory=/home/ubuntu/tastywork-trading`nExecStart=/usr/bin/python3 run_tqqq_scheduler.py`nRestart=always`nRestartSec=30`n`n[Install]`nWantedBy=multi-user.target"
 ssh -i $PEM -o StrictHostKeyChecking=no $HOST "echo '$SVC' | sudo tee /etc/systemd/system/tqqq-scheduler.service ; sudo systemctl daemon-reload ; sudo systemctl enable tqqq-scheduler ; sudo systemctl start tqqq-scheduler"
 ```

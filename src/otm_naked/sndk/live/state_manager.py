@@ -21,11 +21,13 @@ class LivePosition:
     target_dte: int
     
 class StateManager:
-    """Persists open positions to JSON."""
+    """Persists open positions and trade logs to JSON."""
     
     def __init__(self, data_dir="data"):
-        self.state_file = Path(data_dir) / "sndk_live_state.json"
-        self.state_file.parent.mkdir(parents=True, exist_ok=True)
+        self.data_dir = Path(data_dir)
+        self.state_file = self.data_dir / "sndk_live_state.json"
+        self.log_file = self.data_dir / "sndk_trades.jsonl"
+        self.data_dir.mkdir(parents=True, exist_ok=True)
         self.positions = []
         self.load()
         
@@ -47,13 +49,39 @@ class StateManager:
         except Exception as e:
             logger.error(f"Failed to save state: {e}")
             
+    def log_trade(self, pos: LivePosition, action: str, price: float, realized_pnl: float = 0.0, reason: str = ""):
+        """Append trade log to JSONL."""
+        record = {
+            "timestamp": datetime.now().isoformat(),
+            "action": action,
+            "id": pos.id,
+            "symbol": pos.symbol,
+            "type": pos.opt_type,
+            "strike": pos.strike,
+            "expiry": pos.expiry,
+            "contracts": pos.contracts,
+            "price": price,
+            "realized_pnl": realized_pnl,
+            "reason": reason
+        }
+        try:
+            with open(self.log_file, 'a') as f:
+                f.write(json.dumps(record) + "\n")
+        except Exception as e:
+            logger.error(f"Failed to write trade log: {e}")
+            
     def add_position(self, pos: LivePosition):
         self.positions.append(pos)
         self.save()
+        self.log_trade(pos, "OPEN", pos.entry_premium, reason="Signal Entry")
         
-    def remove_position(self, pos_id: str):
-        self.positions = [p for p in self.positions if p.id != pos_id]
-        self.save()
-        
+    def remove_position(self, pos_id: str, exit_price: float, reason: str):
+        pos = next((p for p in self.positions if p.id == pos_id), None)
+        if pos:
+            realized = (pos.entry_premium - exit_price) * pos.contracts * 100
+            self.log_trade(pos, "CLOSE", exit_price, realized_pnl=realized, reason=reason)
+            self.positions = [p for p in self.positions if p.id != pos_id]
+            self.save()
+            
     def get_positions(self) -> list:
         return self.positions

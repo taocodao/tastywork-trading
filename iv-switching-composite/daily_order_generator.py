@@ -585,7 +585,11 @@ def check_exits(account_state: dict, signal: dict) -> list:
 
     # Group TT positions by underlying and expiry
     csps = []   # TQQQ short puts
-    ccs_pairs = {} # QQQ C spreads: { expiry: { 'short': pos, 'long': pos } }
+    # FIX #1: Use separate short/long lists per expiry to support MULTIPLE spreads
+    # at the same expiry (different strikes). Previous single-slot dict was overwriting
+    # earlier spreads, leaving orphaned legs unmanaged through to assignment.
+    ccs_shorts = {}  # { expiry_str: [ {'pos', 'occ', 'strike', 'qty'}, ... ] }
+    ccs_longs  = {}  # { expiry_str: [ {'pos', 'occ', 'strike', 'qty'}, ... ] }
     zebras = {}    # QQQM zebras: { expiry: { 'short': pos, 'long': pos } }
 
     for pos in raw_positions:
@@ -607,12 +611,11 @@ def check_exits(account_state: dict, signal: dict) -> list:
                 csps.append({'pos': pos, 'expiry_str': expiry_str, 'strike': strike})
                 
             elif symbol == 'QQQ' and opt_type in ('C', 'CALL'):
-                if expiry_str not in ccs_pairs:
-                    ccs_pairs[expiry_str] = {}
+                entry = {'pos': pos, 'occ': occ, 'strike': strike, 'qty': qty}
                 if qty < 0:
-                    ccs_pairs[expiry_str]['short'] = {'pos': pos, 'occ': occ, 'strike': strike}
+                    ccs_shorts.setdefault(expiry_str, []).append(entry)
                 else:
-                    ccs_pairs[expiry_str]['long'] = {'pos': pos, 'occ': occ, 'strike': strike}
+                    ccs_longs.setdefault(expiry_str, []).append(entry)
                     
             elif symbol == 'QQQM' and opt_type in ('C', 'CALL'):
                 if expiry_str not in zebras:
@@ -652,33 +655,79 @@ def check_exits(account_state: dict, signal: dict) -> list:
                 close_legs.append({"action": "BUY_TO_CLOSE", "symbol": occ, "qty": qty, "instrument_type": "Equity Option"})
 
     # Evaluate MODE C: QQQ CCS Exits
-    for exp_str, legs in ccs_pairs.items():
-        if 'short' in legs and 'long' in legs:
-            sl = legs['short']
-            ll = legs['long']
+    # FIX #1: Iterate all expiries from both short and long lists; pair each short with
+    # its nearest long above (by strike), consuming each long only once.
+    # FIX #2: Force-close any spread with DTE <= 3 to prevent OCC auto-assignment.
+    # FIX #4: Use min(short_qty, long_qty) for close quantities to handle mismatches.
+    all_ccs_expiries = set(ccs_shorts.keys()) | set(ccs_longs.keys())
+    for exp_str in all_ccs_expiries:
+        exp_y, exp_m, exp_d = 2000 + int(exp_str[:2]), int(exp_str[2:4]), int(exp_str[4:6])
+        exp_date = date(exp_y, exp_m, exp_d)
+        dte = (exp_date - today).days
+        # FIX #2: Force close 3 days before expiry to avoid OCC auto-exercise/assignment
+        force_close_expiry = dte <= 3
+
+        shorts = sorted(ccs_shorts.get(exp_str, []), key=lambda x: x['strike'])
+        longs  = list(sorted(ccs_longs.get(exp_str, []),  key=lambda x: x['strike']))
+
+        for sl in shorts:
             short_strike = sl['strike']
-            long_strike = ll['strike']
+            # Find the nearest long leg whose strike is above this short strike
+            paired_long = None
+            for ll in longs:
+                if ll['strike'] > short_strike:
+                    paired_long = ll
+                    break
+            if not paired_long:
+                log.warning(f"CCS orphaned short leg {sl['occ']} — no paired long found for exp {exp_str}")
+                if force_close_expiry:
+                    # Close the orphaned short alone to prevent assignment
+                    orphan_qty = abs(int(getattr(sl['pos'], 'quantity', 0) or 0))
+                    log.warning(f"Force-closing orphaned short {sl['occ']} (qty={orphan_qty}) — DTE={dte}")
+                    close_legs.append({"action": "BUY_TO_CLOSE", "symbol": sl['occ'], "qty": orphan_qty, "instrument_type": "Equity Option"})
+                continue
+            longs.remove(paired_long)  # consume this long leg
+
+            long_strike = paired_long['strike']
+            # FIX #4: Use each leg's own quantity; close the paired (minimum) amount
             short_qty = abs(int(getattr(sl['pos'], 'quantity', 0) or 0))
-            
+            long_qty  = abs(int(getattr(paired_long['pos'], 'quantity', 0) or 0))
+            close_qty = min(short_qty, long_qty)
+            if short_qty != long_qty:
+                log.warning(f"CCS quantity mismatch for exp {exp_str}: short={short_qty} long={long_qty} — closing min={close_qty}")
+
             try:
                 sc_entry = abs(float(getattr(sl['pos'], 'average_open_price', 0) or 0))
-                lc_entry = float(getattr(ll['pos'], 'average_open_price', 0) or 0)
+                lc_entry = float(getattr(paired_long['pos'], 'average_open_price', 0) or 0)
             except ValueError:
                 sc_entry, lc_entry = 0.0, 0.0
             entry_premium = sc_entry - lc_entry
-            
-            exp_y, exp_m, exp_d = 2000 + int(exp_str[:2]), int(exp_str[2:4]), int(exp_str[4:6])
-            exp_date = date(exp_y, exp_m, exp_d)
-            
+
             q = get_option_spread_quote('QQQ', short_strike, long_strike, exp_str, 'C')
+            should_close = force_close_expiry  # always close near expiry
+            close_reason = f"DTE={dte} expiry protection" if force_close_expiry else ""
+
             if q and entry_premium > 0:
                 liability = max(q.short_ask - q.long_bid, 0)
                 profit_pct = 1.0 - (liability / entry_premium)
-                
-                if profit_pct >= 0.50 or liability >= entry_premium * 3.0 or today >= exp_date:
-                    log.info(f"Closing CCS {exp_str}: profit={profit_pct*100:.1f}%, liability={liability}")
-                    close_legs.append({"action": "BUY_TO_CLOSE", "symbol": sl['occ'], "qty": short_qty, "instrument_type": "Equity Option"})
-                    close_legs.append({"action": "SELL_TO_CLOSE", "symbol": ll['occ'], "qty": short_qty, "instrument_type": "Equity Option"})
+                if profit_pct >= 0.50:
+                    should_close = True
+                    close_reason = f"profit={profit_pct*100:.1f}%"
+                elif liability >= entry_premium * 3.0:
+                    should_close = True
+                    close_reason = f"loss limit (liability={liability:.2f})"
+            elif not q and force_close_expiry:
+                # Can't get a quote but we must close near expiry anyway
+                should_close = True
+
+            if should_close:
+                log.info(f"Closing CCS {exp_str} {short_strike}/{long_strike}: {close_reason} (qty={close_qty})")
+                close_legs.append({"action": "BUY_TO_CLOSE", "symbol": sl['occ'], "qty": close_qty, "instrument_type": "Equity Option"})
+                close_legs.append({"action": "SELL_TO_CLOSE", "symbol": paired_long['occ'], "qty": close_qty, "instrument_type": "Equity Option"})
+
+        # Warn about any remaining unmatched long legs
+        for ll in longs:
+            log.warning(f"CCS orphaned long leg {ll['occ']} — no paired short found for exp {exp_str}")
 
     # Evaluate MODE B: QQQM ZEBRA Exits
     for exp_str, legs in zebras.items():
@@ -708,9 +757,16 @@ def check_exits(account_state: dict, signal: dict) -> list:
                 val = max((q.long_bid * 2) - q.short_ask, 0)
                 profit_pct = (val - entry_debit) / entry_debit
                 time_stop = dte <= 21
-                
-                if profit_pct >= 0.50 or time_stop or val <= 0.01:
-                    log.info(f"Closing ZEBRA {exp_str}: profit={profit_pct*100:.1f}%, time_stop={time_stop}")
+                # FIX #2: Also force-close ZEBRA 3 days before expiry to avoid assignment
+                force_close_expiry = dte <= 3
+
+                if profit_pct >= 0.50 or time_stop or val <= 0.01 or force_close_expiry:
+                    close_reason = (
+                        f"profit={profit_pct*100:.1f}%" if profit_pct >= 0.50
+                        else (f"DTE={dte} expiry protection" if force_close_expiry
+                              else ("time_stop" if time_stop else "val~0"))
+                    )
+                    log.info(f"Closing ZEBRA {exp_str}: {close_reason}")
                     close_legs.append({"action": "BUY_TO_CLOSE", "symbol": sl['occ'], "qty": short_qty, "instrument_type": "Equity Option"})
                     close_legs.append({"action": "SELL_TO_CLOSE", "symbol": ll['occ'], "qty": long_qty, "instrument_type": "Equity Option"})
 

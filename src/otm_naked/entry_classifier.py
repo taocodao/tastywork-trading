@@ -40,13 +40,28 @@ PRIMARY_FEATURES: List[str] = [
     "iv_rank", "iv_hv_ratio",
     "stoch_14", "volume_ratio",
     "is_gap_up", "is_gap_down",
+    "cci_20", "macd_hist_norm",   # Phase 1 additions
+    # VRP regime features (Phase 1)
+    "vrp_conditional",          # iv_est - hv_20 conditioned on VIX regime
+    "days_since_large_move",    # IV spike decay timer
+    # Entry timing features (Phase 3)  
+    "spy_same_day_return",      # Macro vs. idiosyncratic filter
+    "sndk_spy_corr_20d",        # Rolling beta
+    # Regime features (Phase 4)
+    "adx_14",               # Trend strength
+    "reg_slope_40d",        # Trend direction velocity
+    "hurst_90d",            # Trend persistence
+    "ema_cross_up",         # Binary trend direction
 ]
 
 META_FEATURES: List[str] = PRIMARY_FEATURES + [
     "rsi_30", "ret_10d", "ret_21d",
     "ath_drawdown", "dist_sma200",
     "hv_10", "hv_20", "hv_60",
-    "vix_5d_change", "primary_prob",
+    "vix_5d_change", "macd_hist", "primary_prob",
+    # Execution quality (Phase 3)
+    "daily_range_pct",          # Intraday volatility proxy
+    "atr_14",                   # Average true range (liquidity proxy)
 ]
 
 PRIMARY_THRESHOLD = 0.30
@@ -66,15 +81,16 @@ class OTMNakedEntryClassifier:
         if not ML_AVAILABLE:
             return
         df = train_df.dropna(subset=[win_col])
-        if len(df) < 30:
-            logger.warning(f"Only {len(df)} labeled samples — need >= 30")
+        if len(df) < 10:  # Was 30; lowered for small WF windows
+            logger.warning(f"Only {len(df)} labeled samples — need >= 10")
             return
 
         y = df[win_col].astype(int).values
         prim_features = [c for c in PRIMARY_FEATURES if c in df.columns]
         X_prim = df[prim_features].fillna(0).values
 
-        skf = StratifiedKFold(n_splits=5, shuffle=True, random_state=42)
+        n_folds = min(5, max(2, len(df) // 8))  # Adaptive fold count
+        skf = StratifiedKFold(n_splits=n_folds, shuffle=True, random_state=42)
         base_xgb = XGBClassifier(
             n_estimators=200, max_depth=4, learning_rate=0.05,
             subsample=0.8, colsample_bytree=0.8,
@@ -103,7 +119,7 @@ class OTMNakedEntryClassifier:
                 use_label_encoder=False, eval_metric="logloss",
                 random_state=42, verbosity=0,
             )
-            skf_meta = StratifiedKFold(n_splits=5, shuffle=True, random_state=42)
+            skf_meta = StratifiedKFold(n_splits=n_folds, shuffle=True, random_state=42)
             self.meta_model = CalibratedClassifierCV(meta_xgb, cv=skf_meta, method="isotonic")
             self.meta_model.fit(X_meta, y_meta)
 

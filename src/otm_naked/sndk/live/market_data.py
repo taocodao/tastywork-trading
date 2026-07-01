@@ -1,8 +1,7 @@
 import logging
-import asyncio
 import pandas as pd
 from typing import Optional, List
-from ib_insync import IB, Stock, Option, util
+from ib_insync import IB, Stock, Option, Index, util
 from datetime import datetime, timedelta
 
 logger = logging.getLogger(__name__)
@@ -12,14 +11,19 @@ class SNDKMarketDataProvider:
     
     def __init__(self, ib_connector):
         self.ib_connector = ib_connector
+        self.live_bars = None
+        self.bar_update_callbacks = []
         
-    async def get_daily_bars(self, ticker: str, days: int = 100) -> pd.DataFrame:
-        """Fetch daily OHLCV bars from IB."""
-        ib = self.ib_connector.get_ib()
+    def _get_ib(self) -> IB:
+        return self.ib_connector.get_ib()
+        
+    def get_daily_bars(self, ticker: str, days: int = 150) -> pd.DataFrame:
+        """Fetch daily OHLCV bars from IB (synchronous)."""
+        ib = self._get_ib()
         contract = Stock(ticker, 'SMART', 'USD')
-        await ib.qualifyContractsAsync(contract)
+        ib.qualifyContracts(contract)
         
-        bars = await ib.reqHistoricalDataAsync(
+        bars = ib.reqHistoricalData(
             contract,
             endDateTime='',
             durationStr=f"{days} D",
@@ -30,124 +34,185 @@ class SNDKMarketDataProvider:
         )
         
         if not bars:
-            logger.warning(f"No historical data received for {ticker}")
+            logger.warning(f"No daily historical data received for {ticker}")
             return pd.DataFrame()
             
         df = util.df(bars)
-        # Standardize column names for feature engineering
-        df = df.rename(columns={
-            'date': 'date',
-            'open': 'open',
-            'high': 'high',
-            'low': 'low',
-            'close': 'close',
-            'volume': 'volume'
-        })
+        df = df.rename(columns={'date': 'date'})
         df.set_index('date', inplace=True)
-        # Ensure index is DatetimeIndex
         df.index = pd.to_datetime(df.index)
         return df
 
-    async def get_current_price(self, ticker: str) -> float:
-        """Get live (or delayed) last price."""
-        ib = self.ib_connector.get_ib()
+    def subscribe_5min_bars(self, ticker: str, callback):
+        """Subscribe to keepUpToDate 5-min bars for intraday triggers."""
+        ib = self._get_ib()
         contract = Stock(ticker, 'SMART', 'USD')
-        await ib.qualifyContractsAsync(contract)
+        ib.qualifyContracts(contract)
         
-        ticker_data = await ib.reqTickersAsync(contract)
+        self.bar_update_callbacks.append(callback)
+        
+        # Open persistent subscription
+        self.live_bars = ib.reqHistoricalData(
+            contract,
+            endDateTime='',
+            durationStr='1 D',
+            barSizeSetting='5 mins',
+            whatToShow='TRADES',
+            useRTH=True,
+            formatDate=1,
+            keepUpToDate=True
+        )
+        
+        # Bind the update event
+        ib.barUpdateEvent += self._on_bar_update
+        logger.info(f"Subscribed to live 5-min bars for {ticker}.")
+        
+    def _on_bar_update(self, bars, has_new_bar):
+        """Internal callback for ib_insync barUpdateEvent."""
+        if has_new_bar:
+            # Trigger our custom callbacks
+            for cb in self.bar_update_callbacks:
+                cb(bars, has_new_bar)
+                
+    def unsubscribe_5min_bars(self):
+        """Cleanup subscription."""
+        ib = self._get_ib()
+        if self.live_bars:
+            ib.cancelHistoricalData(self.live_bars)
+            ib.barUpdateEvent -= self._on_bar_update
+            self.live_bars = None
+            self.bar_update_callbacks = []
+            
+    def get_intraday_move(self, ticker: str) -> float:
+        """Calculate today's move from open to current price using live bars."""
+        if not self.live_bars or len(self.live_bars) == 0:
+            return 0.0
+        
+        df = util.df(self.live_bars)
+        # Use today's first bar open
+        today = datetime.now().date()
+        df['date_only'] = pd.to_datetime(df['date']).dt.date
+        today_bars = df[df['date_only'] == today]
+        
+        if today_bars.empty:
+            return 0.0
+            
+        open_price = today_bars.iloc[0]['open']
+        current_price = today_bars.iloc[-1]['close']
+        
+        if open_price > 0:
+            return ((current_price - open_price) / open_price) * 100
+        return 0.0
+
+    def get_current_price(self, ticker: str) -> float:
+        """Get live (or delayed) last price."""
+        ib = self._get_ib()
+        contract = Stock(ticker, 'SMART', 'USD')
+        ib.qualifyContracts(contract)
+        
+        ticker_data = ib.reqTickers(contract)
         if not ticker_data or len(ticker_data) == 0:
             return 0.0
             
         t = ticker_data[0]
         # Fallbacks: last price -> close price -> midpoint
         price = t.last
-        if not price or price <= 0:
+        if not price or price <= 0 or price != price:
             price = t.close
-        if not price or price <= 0:
-            price = (t.bid + t.ask) / 2 if (t.bid and t.ask and t.bid > 0 and t.ask > 0) else 0.0
+        if not price or price <= 0 or price != price:
+            if t.bid and t.ask and t.bid > 0 and t.ask > 0 and t.bid != -1 and t.ask != -1:
+                price = (t.bid + t.ask) / 2
+            else:
+                price = 0.0
             
         return price
         
-    async def get_vix_close(self) -> float:
-        """Get current VIX approximation."""
-        # Note: True VIX requires index data permissions. 
-        # Using SPY implied volatility or VIX index if available.
-        from ib_insync import Index
-        ib = self.ib_connector.get_ib()
+    def get_vix_history(self, days: int = 150) -> pd.Series:
+        """Get historical VIX daily closes."""
+        ib = self._get_ib()
         contract = Index('VIX', 'CBOE')
         try:
-            await ib.qualifyContractsAsync(contract)
-            ticker_data = await ib.reqTickersAsync(contract)
-            if ticker_data and len(ticker_data) > 0 and ticker_data[0].last > 0:
-                return ticker_data[0].last
-        except Exception:
-            pass
+            ib.qualifyContracts(contract)
+            bars = ib.reqHistoricalData(
+                contract,
+                endDateTime='',
+                durationStr=f"{days} D",
+                barSizeSetting='1 day',
+                whatToShow='TRADES',
+                useRTH=True,
+                formatDate=1
+            )
+            if bars:
+                df = util.df(bars)
+                df.set_index('date', inplace=True)
+                df.index = pd.to_datetime(df.index)
+                return df['close']
+        except Exception as e:
+            logger.warning(f"Could not fetch VIX history: {e}")
             
-        logger.warning("VIX Index unavailable. Defaulting to 20.0")
-        return 20.0 # Default fallback
+        # Fallback dummy VIX series
+        logger.warning("Defaulting to flat VIX 20.0")
+        dates = pd.date_range(end=datetime.now(), periods=days, freq='B')
+        return pd.Series(20.0, index=dates)
         
-    async def get_option_chain_data(self, ticker: str) -> list:
+    def get_option_chain_data(self, ticker: str) -> list:
         """Get all option chain parameters (expirations, strikes)."""
-        ib = self.ib_connector.get_ib()
+        ib = self._get_ib()
         contract = Stock(ticker, 'SMART', 'USD')
-        await ib.qualifyContractsAsync(contract)
+        ib.qualifyContracts(contract)
         
-        chains = await ib.reqSecDefOptParamsAsync(
+        chains = ib.reqSecDefOptParams(
             underlyingSymbol=contract.symbol,
             futFopExchange='',
             underlyingSecType=contract.secType,
             underlyingConId=contract.conId
         )
-        # SMART is usually a combination of exchanges. Look for SMART or the primary exchange.
         valid_chains = [c for c in chains if c.exchange == 'SMART' or c.exchange == 'CBOE']
         if not valid_chains:
             valid_chains = chains
             
         return valid_chains
 
-    async def get_real_iv(self, option_contract: Option) -> float:
-        """Get actual implied volatility for a specific option contract."""
-        ib = self.ib_connector.get_ib()
-        await ib.qualifyContractsAsync(option_contract)
+    def get_contract_greeks_and_prices(self, contracts: List[Option]) -> dict:
+        """
+        Batch fetch Greeks and prices for multiple contracts.
+        Returns a dict mapping conId to its data.
+        """
+        ib = self._get_ib()
+        # Qualify first
+        ib.qualifyContracts(*contracts)
+        valid_contracts = [c for c in contracts if c.conId > 0]
         
-        # Request generic tick 106 for Option Volume and IV
-        ticker = ib.reqMktData(option_contract, "106", False, False)
-        
-        # Wait up to 5 seconds for IV to populate
-        for _ in range(50):
-            if ticker.modelGreeks and ticker.modelGreeks.impliedVol:
-                ib.cancelMktData(option_contract)
-                return ticker.modelGreeks.impliedVol
-            await asyncio.sleep(0.1)
+        if not valid_contracts:
+            return {}
             
-        ib.cancelMktData(option_contract)
-        logger.warning(f"Could not fetch real IV for {option_contract.symbol} {option_contract.lastTradeDateOrContractMonth} {option_contract.strike}")
-        return 0.0
-
-    async def get_contract_greeks_and_prices(self, option_contract: Option) -> dict:
-        """Get bid, ask, last, delta, gamma, vega, theta, IV."""
-        ib = self.ib_connector.get_ib()
-        await ib.qualifyContractsAsync(option_contract)
+        # Empty genericTickList to get modelGreeks
+        tickers = [ib.reqMktData(c, "", False, False) for c in valid_contracts]
         
-        ticker = ib.reqMktData(option_contract, "106", False, False)
-        result = {"bid": 0.0, "ask": 0.0, "last": 0.0, "iv": 0.0, "delta": 0.0}
+        # Wait for Greeks to populate (usually 2-5 seconds)
+        ib.sleep(5)
         
-        # Wait for data
-        for _ in range(50):
-            has_price = ticker.bid > 0 or ticker.ask > 0 or ticker.last > 0
-            has_greeks = ticker.modelGreeks is not None
-            if has_price and has_greeks:
-                break
-            await asyncio.sleep(0.1)
+        results = {}
+        for t, c in zip(tickers, valid_contracts):
+            res = {"bid": 0.0, "ask": 0.0, "last": 0.0, "mid": 0.0, "iv": 0.0, "delta": 0.0, "theta": 0.0}
             
-        result["bid"] = ticker.bid
-        result["ask"] = ticker.ask
-        result["last"] = ticker.last
-        result["mid"] = (ticker.bid + ticker.ask) / 2 if (ticker.bid > 0 and ticker.ask > 0) else 0.0
-        
-        if ticker.modelGreeks:
-            result["iv"] = ticker.modelGreeks.impliedVol or 0.0
-            result["delta"] = ticker.modelGreeks.delta or 0.0
+            # Sanitize negative values which mean "no data" in IB API
+            if t.bid and t.bid > 0 and t.bid != -1: res["bid"] = t.bid
+            if t.ask and t.ask > 0 and t.ask != -1: res["ask"] = t.ask
+            if t.last and t.last > 0 and t.last != -1: res["last"] = t.last
             
-        ib.cancelMktData(option_contract)
-        return result
+            if res["bid"] > 0 and res["ask"] > 0:
+                res["mid"] = (res["bid"] + res["ask"]) / 2
+                
+            if t.modelGreeks:
+                res["iv"] = t.modelGreeks.impliedVol or 0.0
+                res["delta"] = t.modelGreeks.delta or 0.0
+                res["theta"] = t.modelGreeks.theta or 0.0
+                
+            results[c.conId] = res
+            
+        # Cleanup
+        for c in valid_contracts:
+            ib.cancelMktData(c)
+            
+        return results

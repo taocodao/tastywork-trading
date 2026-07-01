@@ -47,6 +47,8 @@ class EntrySignal:
     iv_hv_ratio:     float
     # Composite confidence (0.0–1.0 based on signal strength)
     raw_confidence:  float
+    # Pathway tag (Phase 2)
+    pathway:         str = "A"    # "A" = HILO signal; "B" = VIX-conditional
 
 
 def classify_vix_regime(vix_level: float) -> str:
@@ -100,6 +102,8 @@ class OTMSignalEngine:
         iv_rank         = float(row.get("iv_rank",         0.5))
         iv_hv_ratio     = float(row.get("iv_hv_ratio",     1.0))
         earnings_near   = bool(row.get("earnings_near",    False))
+        cci_20          = float(row.get("cci_20",          0.0))
+        macd_hist_norm  = float(row.get("macd_hist_norm",  0.0))
 
         # ── VIX Regime ────────────────────────────────────────────────────────
         regime = classify_vix_regime(vix)
@@ -114,12 +118,28 @@ class OTMSignalEngine:
         put_l1  = self._check_52w_put(pct_from_hi, pct_from_lo)
 
         # ── Layer 2: Momentum Confirmation ───────────────────────────────────
-        call_l2 = self._check_momentum_call(rsi_14, pct_b, dist_sma20)
-        put_l2  = self._check_momentum_put(rsi_14, pct_b, dist_sma20)
+        call_l2 = self._check_momentum_call(rsi_14, pct_b, dist_sma20, cci_20, macd_hist_norm)
+        put_l2  = self._check_momentum_put(rsi_14, pct_b, dist_sma20, cci_20, macd_hist_norm)
 
-        # ── Composite Signal ──────────────────────────────────────────────────
-        call_signal = l3_regime and call_l1 and call_l2
-        put_signal  = l3_regime and put_l1  and put_l2
+        # ── Pathway A: HILO signal (existing) ──────────────────────────────────────────────
+        call_signal_a = l3_regime and call_l1 and call_l2
+        put_signal_a  = l3_regime and put_l1  and put_l2
+
+        # ── Pathway B: VIX-conditional (Phase 2) ──────────────────────────────────────────
+        # Only fires when Pathway A is silent -- fills trade frequency gap in calm markets.
+        call_signal_b = False
+        put_signal_b  = False
+        pathway = "A"
+        if cfg.pathway_b_enabled and not (call_signal_a or put_signal_a):
+            call_signal_b, put_signal_b = self._check_pathway_b(
+                vix=vix, iv_rank=iv_rank, iv_hv_ratio=iv_hv_ratio,
+                rsi_14=rsi_14, earnings_near=earnings_near, regime=regime,
+            )
+            if call_signal_b or put_signal_b:
+                pathway = "B"
+
+        call_signal = call_signal_a or call_signal_b
+        put_signal  = put_signal_a  or put_signal_b
 
         if call_signal and put_signal:
             signal_type = SignalType.BOTH
@@ -130,7 +150,7 @@ class OTMSignalEngine:
         else:
             signal_type = SignalType.NONE
 
-        # ── Raw confidence heuristic (pre-ML) ────────────────────────────────
+        # ── Raw confidence heuristic (pre-ML) ────────────────────────────────────────────
         raw_confidence = self._compute_raw_confidence(
             signal_type, pct_from_hi, pct_from_lo,
             rsi_14, pct_b, iv_rank, iv_hv_ratio
@@ -152,6 +172,7 @@ class OTMSignalEngine:
             iv_rank=iv_rank,
             iv_hv_ratio=iv_hv_ratio,
             raw_confidence=raw_confidence,
+            pathway=pathway,
         )
 
     def evaluate_batch(self, symbol: str, features: pd.DataFrame) -> pd.DataFrame:
@@ -188,10 +209,10 @@ class OTMSignalEngine:
                       above_sma200: float, iv_rank: float, iv_hv_ratio: float,
                       earnings_near: bool) -> bool:
         """Layer 3: Must-pass gates for new entries."""
-        # Crisis → no trades
+        # Crisis -> no trades
         if regime == "CRISIS":
             return False
-        # Earnings proximity → skip
+        # Earnings proximity -> skip
         if earnings_near:
             return False
         # IV rank must be elevated (premium selling edge)
@@ -201,6 +222,43 @@ class OTMSignalEngine:
         if iv_hv_ratio < self.config.min_iv_hv_ratio:
             return False
         return True
+
+    def _check_pathway_b(
+        self, vix: float, iv_rank: float, iv_hv_ratio: float,
+        rsi_14: float, earnings_near: bool, regime: str,
+    ) -> tuple:
+        """
+        Pathway B: VIX-conditional entry when HILO signal (Pathway A) is quiet.
+        Fires when VIX is elevated enough to confirm volatility risk premium
+        AND RSI confirms the directional oversold/overbought condition.
+
+        Returns: (call_signal_b, put_signal_b) booleans
+        """
+        cfg = self.config
+
+        # Hard gates -- circuit breakers
+        if regime == "CRISIS" or vix >= cfg.pathway_b_vix_pause:
+            return False, False
+        if earnings_near:
+            return False, False
+
+        # VIX must be >= threshold (volatility risk premium confirmed)
+        if vix < cfg.pathway_b_vix_min:
+            return False, False
+
+        # Stricter IV rank gate (must be clearly elevated, not just marginal)
+        if iv_rank < cfg.pathway_b_iv_rank_min:
+            return False, False
+
+        # IV/HV ratio gate (same as Pathway A -- premium must exceed realized vol)
+        if iv_hv_ratio < cfg.min_iv_hv_ratio:
+            return False, False
+
+        # RSI momentum confirmation (strict -- must be genuinely oversold/overbought)
+        put_b  = rsi_14 <= cfg.pathway_b_rsi_oversold    # RSI < 30: genuine oversold
+        call_b = rsi_14 >= cfg.pathway_b_rsi_overbought  # RSI > 70: genuine overbought
+
+        return call_b, put_b
 
     def _check_52w_call(self, pct_from_hi: float) -> bool:
         """Layer 1 CALL: Price near or above 52W high → overbought."""
@@ -221,22 +279,27 @@ class OTMSignalEngine:
         return near_lo or big_decline
 
     def _check_momentum_call(self, rsi_14: float, pct_b: float,
-                              dist_sma20: float) -> bool:
-        """Layer 2 CALL: At least 2 of 3 overbought momentum indicators."""
+                              dist_sma20: float, cci_20: float = 0.0,
+                              macd_hist_norm: float = 0.0) -> bool:
+        """Layer 2 CALL: At least 1 of 4 overbought momentum indicators."""
         score = 0
         if rsi_14 >= self.config.rsi_overbought:           score += 1
         if pct_b >= self.config.bb_overbought:             score += 1
         if dist_sma20 >= 0.05:                             score += 1  # 5%+ above SMA20
+        if cci_20 >= 100:                                  score += 1  # CCI overbought
         return score >= 1
 
     def _check_momentum_put(self, rsi_14: float, pct_b: float,
-                             dist_sma20: float) -> bool:
-        """Layer 2 PUT: At least 2 of 3 oversold momentum indicators."""
+                             dist_sma20: float, cci_20: float = 0.0,
+                             macd_hist_norm: float = 0.0) -> bool:
+        """Layer 2 PUT: At least 1 of 4 oversold momentum indicators."""
         score = 0
         if rsi_14 <= self.config.rsi_oversold:             score += 1
         if pct_b <= self.config.bb_oversold:               score += 1
         if dist_sma20 <= -0.05:                            score += 1  # 5%+ below SMA20
+        if cci_20 <= -100:                                 score += 1  # CCI oversold
         return score >= 1
+
 
     def _compute_raw_confidence(
         self, signal_type: SignalType,

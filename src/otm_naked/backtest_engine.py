@@ -35,6 +35,8 @@ from .signal_engine import OTMSignalEngine, SignalType
 from .entry_classifier import OTMNakedEntryClassifier
 from .strike_selector import OTMStrikeSelector, bs_put_price, bs_call_price, bs_all_greeks
 from .risk_manager import OTMNakedRiskManager
+from .stop_manager import SpreadAwareStopManager, StopState, compute_stop_from_row
+from .earnings_overlay import EarningsICOverlay
 
 warnings.filterwarnings("ignore")
 logger = logging.getLogger(__name__)
@@ -63,6 +65,10 @@ class NakedPosition:
     exit_reason:   str   = ""
     pnl:           float = 0.0
     trade_won:     bool  = False
+    stop_state:    Optional[object] = field(default=None, repr=False)  # StopState
+    strangle_id:   Optional[str]   = None   # Non-None -> this leg is part of a strangle pair
+    is_strangle_call: bool = False          # True = call leg; False = put leg (or solo put)
+    pathway:       str   = "A"             # "A" = HILO signal; "B" = VIX-conditional (Phase 2)
 
 
 # ---------------------------------------------------------------------------
@@ -82,6 +88,18 @@ class OTMNakedBacktestEngine:
         self.config      = config or OTMNakedConfig()
         self.signal_eng  = OTMSignalEngine(self.config)
         self.strike_sel  = OTMStrikeSelector(self.config)
+        self.stop_mgr    = SpreadAwareStopManager(
+            base_stop_mult    = self.config.stop_loss_credit_mult,
+            high_vol_mult     = self.config.stop_loss_hv_mult,
+            low_vol_mult      = self.config.stop_loss_lv_mult,
+            iv_rank_scale     = self.config.stop_iv_rank_scale,
+            trail_trigger_pct = self.config.stop_trail_trigger_pct,
+            trail_step_pct    = self.config.stop_trail_step_pct,
+            spread_buffer_mult= self.config.stop_spread_buffer_mult,
+            check_interval    = self.config.stop_check_interval,
+            check_dte_urgent  = self.config.stop_check_dte_urgent,
+            check_move_pct    = self.config.stop_check_move_pct,
+        )
         self.classifier  = OTMNakedEntryClassifier()
 
     # ── Main entry point ──────────────────────────────────────────────────────
@@ -122,14 +140,16 @@ class OTMNakedBacktestEngine:
             raise ValueError("No valid feature matrices built. Check data.")
 
         # Align all features to common trading dates
-        all_dates = sorted(set.intersection(
+        all_dates = sorted(set.union(
             *[set(df.index) for df in features.values()]
         ))
         start_ts = pd.Timestamp(cfg.backtest_start)
         end_ts   = pd.Timestamp(cfg.backtest_end)
         trading_days = [d for d in all_dates if start_ts <= d <= end_ts]
 
-        if len(trading_days) < cfg.train_window_days + 30:
+        if use_ml and len(trading_days) < cfg.train_window_days + 30:
+            raise ValueError(f"Insufficient trading days for ML training: {len(trading_days)}")
+        elif not use_ml and len(trading_days) < 30:
             raise ValueError(f"Insufficient trading days: {len(trading_days)}")
 
         logger.info(f"Simulation: {len(trading_days)} trading days across {len(features)} symbols")
@@ -144,6 +164,13 @@ class OTMNakedBacktestEngine:
         ml_trained_through: Optional[pd.Timestamp] = None
         labeled_data: List[dict] = []    # accumulates for ML training
 
+        # Phase 3: drawdown kill-switch state
+        peak_nav             = initial_capital
+        drawdown_kill_active = False    # True = max_risk_per_trade_pct reverted to 2%
+
+        # Phase 3b: Earnings IC overlay (separate capital pool)
+        earnings_overlay = EarningsICOverlay(cfg) if cfg.earnings_ic_enabled else None
+
         # ── Daily simulation ──────────────────────────────────────────────────
         for i, today in enumerate(trading_days):
             today_vix   = float(vix.get(today, vix.iloc[-1]) if today in vix.index else vix.iloc[-1])
@@ -152,17 +179,23 @@ class OTMNakedBacktestEngine:
             # ── 1. Monitor open positions ─────────────────────────────────────
             exits = []
             for pos in open_positions:
-                result = self._check_exits(pos, today, features, today_vix, today_rf)
+                result = self._check_exits(pos, today, features, today_vix, today_rf, i)
                 if result:
                     exit_premium, exit_reason = result
+                    # BUG FIX: Cash accounting for naked option sellers.
+                    # At ENTRY: cash already received entry_premium * contracts * 100 (credit)
+                    # At EXIT:  we pay exit_premium to close; net = entry - exit (already in pnl)
+                    # Old code added entry_premium a 2nd time, doubling the credit every close.
                     pnl = (pos.entry_premium - exit_premium) * pos.contracts * 100
-                    pnl -= cfg.commission_per_contract * pos.contracts * 2   # round-trip
+                    pnl -= cfg.commission_per_contract * pos.contracts * 2   # round-trip comm
                     pos.exit_date    = today
                     pos.exit_premium = exit_premium
                     pos.exit_reason  = exit_reason
                     pos.pnl          = pnl
                     pos.trade_won    = pnl > 0
-                    cash            += pnl + pos.entry_premium * pos.contracts * 100
+                    # Only subtract the cost-to-close and exit commission (entry credit already in cash)
+                    cash -= exit_premium * pos.contracts * 100                     # Pay to close
+                    cash -= cfg.commission_per_contract * pos.contracts            # Exit commission
                     exits.append(pos)
                     closed_trades.append(pos)
                     labeled_data.append(self._position_to_label(pos, features))
@@ -184,6 +217,24 @@ class OTMNakedBacktestEngine:
                 self._mtm_position(p, today, features, today_vix, today_rf)
                 for p in open_positions
             )
+
+            # Phase 3: Drawdown kill-switch — protect quarter-Kelly sizing
+            # If NAV drops 10% from its peak, revert sizing to 2% for safety
+            peak_nav = max(peak_nav, nav)
+            drawdown_pct = (peak_nav - nav) / peak_nav if peak_nav > 0 else 0
+            if drawdown_pct >= cfg.max_drawdown_kill_pct and not drawdown_kill_active:
+                drawdown_kill_active = True
+                logger.warning(f"  KILL-SWITCH: {today.date()} | DD={drawdown_pct*100:.1f}% "
+                               f"| Reverting sizing to 2%")
+            elif drawdown_pct < cfg.max_drawdown_kill_pct * 0.5 and drawdown_kill_active:
+                # Re-enable when drawdown recovers to 5% (half of kill threshold)
+                drawdown_kill_active = False
+                logger.info(f"  KILL-SWITCH RESET: {today.date()} | DD={drawdown_pct*100:.1f}%")
+
+            # Override config sizing if kill-switch is active
+            effective_risk_pct = cfg.max_drawdown_kill_revert_pct if drawdown_kill_active else cfg.max_risk_per_trade_pct
+            risk_mgr.config.max_risk_per_trade_pct = effective_risk_pct
+
             new_entries = self._scan_entries(
                 today=today,
                 features=features,
@@ -194,7 +245,6 @@ class OTMNakedBacktestEngine:
                 risk_mgr=risk_mgr,
                 open_positions=open_positions,
                 use_ml=use_ml,
-                warmup=(i < 252),   # 252 trading days (1 year) warmup
             )
             for pos in new_entries:
                 cost = pos.entry_premium * pos.contracts * 100
@@ -214,6 +264,29 @@ class OTMNakedBacktestEngine:
             # Naked positions: cash already has premium; MTM is unrealized loss risk
             # Net NAV = cash - current cost to close open positions
             nav = cash - positions_mv
+
+            # ── 4.5 SGOV cash sweep yield (Phase 1B) ─────────────────────────
+            if cfg.sgov_sweep_enabled:
+                margin_reserve = nav * cfg.sgov_margin_buffer_pct
+                sweepable_cash = max(0.0, cash - positions_mv - margin_reserve)
+                daily_yield    = sweepable_cash * (cfg.sgov_annual_yield / 252.0)
+                cash          += daily_yield
+                nav           += daily_yield
+
+            # ── 4.6 Earnings IC Overlay (Phase 3b) ───────────────────────────
+            if earnings_overlay is not None:
+                # Check exits FIRST (yesterday's ICs closing today)
+                closed_ics = earnings_overlay.check_exits(today, features, today_vix)
+                for ic in closed_ics:
+                    # Pay debit to close IC legs; entry credit already in cash
+                    cash -= ic.exit_debit * ic.contracts * 100
+
+                # Then scan for new earnings IC entries
+                new_ics = earnings_overlay.scan_entries(today, features, nav)
+                for ic in new_ics:
+                    # Receive net credit from selling the IC
+                    cash += ic.net_credit * ic.contracts * 100
+
             equity_curve.append({"date": today, "nav": nav, "cash": cash,
                                   "open_positions": len(open_positions)})
 
@@ -234,22 +307,32 @@ class OTMNakedBacktestEngine:
             pos.exit_reason  = "end_of_backtest"
             pos.pnl          = pnl
             pos.trade_won    = pnl > 0
-            cash            += pnl
+            # Consistent with intra-backtest exit: subtract cost-to-close only
+            cash -= exit_premium * pos.contracts * 100
+            cash -= cfg.commission_per_contract * pos.contracts
             closed_trades.append(pos)
 
         equity_df = pd.DataFrame(equity_curve).set_index("date")
         trades_df = pd.DataFrame([self._pos_to_dict(p) for p in closed_trades])
         metrics   = self._compute_metrics(equity_df, trades_df, initial_capital)
 
-        return {"equity_curve": equity_df, "trades": trades_df, "metrics": metrics}
+        # Include earnings IC overlay results (separate from core metrics)
+        ic_metrics  = earnings_overlay.get_metrics() if earnings_overlay else {}
+        ic_trades   = earnings_overlay.to_dataframe() if earnings_overlay else pd.DataFrame()
+
+        return {
+            "equity_curve":   equity_df,
+            "trades":         trades_df,
+            "metrics":        metrics,
+            "ic_metrics":     ic_metrics,
+            "ic_trades":      ic_trades,
+        }
+
 
     # ── Entry scanning ────────────────────────────────────────────────────────
     def _scan_entries(self, today, features, vix, rf, cash, nav,
-                      risk_mgr, open_positions, use_ml, warmup) -> List[NakedPosition]:
+                      risk_mgr, open_positions, use_ml) -> List[NakedPosition]:
         """Scan all symbols for entry signals today."""
-        if warmup:
-            return []
-
         cfg = self.config
         candidates = []
         entries = []
@@ -300,35 +383,59 @@ class OTMNakedBacktestEngine:
             if premium < cfg.min_premium:
                 continue    # Not enough credit
 
-            # Risk check
-            contracts = risk_mgr.calculate_contracts(premium, strike, nav)
+            # Risk check — pass symbol for high-beta size multiplier
+            contracts = risk_mgr.calculate_contracts(premium, strike, nav, symbol=symbol)
             if contracts < 1:
                 continue
 
+            # Pathway B: apply smaller size multiplier (more conservative)
+            if signal.pathway == "B":
+                contracts = max(1, int(contracts * cfg.pathway_b_size_mult))
+
             # Add to candidates list instead of committing immediately
+            rsi_14_val   = float(row.get("rsi_14", 50.0))
+            pct_52w_dist = abs(float(row.get("pct_from_52w_high", 0)))
+
+            # Sort score by pathway:
+            # Pathway A: pure 52W distance (unchanged from Phase 1 — do NOT pollute with RSI)
+            # Pathway B: RSI confirmation bonus (+0.5) so the most oversold B candidates
+            #            fill their slots first, but never compete with Pathway A ordering.
+            if signal.pathway == "A":
+                sort_score = pct_52w_dist
+            else:
+                sort_score = pct_52w_dist + (
+                    0.50 if (opt_type == "put"  and rsi_14_val <= 30) else 0
+                ) + (
+                    0.50 if (opt_type == "call" and rsi_14_val >= 70) else 0
+                )
+
             candidates.append({
-                "symbol": symbol,
-                "opt_type": opt_type,
-                "strike": strike,
-                "premium": premium,
-                "sigma": sigma,
+                "symbol":    symbol,
+                "opt_type":  opt_type,
+                "strike":    strike,
+                "premium":   premium,
+                "sigma":     sigma,
                 "contracts": contracts,
-                "regime": regime,
-                "ml_conf": ml_conf,
-                "spot": spot,
-                "vix": vix,
-                "iv_rank": float(row.get("iv_rank", 0.5)),
+                "regime":    regime,
+                "ml_conf":   ml_conf,
+                "spot":      spot,
+                "vix":       vix,
+                "iv_rank":   float(row.get("iv_rank", 0.5)),
                 "iv_hv_ratio": float(row.get("iv_hv_ratio", 1.1)),
                 "earn_days": int(row.get("earnings_days_away", 999)),
-                "dte": dte,
-                # For PUTs, more negative pct_from_hi is better (extreme oversold).
-                # For CALLs, more positive pct_from_hi is better.
-                # We want to sort such that the most extreme values are first.
-                "sort_score": abs(float(row.get("pct_from_52w_high", 0)))
+                "dte":       dte,
+                "pathway":    signal.pathway,
+                "rsi_14":     rsi_14_val,
+                "sort_score": sort_score,
             })
 
-        # Sort candidates by distance from 52W high (descending)
-        candidates.sort(key=lambda x: x["sort_score"], reverse=True)
+        # Sort: Pathway A first (HILO signals take priority), then by sort_score desc
+        candidates.sort(key=lambda x: (x["pathway"] != "A", -x["sort_score"]))
+
+        # Track Pathway B slots used today (separate pool from Pathway A)
+        pathway_b_used = sum(
+            1 for p in open_positions if getattr(p, "pathway", "A") == "B"
+        )
 
         for cand in candidates:
             # Check risk limits sequentially on the sorted candidates
@@ -339,9 +446,17 @@ class OTMNakedBacktestEngine:
             if not rcheck:
                 continue
 
-            # Build position
+            # Pathway B: enforce separate slot limit
+            if cand["pathway"] == "B":
+                if pathway_b_used >= cfg.pathway_b_max_slots:
+                    logger.debug(f"  {cand['symbol']}: Pathway B slot limit ({cfg.pathway_b_max_slots}) reached")
+                    continue
+                pathway_b_used += 1
+
+            # Build position + initialize spread-aware stop state
             expiry = today + pd.Timedelta(days=cand["dte"])
             notional = cand["strike"] * cand["contracts"] * 100
+            iv_rank_at_entry = float(cand.get("iv_rank", 0.30))
             pos = NakedPosition(
                 symbol=cand["symbol"], option_type=cand["opt_type"],
                 strike=cand["strike"], entry_date=today, expiry_date=expiry,
@@ -349,41 +464,194 @@ class OTMNakedBacktestEngine:
                 entry_sigma=cand["sigma"], contracts=cand["contracts"],
                 regime=cand["regime"], ml_confidence=cand["ml_conf"],
                 notional_risk=notional,
+                pathway=cand["pathway"],
+                stop_state=self.stop_mgr.init_stop(
+                    entry_premium=cand["premium"],
+                    regime=cand["regime"],
+                    iv_rank=iv_rank_at_entry,
+                    day_idx=0,
+                ),
             )
             entries.append(pos)
             risk_mgr.record_open(self._pos_to_dict(pos))
 
+            # ── Strangle upgrade: try to add a call leg ───────────────────────
+            T_years_s = cand["dte"] / 365.0
+            should_strang, call_strike, call_premium, call_contr = \
+                self._should_upgrade_to_strangle(
+                    symbol=cand["symbol"],
+                    iv_rank=cand["iv_rank"],
+                    vix=cand["vix"],
+                    regime=cand["regime"],
+                    spot=cand["spot"],
+                    T_years=T_years_s,
+                    sigma=cand["sigma"],
+                    rf=rf,
+                    nav=nav,
+                    risk_mgr=risk_mgr,
+                    open_positions=open_positions + entries,
+                )
+            if should_strang:
+                import uuid
+                pair_id = str(uuid.uuid4())[:8]
+                # Tag the put leg we just added
+                pos.strangle_id = pair_id
+
+                # Build the call leg
+                call_notional = call_strike * call_contr * 100
+                call_pos = NakedPosition(
+                    symbol=cand["symbol"], option_type="call",
+                    strike=call_strike, entry_date=today,
+                    expiry_date=today + pd.Timedelta(days=cand["dte"]),
+                    entry_premium=call_premium, entry_spot=cand["spot"],
+                    entry_sigma=cand["sigma"], contracts=call_contr,
+                    regime=cand["regime"], ml_confidence=cand["ml_conf"],
+                    notional_risk=call_notional,
+                    strangle_id=pair_id, is_strangle_call=True,
+                    stop_state=self.stop_mgr.init_stop(
+                        entry_premium=call_premium,
+                        regime=cand["regime"],
+                        iv_rank=cand["iv_rank"],
+                        day_idx=0,
+                    ),
+                )
+                entries.append(call_pos)
+                risk_mgr.record_open(self._pos_to_dict(call_pos))
+                logger.debug(f"  STRANGLE {cand['symbol']} | put K={pos.strike:.1f} call K={call_strike:.1f} "
+                             f"total_cr=${(pos.entry_premium + call_premium)*call_contr*100:.0f}")
+
         return entries
 
-    # ── Exit logic ────────────────────────────────────────────────────────────
+    # ── Strangle upgrade decision ──────────────────────────────────────────────
+    def _should_upgrade_to_strangle(
+        self,
+        symbol: str,
+        iv_rank: float,
+        vix: float,
+        regime: str,
+        spot: float,
+        T_years: float,
+        sigma: float,
+        rf: float,
+        nav: float,
+        risk_mgr: OTMNakedRiskManager,
+        open_positions: list,
+    ) -> Tuple[bool, float, float, int]:
+        """
+        Decide if a PUT signal should be upgraded to a strangle.
+
+        Returns:
+            (should_upgrade, call_strike, call_premium, call_contracts)
+        """
+        cfg = self.config
+        if not cfg.strangle_enabled:
+            return False, 0.0, 0.0, 0
+
+        # IV & VIX gates
+        if iv_rank < cfg.strangle_iv_rank_min:
+            return False, 0.0, 0.0, 0
+        if vix > cfg.strangle_vix_max:
+            return False, 0.0, 0.0, 0
+        if regime in ("HIGH", "CRISIS"):
+            return False, 0.0, 0.0, 0
+
+        # Compute call strike and premium
+        try:
+            call_strike, call_premium, _ = self.strike_sel.select_call_strike(
+                spot, T_years, sigma, regime, rf
+            )
+        except Exception:
+            return False, 0.0, 0.0, 0
+
+        if call_premium < cfg.strangle_min_call_premium:
+            return False, 0.0, 0.0, 0
+
+        # The put leg is already counted in open_positions when this is called.
+        # We only need 1 additional slot for the call leg.
+        open_count = len(open_positions)
+        if open_count + 1 > cfg.max_concurrent_positions:
+            return False, 0.0, 0.0, 0
+
+        # Size the call leg (same logic as put, high-beta adjusted)
+        call_contracts = risk_mgr.calculate_contracts(call_premium, call_strike, nav, symbol=symbol)
+        if call_contracts < 1:
+            return False, 0.0, 0.0, 0
+
+        return True, call_strike, call_premium, call_contracts
+
     def _check_exits(self, pos: NakedPosition, today: pd.Timestamp,
-                     features: dict, vix: float, rf: float
+                     features: dict, vix: float, rf: float,
+                     day_idx: int = 0,
                      ) -> Optional[Tuple[float, str]]:
-        """Check all exit rules. Returns (exit_premium, reason) or None."""
-        current_px = self._current_premium(pos, today, features, vix, rf)
-
-        # 1. Profit take (50% of max credit)
-        profit_pct = 1.0 - (current_px / max(pos.entry_premium, 0.001))
-        if profit_pct >= self.config.profit_take_pct:
-            return current_px, "profit_take"
-
-        # 2. Stop-loss (2x credit)
-        loss_mult = current_px / max(pos.entry_premium, 0.001)
-        if loss_mult >= self.config.stop_loss_credit_mult:
-            return current_px, "stop_loss_2x"
-
-        # 3. Time exit (DTE <= 7)
+        """Check all exit rules using spread-aware + IV-adjusted stop. Returns (exit_premium, reason) or None."""
+        current_mid = self._current_premium(pos, today, features, vix, rf)
         dte_remaining = (pos.expiry_date - today).days
+
+        # 1. DTE-graduated profit targets (TastyTrade 200K-trade study)
+        #    DTE > 21 → 50%, 14 < DTE ≤ 21 → 70%, 7 < DTE ≤ 14 → 80%, DTE ≤ 7 → 90%
+        profit_pct = 1.0 - (current_mid / max(pos.entry_premium, 0.001))
+        if dte_remaining > 21:
+            target_pct = self.config.profit_take_pct           # 50%
+        elif dte_remaining > 14:
+            target_pct = self.config.profit_take_pct_21dte     # 70%
+        elif dte_remaining > 7:
+            target_pct = self.config.profit_take_pct_14dte     # 80%
+        else:
+            target_pct = self.config.profit_take_pct_7dte      # 90%
+        if profit_pct >= target_pct:
+            return current_mid, f"profit_take_{int(target_pct*100)}pct"
+
+        # 2. Time exit (DTE ≤ 7) — always check
         if dte_remaining <= self.config.time_exit_dte:
-            return current_px, "time_exit"
+            return current_mid, "time_exit"
 
-        # 4. Expiry
+        # 3. Expiry — always check
         if today >= pos.expiry_date:
-            return current_px, "expired"
+            return current_mid, "expired"
 
-        # 5. VIX spike (10+ pts / day)
+        # 4. VIX crisis spike — always check
         if vix >= self.config.vix_crisis_threshold:
-            return current_px, "vix_crisis"
+            return current_mid, "vix_crisis"
+
+        # 5. Spread-aware IV-adjusted trailing stop (check-frequency gated)
+        if pos.stop_state is None:
+            pos.stop_state = self.stop_mgr.init_stop(pos.entry_premium, pos.regime)
+
+        # Frequency gate: skip evaluation on calm days
+        if not self.stop_mgr.should_check(pos.stop_state, day_idx, dte_remaining, current_mid):
+            return None
+
+        feat_df  = features.get(pos.symbol)
+        feat_row = feat_df.loc[today] if (feat_df is not None and today in feat_df.index) else None
+
+        if feat_row is not None:
+            import math as _math
+            try:
+                close_today = float(feat_row.get("close", 1.0))
+                close_prev  = float(feat_row.get("prev_close", close_today))
+                daily_move  = abs(close_today - close_prev) / max(close_prev, 0.01)
+                hv20        = float(feat_row.get("hv_20", 0.20))
+                avg_move    = hv20 / _math.sqrt(252)
+            except Exception:
+                daily_move, avg_move = 0.01, 0.01
+
+            triggered, exit_px, reason = self.stop_mgr.check(
+                entry_premium=pos.entry_premium,
+                current_mid=current_mid,
+                stop_state=pos.stop_state,
+                regime=pos.regime,
+                current_day_idx=day_idx,
+                underlying_daily_move=daily_move,
+                underlying_avg_move=avg_move,
+            )
+        else:
+            # Fallback: simple multiplier
+            triggered = (current_mid / max(pos.entry_premium, 0.001)) >= self.config.stop_loss_credit_mult
+            exit_px   = current_mid
+            reason    = "stop_loss_2x"
+
+        if triggered:
+            return exit_px, reason
 
         return None
 
@@ -533,6 +801,13 @@ class OTMNakedBacktestEngine:
                 wr = grp["trade_won"].mean() * 100 if "trade_won" in grp else 0
                 print(f"    {ot:<10} trades={len(grp):>3d}  win={wr:.1f}%  "
                       f"pnl=${grp['pnl'].sum():+,.0f}")
+        if not t.empty and "strangle_id" in t.columns:
+            strang = t[t["strangle_id"].notna()]
+            solo   = t[t["strangle_id"].isna()]
+            n_strang_pairs = strang["strangle_id"].nunique()
+            print(f"\n  Strategy Mix:")
+            print(f"    Naked puts/calls (solo) : {len(solo):>3d} legs  pnl=${solo['pnl'].sum():+,.0f}")
+            print(f"    Strangle legs           : {len(strang):>3d} legs  ({n_strang_pairs} pairs)  pnl=${strang['pnl'].sum():+,.0f}")
 
     @staticmethod
     def _pos_to_dict(pos: NakedPosition) -> dict:
@@ -553,4 +828,6 @@ class OTMNakedBacktestEngine:
             "exit_reason":   pos.exit_reason,
             "pnl":           pos.pnl,
             "trade_won":     pos.trade_won,
+            "strangle_id":   pos.strangle_id,
+            "pathway":       pos.pathway,   # "A" = HILO; "B" = VIX-conditional
         }

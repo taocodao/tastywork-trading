@@ -949,17 +949,34 @@ def _execute_turbocore_auto_approve(signal_data: Dict[str, Any], session, accoun
             
             order_dollar_value = abs(diff_value)
             
-            # 🛡️ Sell cap logic: Do not attempt to sell more notional value than we currently hold
+            # FIX #3: CRITICAL — Never create a short equity position.
+            # The previous logic only capped sells at the current notional VALUE,
+            # but did not guard against current_shares <= 0 (no long position held).
+            # After an unexpected assignment, shares could be 0 while target_pct stays
+            # non-zero, causing SELL orders to be submitted on an empty position and
+            # producing net-short equity at ATH.
             if action == 'Sell':
-                max_sell_value = int(current_value * 100) / 100.0 # Floor to cent
+                if current_shares <= 0:
+                    logger.warning(f"⚠️ FIX#3 BLOCKED: {sym} SELL skipped — no long shares held (have {current_shares}). Preventing short equity position.")
+                    continue
+                # Cap sell to exactly what we hold (no more)
+                max_sell_value = current_shares * current_price
                 if order_dollar_value > max_sell_value:
-                    logger.info(f"⚠️ {sym}: Capping SELL strictly to current value ${max_sell_value:,.2f} preventing oversold notional API errors.")
+                    logger.info(f"⚠️ {sym}: Capping SELL to current holdings ({current_shares} sh = ${max_sell_value:,.2f})")
                     order_dollar_value = max_sell_value
                     
             exact_shares = order_dollar_value / current_price
             whole_shares = int(exact_shares) if action == 'Buy' else int(exact_shares + 0.999) # Ceil for sells roughly
             
-            if order_dollar_value >= 5.0: # TT min notional is $5
+            # FIX #5: Raise the minimum rebalance threshold from $5 to $500 notional
+            # and require a 2% drift from target before submitting any order.
+            # The previous $5 threshold caused hundreds of micro-trades per day
+            # (~400+ fills in 5 months) each incurring $0.10 SEC fees + bid-ask spread.
+            MIN_REBALANCE_NOTIONAL = 500.0   # Never trade less than $500 at a time
+            MIN_REBALANCE_DRIFT_PCT = 0.02   # Skip if drift < 2% of target value
+            drift_pct = abs(diff_value) / max(target_value, 1.0) if target_value > 0 else 1.0
+
+            if order_dollar_value >= MIN_REBALANCE_NOTIONAL and drift_pct >= MIN_REBALANCE_DRIFT_PCT:
                 orders_to_submit.append({
                     'symbol': sym,
                     'action': action,
@@ -967,9 +984,10 @@ def _execute_turbocore_auto_approve(signal_data: Dict[str, Any], session, accoun
                     'currentShares': current_shares,
                     'targetPct': target_pct
                 })
-                logger.info(f"🔄 {sym}: Target {(target_pct*100):.1f}% (${target_value:,.2f}) Curr {current_shares}sh (${current_value:,.2f}) -> {action.upper()} ${order_dollar_value:,.2f}")
+                logger.info(f"🔄 {sym}: Target {(target_pct*100):.1f}% (${target_value:,.2f}) Curr {current_shares}sh (${current_value:,.2f}) -> {action.upper()} ${order_dollar_value:,.2f} (drift={drift_pct:.1%})")
             else:
-                logger.info(f"✅ {sym}: Target {(target_pct*100):.1f}% is relatively balanced. Delta < $5.")
+                skip_reason = f"drift={drift_pct:.1%} < 2%" if drift_pct < MIN_REBALANCE_DRIFT_PCT else f"notional=${order_dollar_value:.0f} < $500"
+                logger.info(f"✅ {sym}: Skipping rebalance — {skip_reason} (within threshold)")
                 
         # 4. Sequence orders: sells before buys
         orders_to_submit.sort(key=lambda x: 0 if x['action'] == 'Sell' else 1)
@@ -984,10 +1002,14 @@ def _execute_turbocore_auto_approve(signal_data: Dict[str, Any], session, accoun
         
         for o in orders_to_submit:
             # 🛡️ Full liquidation condition
+            # FIX #3 (continued): Guard the full liquidation path too
             full_liquidation = o['action'] == 'Sell' and o['targetPct'] == 0 and o['currentShares'] > 0
             
             try:
                 if full_liquidation:
+                    if o['currentShares'] <= 0:
+                        logger.warning(f"⚠️ FIX#3 BLOCKED: {o['symbol']} full liquidation skipped — no shares held")
+                        continue
                     logger.info(f"🏳️ Full liquidation of {o['symbol']}: Share-based order for {o['currentShares']} sh (safer than notional).")
                     resp = client.submit_equity_order(account, o['symbol'], 'Sell', o['currentShares'], order_type='Market')
                 else:

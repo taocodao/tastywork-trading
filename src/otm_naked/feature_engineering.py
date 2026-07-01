@@ -112,14 +112,15 @@ def build_stock_features(
     # ── Trend / SMA ───────────────────────────────────────────────────────────
     f["sma_20"]   = close.rolling(20).mean()
     f["sma_50"]   = close.rolling(50).mean()
-    f["sma_200"]  = close.rolling(200).mean()
+    # Use min_periods=50 so recently-listed stocks (like SNDK) retain rows
+    f["sma_200"]  = close.rolling(200, min_periods=50).mean()
 
     f["above_sma50"]  = (close > f["sma_50"]).astype(float)
     f["above_sma200"] = (close > f["sma_200"]).astype(float)
 
     f["dist_sma20"]  = ((close - f["sma_20"])  / f["sma_20"]).fillna(0.0)
     f["dist_sma50"]  = ((close - f["sma_50"])  / f["sma_50"]).fillna(0.0)
-    f["dist_sma200"] = ((close - f["sma_200"]) / f["sma_200"]).fillna(0.0)
+    f["dist_sma200"] = ((close - f["sma_200"]) / f["sma_200"]).fillna(0.0)  # 0 when not enough history
 
     # ── RSI (2, 5, 14, 30) ────────────────────────────────────────────────────
     f["rsi_2"]  = _rsi(close, 2)
@@ -129,6 +130,21 @@ def build_stock_features(
 
     # ── Stochastic(14) ────────────────────────────────────────────────────────
     f["stoch_14"] = _stochastic(close, high, low, 14)
+
+    # ── CCI (20) ──────────────────────────────────────────────────────────────
+    tp        = (high + low + close) / 3
+    sma_tp    = tp.rolling(20).mean()
+    mad_20    = tp.rolling(20).apply(lambda x: np.abs(x - x.mean()).mean(), raw=True)
+    f["cci_20"] = ((tp - sma_tp) / (0.015 * mad_20.replace(0, np.nan))).fillna(0.0)
+
+    # ── MACD (12, 26, 9) ──────────────────────────────────────────────────────
+    ema12            = close.ewm(span=12, adjust=False).mean()
+    ema26            = close.ewm(span=26, adjust=False).mean()
+    macd_line        = ema12 - ema26
+    macd_signal_line = macd_line.ewm(span=9, adjust=False).mean()
+    f["macd_hist"]       = (macd_line - macd_signal_line).fillna(0.0)
+    # Normalize histogram by close price for cross-stock comparability
+    f["macd_hist_norm"]  = (f["macd_hist"] / close.replace(0, np.nan)).fillna(0.0)
 
     # ── Bollinger Bands ───────────────────────────────────────────────────────
     sma_20  = close.rolling(20).mean()
@@ -183,7 +199,7 @@ def build_stock_features(
         f["earnings_days_away"] = 999.0
         f["earnings_near"]      = 0.0
 
-    return f.dropna(subset=["sma_200"])   # Require at least 200 bars of history
+    return f.dropna(subset=["sma_20"])   # Require at least 20 bars (sma_200 uses min_periods=50)
 
 
 # ---------------------------------------------------------------------------
