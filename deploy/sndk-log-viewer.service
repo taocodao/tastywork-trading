@@ -1,0 +1,15 @@
+[Unit]
+Description=SNDK Bot Log Viewer Dashboard
+After=network.target sndk-live.service
+
+[Service]
+Type=simple
+User=ubuntu
+WorkingDirectory=/home/ubuntu/tastywork-trading
+ExecStart=/usr/bin/python3 sndk_log_viewer.py
+Restart=always
+RestartSec=10
+Environment=PYTHONUNBUFFERED=1
+
+[Install]
+WantedBy=multi-user.target
