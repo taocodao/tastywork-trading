@@ -14,6 +14,7 @@ class SNDKLadderConfig(OTMNakedConfig):
     
     # Entry triggers (SNDK specific)
     entry_trigger_pct: float = 5.0     # Min daily move %
+    intraday_trigger_pct: float = 2.0  # Min intraday move % for live engine
     ivr_min: float = 65.0              # Min IV Rank (0-100 scale)
     ml_confidence_min: float = 0.62    # XGBoost threshold
     

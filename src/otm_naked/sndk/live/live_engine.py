@@ -37,6 +37,7 @@ class LiveTradingEngine:
     def _refresh_daily_regime(self):
         """Fetches daily bars and computes ADX, Hurst, ROC5."""
         logger.info(f"Refreshing daily regime features for {self.ticker}...")
+        self.risk.reset_daily_stats()
         df_bars = self.md.get_daily_bars(self.ticker, days=150)
         
         if df_bars.empty:
@@ -44,7 +45,8 @@ class LiveTradingEngine:
             return
             
         vix_series = self.md.get_vix_history(days=150)
-        # Assuming we don't have SPY history built yet, just pass dummy for now
+        spy_bars = self.md.get_daily_bars('SPY', days=150)
+        spy_close = spy_bars['close'] if not spy_bars.empty else None
         
         df_features = build_sndk_features(
             close=df_bars['close'],
@@ -52,7 +54,8 @@ class LiveTradingEngine:
             high=df_bars['high'],
             low=df_bars['low'],
             volume=df_bars['volume'],
-            vix=vix_series
+            vix=vix_series,
+            spy_close=spy_close
         )
         
         if df_features.empty:
@@ -70,6 +73,7 @@ class LiveTradingEngine:
         
         # 1. Startup: compute daily regime features
         self._refresh_daily_regime()
+        self.risk.peak_nav = self.executor.get_net_liquidation()
         
         # 2. Subscribe to live 5-min bars
         self.md.subscribe_5min_bars(ticker, callback=self._on_new_bar)
@@ -89,6 +93,7 @@ class LiveTradingEngine:
                 # If we were disconnected and just reconnected
                 if self.ib.needs_reconnect:
                     logger.info("Reconnect flag detected. Re-subscribing to market data...")
+                    self.ib.connect()
                     self.md.unsubscribe_5min_bars()
                     self.ib.get_ib().sleep(5)
                     self.md.subscribe_5min_bars(ticker, callback=self._on_new_bar)
@@ -213,10 +218,20 @@ class LiveTradingEngine:
         greeks_data = self.md.get_contract_greeks_and_prices(contracts)
         
         for pos, contract in zip(positions, contracts):
-            if contract.conId not in greeks_data:
+            # Fallback to matching by strike/right if conId wasn't updated
+            matched_data = None
+            if contract.conId in greeks_data:
+                matched_data = greeks_data[contract.conId]
+            else:
+                for cid, data in greeks_data.items():
+                    if data.get("strike") == contract.strike and data.get("right") == contract.right:
+                        matched_data = data
+                        break
+                        
+            if not matched_data:
                 continue
                 
-            opt_data = greeks_data[contract.conId]
+            opt_data = matched_data
             current_prem = opt_data["mid"] if opt_data["mid"] > 0 else opt_data["ask"]
             if current_prem <= 0:
                 continue
@@ -246,7 +261,7 @@ class LiveTradingEngine:
                 
             if should_close:
                 logger.info(f"Closing position {pos.strike} {pos.opt_type}: {reason} (PnL: {pnl_pct*100:.1f}%)")
-                limit_price = opt_data["ask"] if opt_data["ask"] > 0 else opt_data["mid"] + 0.10
+                limit_price = opt_data["mid"] + 0.05 if opt_data["mid"] > 0 else (opt_data.get("bid", 0) + 0.05 if opt_data.get("bid", 0) > 0 else opt_data["ask"])
                 
                 trade = self.executor.buy_to_close(contract, pos.contracts, limit_price)
                 if trade and trade.orderStatus.status == 'Filled':

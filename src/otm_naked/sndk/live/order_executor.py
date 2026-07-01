@@ -8,7 +8,10 @@ class OrderExecutor:
     
     def __init__(self, ib_connector):
         self.ib_connector = ib_connector
-        self.ib = ib_connector.get_ib()
+        
+    @property
+    def ib(self):
+        return self.ib_connector.get_ib()
         
     def _cap_fill_price(self, trade: Trade) -> float:
         """

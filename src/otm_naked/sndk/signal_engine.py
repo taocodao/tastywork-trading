@@ -45,8 +45,9 @@ class SNDKLadderSignalEngine:
             return SNDKSignal(False, "none", f"IVR {ivr:.1f} < {self.config.ivr_min}", 0)
         
         # 2. Daily move check (secondary filter)
-        if abs(daily_move) < self.config.entry_trigger_pct:
-            return SNDKSignal(False, "none", f"Move {daily_move:.1f}% < {self.config.entry_trigger_pct}%", 0)
+        trigger_pct = getattr(self.config, 'intraday_trigger_pct', self.config.entry_trigger_pct)
+        if abs(daily_move) < trigger_pct:
+            return SNDKSignal(False, "none", f"Move {daily_move:.1f}% < {trigger_pct}%", 0)
             
         # === Regime gate ===
         regime = str(feat_row.get("regime", "SIDEWAYS"))
