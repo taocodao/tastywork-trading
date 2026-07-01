@@ -27,16 +27,39 @@ class SNDKLadderConfig(OTMNakedConfig):
     # DTE targets
     dte_target: int = 60               # Base DTE (can be overridden by IV regime)
     
-    # Roll & Exit triggers
-    delta_breach_threshold: float = 0.35
-    dte_roll_threshold: int = 21       # Roll/close when DTE <= 21
-    profit_take_pct_short: float = 0.25  # For DTE <= 21 (fast decay)
-    profit_dte_threshold: int = 25       # Crossover point
+    # V3: Margin & Risk Management
+    nav: float = 245_600.0             # Current paper account NAV
+    max_contracts_hard: int = 4        # Absolute ceiling (Reg T)
+    max_contracts_pm: int = 6          # Portfolio Margin ceiling
+    use_portfolio_margin: bool = False # Set True after PM approved
+    margin_per_contract_regt: float = 25_000.0
+    margin_per_contract_pm: float = 11_000.0
+    min_excess_liquidity: float = 60_000.0
+    emergency_close_threshold: float = 30_000.0
+    cash_reserve_floor: float = 0.40
+
+    # V3: Rung Spacing (σ multiples of 5-day expected move)
+    rung_spacing_sigma_extreme_up: float = 1.00
+    rung_spacing_sigma_uptrend: float = 0.75
+    rung_spacing_sigma_sideways: float = 0.50
+
+    # V3: Exit Rules
+    dte_emergency_close: int = 7
+    dte_reduce_profit_target: int = 14
+    profit_target_pct_normal: float = 0.50
+    profit_target_pct_low_dte: float = 0.35
+    favorable_close_fraction: float = 0.20
     
-    # Risk
+    # Old Roll & Exit triggers (keep for compatibility, but deprecated by V3 rules)
+    delta_breach_threshold: float = 0.35
+    dte_roll_threshold: int = 21
+    profit_take_pct_short: float = 0.25
+    profit_dte_threshold: int = 25
+    
+    # Old Risk (deprecated)
     max_portfolio_delta: float = 0.45
-    position_size_pct: float = 0.01    # 1% per rung
-    stop_loss_credit_mult: float = 2.0 # Stop at 2x credit received
+    position_size_pct: float = 0.01
+    stop_loss_credit_mult: float = 2.0
     
     # Macro filter
     macro_filter_spy_pct: float = 3.0

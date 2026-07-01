@@ -93,6 +93,14 @@ class OrderExecutor:
                 return float(item.value)
         return 0.0
         
+    def get_excess_liquidity(self) -> float:
+        """Get excess liquidity for margin checking."""
+        summary = self.ib.accountSummary()
+        for item in summary:
+            if item.tag == 'ExcessLiquidity':
+                return float(item.value)
+        return 0.0
+        
     def get_buying_power(self) -> float:
         """Get available funds for trading."""
         summary = self.ib.accountSummary()

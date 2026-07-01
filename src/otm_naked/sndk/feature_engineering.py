@@ -209,14 +209,24 @@ def build_sndk_features(
     df["spy_same_day_return"] = spy_aligned.pct_change() * 100 if spy_close is not None else 0.0
     df["sndk_spy_corr_20d"] = c.pct_change().rolling(20).corr(spy_aligned.pct_change()).fillna(0.5) if spy_close is not None else 0.5
     df["strike_distance_pct"] = 0.0  # Placeholder; set at entry time
-    
-    # h. Regime detection features
-    df["adx_14"] = _compute_adx(h, l, c, period=14)
-    df["reg_slope_40d"] = _compute_regression_slope(c, window=40)
+
+    # h. Regime detection features (some used above)
     df["ema_20"] = c.ewm(span=20, adjust=False).mean()
     df["ema_50"] = c.ewm(span=50, adjust=False).mean()
     df["ema_cross_up"] = (df["ema_20"] > df["ema_50"] * 1.005).astype(float)
+    df["adx_14"] = _compute_adx(h, l, c, period=14)
+    df["reg_slope_40d"] = _compute_regression_slope(c, window=40)
     df["hurst_90d"] = _compute_rolling_hurst(c, window=90)
+    
+    # Phase 3 DDS ML Features
+    df["vwap_dev"] = (c - df["ema_20"]) / c * 100 # Proxy for VWAP deviation
+    # Calculate hv_5 manually since base features might not have it
+    hv_5 = (c.pct_change().rolling(5).std() * math.sqrt(252)).fillna(0.20)
+    df["hv_ratio"] = (hv_5 / (df["hv_20"] + 1e-9)).fillna(1.0)
+    df["iv_change"] = df["iv_est"].pct_change().fillna(0.0) * 100
+    df["put_call_ratio"] = 1.0 # Placeholder; requires options flow data
+    df["net_portfolio_delta"] = 0.0 # Placeholder; injected at predict time
+    df["sndk_vs_smh"] = df["spy_5d_return"] # Placeholder; proxy with SPY for now
     
     # ROC5: 5-day rate of change — hard block for ADX lag vulnerability
     df["roc_5d"] = c.pct_change(5) * 100

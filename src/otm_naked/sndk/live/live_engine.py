@@ -80,6 +80,7 @@ class LiveTradingEngine:
         
         # 3. Main loop: ib.sleep() until market close
         last_poll_time = datetime.min
+        last_margin_check = datetime.min
         while True:
             try:
                 if not self._is_market_hours():
@@ -101,6 +102,19 @@ class LiveTradingEngine:
                     self.ib.needs_reconnect = False
                     
                 now = datetime.now()
+                
+                # V3 Margin Check every 30s
+                if (now - last_margin_check).total_seconds() >= 30:
+                    el = self.executor.get_excess_liquidity()
+                    nav = self.executor.get_net_liquidation()
+                    health = self.risk.check_margin_health(el, nav, self.state.get_positions())
+                    if health == "CRITICAL":
+                        logger.critical("Margin health CRITICAL outside of bar update. Triggering emergency close logic.")
+                        spot = self.md.get_current_price(self.ticker)
+                        self._manage_positions(spot)
+                    last_margin_check = now
+                
+                # 60s bar poll logic (for fallback to delayed data if needed)
                 if (now - last_poll_time).total_seconds() >= 60:
                     self.md.poll_5min_bars(ticker)
                     last_poll_time = now
@@ -131,82 +145,102 @@ class LiveTradingEngine:
         if spot <= 0:
             return
             
-        # 1. Manage existing positions
+        # 1. Manage existing positions (Closes happen first)
         self._manage_positions(spot)
         
         # 2. Evaluate entry signal
-        open_calls = len([p for p in self.state.get_positions() if p.opt_type == "call"])
-        open_puts = len([p for p in self.state.get_positions() if p.opt_type == "put"])
-        
         # Inject intraday move into the daily features for the signal engine
         current_features = self.daily_features.copy()
         current_features['daily_move_pct'] = intraday_move
         
         row_series = pd.Series(current_features)
-        signal = self.signal_engine.evaluate(row_series, open_calls, open_puts)
         
-        if not signal.should_enter:
+        eval_result = self.signal_engine.evaluate(row_series, self.state.get_positions())
+        logger.info(f"DDS Evaluation - State: {eval_result.state} | Score: {eval_result.dss_score:.2f}")
+        
+        if not eval_result.actions:
             return
             
-        logger.info(f"Entry Signal Fired: {signal.direction.upper()} (Move: {intraday_move:.2f}%)")
-        
         # Check Risk
         nav = self.executor.get_net_liquidation()
-        earnings_days = current_features.get('earnings_days_away', 999)
-        
-        if not self.risk.is_safe_to_enter(nav, self.state.get_positions(), signal.direction, earnings_days):
-            return
-            
-        # 3. Select Option Strike
+        el = self.executor.get_excess_liquidity()
         regime = str(current_features.get("regime", "SIDEWAYS"))
-        base_delta = getattr(self.config, 'delta_trending', 0.15) if regime in ("UPTREND", "DOWNTREND", "EXTREME_UPTREND", "EXTREME_DOWNTREND") else self.config.initial_delta
         
-        opt_data = self.selector.select_strike(
-            ticker=self.ticker,
-            target_dte=signal.target_dte,
-            target_delta=base_delta,
-            right="C" if signal.direction == "call" else "P"
-        )
-        
-        if not opt_data:
-            logger.error("Failed to select option strike.")
-            return
-            
-        contract = opt_data["contract"]
-        iv = opt_data["iv"]
-        
-        # 4. Execute STO
-        max_risk = nav * self.config.position_size_pct
-        margin_req = contract.strike * 100 * 0.20
-        contracts = max(1, int(max_risk / margin_req))
-        
-        limit_price = opt_data["mid"] if opt_data["mid"] > 0 else opt_data["ask"]
-        if limit_price <= 0.05:
-            logger.info(f"Premium too low ({limit_price}), skipping.")
-            return
-            
-        trade = self.executor.sell_to_open(contract, contracts, limit_price, available_funds=self.executor.get_buying_power())
-        
-        if trade and trade.orderStatus.status == 'Filled':
-            fill_price = trade.orderStatus.avgFillPrice
-            pos = LivePosition(
-                id=str(uuid.uuid4()),
-                symbol=self.ticker,
-                opt_type=signal.direction,
-                strike=contract.strike,
-                expiry=contract.lastTradeDateOrContractMonth,
-                entry_premium=fill_price,
-                entry_delta=opt_data["delta"],
-                entry_iv=iv,
-                entry_date=datetime.now().isoformat(),
-                contracts=trade.orderStatus.filled,
-                target_dte=signal.target_dte
-            )
-            self.state.add_position(pos)
-            logger.info(f"Successfully entered new rung: {pos}")
+        for action in eval_result.actions:
+            if action.action == "SELL_TO_OPEN":
+                logger.info(f"Attempting STO {action.side.upper()}: {action.reason}")
+                
+                iv_annual = current_features.get("iv_est", 0.60) # fallback to 60% if missing
+                
+                # Use RiskManager V3 entry gate
+                allowed, block_reason = self.risk.can_add_rung(
+                    side=action.side,
+                    sndk_price=spot,
+                    iv=iv_annual,
+                    regime=regime,
+                    nav=nav,
+                    excess_liquidity=el,
+                    positions=self.state.get_positions()
+                )
+                
+                if not allowed:
+                    logger.info(f"Trade blocked by Risk Manager: {block_reason}")
+                    continue
+                    
+                # 3. Select Option Strike
+                opt_data = self.selector.select_strike(
+                    ticker=self.ticker,
+                    target_dte=action.target_dte,
+                    target_delta=action.target_delta,
+                    right="C" if action.side == "call" else "P"
+                )
+                
+                if not opt_data:
+                    logger.error(f"Failed to select option strike for {action.side}.")
+                    continue
+                    
+                contract = opt_data["contract"]
+                iv = opt_data["iv"]
+                
+                # 4. Execute STO
+                # In V3, quantity is 1 contract by default for scaling in
+                contracts = action.quantity
+                
+                limit_price = opt_data["mid"] if opt_data["mid"] > 0 else opt_data["ask"]
+                if limit_price <= 0.05:
+                    logger.info(f"Premium too low ({limit_price}), skipping.")
+                    continue
+                    
+                trade = self.executor.sell_to_open(contract, contracts, limit_price, available_funds=self.executor.get_buying_power())
+                
+                if trade and trade.orderStatus.status == 'Filled':
+                    fill_price = trade.orderStatus.avgFillPrice
+                    
+                    rung_id = len(self.state.get_positions()) + 1
+                    
+                    pos = LivePosition(
+                        id=str(uuid.uuid4()),
+                        symbol=self.ticker,
+                        opt_type=action.side,
+                        strike=contract.strike,
+                        expiry=contract.lastTradeDateOrContractMonth,
+                        entry_premium=fill_price,
+                        entry_underlying_price=spot,
+                        entry_delta=opt_data["delta"],
+                        entry_iv=iv,
+                        entry_date=datetime.now().isoformat(),
+                        contracts=trade.orderStatus.filled,
+                        target_dte=action.target_dte,
+                        rung_id=rung_id
+                    )
+                    self.state.add_position(pos)
+                    logger.info(f"Successfully entered new rung: {pos}")
+                    
+                    # Deduct margin from EL for subsequent actions in the loop
+                    el -= self.risk.margin_per_contract
 
     def _manage_positions(self, spot: float):
-        """Checks profit/stops and closes positions."""
+        """Checks profit/stops and closes positions using V3 Risk Manager."""
         from ib_insync import Option
         
         positions = self.state.get_positions()
@@ -223,8 +257,9 @@ class LiveTradingEngine:
         # Batch fetch
         greeks_data = self.md.get_contract_greeks_and_prices(contracts)
         
+        # Build current_option_prices dict for RiskManager
+        current_option_prices = {}
         for pos, contract in zip(positions, contracts):
-            # Fallback to matching by strike/right if conId wasn't updated
             matched_data = None
             if contract.conId in greeks_data:
                 matched_data = greeks_data[contract.conId]
@@ -234,44 +269,36 @@ class LiveTradingEngine:
                         matched_data = data
                         break
                         
-            if not matched_data:
+            if matched_data:
+                current_prem = matched_data["mid"] if matched_data["mid"] > 0 else matched_data["ask"]
+                key = f"{pos.strike}_{pos.opt_type}"
+                current_option_prices[key] = current_prem
+
+        el = self.executor.get_excess_liquidity()
+        
+        to_close = self.risk.rungs_to_close(spot, current_option_prices, el, positions)
+        
+        for pos, reason in to_close:
+            logger.info(f"Closing position {pos.strike} {pos.opt_type}: {reason}")
+            
+            # Find the option data to get a limit price
+            key = f"{pos.strike}_{pos.opt_type}"
+            current_prem = current_option_prices.get(key, 0.0)
+            limit_price = current_prem + 0.05 if current_prem > 0 else 0.0
+            
+            # If it's an emergency close, maybe we don't even use a limit, but executor only has limit order right now
+            # So just use a generous limit
+            if "EMERGENCY" in reason:
+                limit_price = current_prem * 1.20 + 0.50  # Pay up to get out
+                
+            if limit_price <= 0:
+                logger.warning(f"Could not determine exit price for {pos.strike} {pos.opt_type}")
                 continue
-                
-            opt_data = matched_data
-            current_prem = opt_data["mid"] if opt_data["mid"] > 0 else opt_data["ask"]
-            if current_prem <= 0:
-                continue
-                
-            entry_date = datetime.fromisoformat(pos.entry_date).date()
-            days_held = (datetime.now().date() - entry_date).days
-            T_rem = max(pos.target_dte - days_held, 1)
-            
-            pnl_pct = (pos.entry_premium - current_prem) / pos.entry_premium
-            
-            effective_target = self.config.profit_take_pct
-            if pos.target_dte <= getattr(self.config, 'profit_dte_threshold', 25):
-                effective_target = getattr(self.config, 'profit_take_pct_short', 0.25)
-                
-            should_close = False
-            reason = ""
-            
-            if pnl_pct >= effective_target:
-                should_close = True
-                reason = "Profit Target"
-            elif pnl_pct <= -self.config.stop_loss_credit_mult:
-                should_close = True
-                reason = "Stop Loss"
-            elif T_rem <= self.config.dte_roll_threshold:
-                should_close = True
-                reason = "DTE Threshold"
-                
-            if should_close:
-                logger.info(f"Closing position {pos.strike} {pos.opt_type}: {reason} (PnL: {pnl_pct*100:.1f}%)")
-                limit_price = opt_data["mid"] + 0.05 if opt_data["mid"] > 0 else (opt_data.get("bid", 0) + 0.05 if opt_data.get("bid", 0) > 0 else opt_data["ask"])
-                
-                trade = self.executor.buy_to_close(contract, pos.contracts, limit_price)
-                if trade and trade.orderStatus.status == 'Filled':
-                    exit_price = trade.orderStatus.avgFillPrice
-                    realized = (pos.entry_premium - exit_price) * pos.contracts * 100
-                    self.risk.record_pnl(realized)
-                    self.state.remove_position(pos.id, exit_price, reason)
+
+            contract_obj = Option(pos.symbol, pos.expiry, pos.strike, "C" if pos.opt_type == "call" else "P", 'SMART', currency='USD', tradingClass=pos.symbol)
+            trade = self.executor.buy_to_close(contract_obj, pos.contracts, limit_price)
+            if trade and trade.orderStatus.status == 'Filled':
+                exit_price = trade.orderStatus.avgFillPrice
+                realized = (pos.entry_premium - exit_price) * pos.contracts * 100
+                self.risk.record_pnl(realized)
+                self.state.remove_position(pos.id, exit_price, reason)

@@ -456,26 +456,32 @@ HTML_PAGE = """<!DOCTYPE html>
 
       // Stats cards
       const grid = document.getElementById('statsGrid');
+      
+      let ddsClass = 'yellow';
+      if (data.dds_state === 'FLAT') ddsClass = '';
+      else if (data.dds_state === 'BALANCED') ddsClass = 'green';
+      else if (data.dds_state === 'ONE_SIDED') ddsClass = 'red';
+      
       grid.innerHTML = `
+        <div class="stat-card">
+          <div class="label">DDS State</div>
+          <div class="value ${ddsClass}">${data.dds_state || 'UNKNOWN'}</div>
+        </div>
+        <div class="stat-card">
+          <div class="label">DSS Score</div>
+          <div class="value ${(data.dss_score || 0) > 0 ? 'green' : 'red'}">${data.dss_score != null ? data.dss_score.toFixed(2) : '0.00'}</div>
+        </div>
+        <div class="stat-card">
+          <div class="label">Margin Health</div>
+          <div class="value ${data.margin_health === 'OK' ? 'green' : 'red'}">${data.margin_health || 'OK'}</div>
+        </div>
         <div class="stat-card">
           <div class="label">Regime</div>
           <div class="value ${data.regime === 'EXTREME_UPTREND' ? 'green' : data.regime === 'EXTREME_DOWNTREND' ? 'red' : 'yellow'}">${data.regime || 'N/A'}</div>
         </div>
         <div class="stat-card">
-          <div class="label">IVR</div>
-          <div class="value">${data.ivr != null ? data.ivr.toFixed(1) : 'N/A'}</div>
-        </div>
-        <div class="stat-card">
-          <div class="label">Open Positions</div>
-          <div class="value">${data.open_positions}</div>
-        </div>
-        <div class="stat-card">
-          <div class="label">Total Trades</div>
-          <div class="value">${data.total_trades}</div>
-        </div>
-        <div class="stat-card">
-          <div class="label">Log Lines</div>
-          <div class="value">${data.log_lines}</div>
+          <div class="label">Open P/C</div>
+          <div class="value">${data.open_puts || 0} / ${data.open_calls || 0}</div>
         </div>
       `;
     } catch(e) { console.error('Status fetch failed:', e); }
@@ -603,10 +609,13 @@ class SNDKLogHandler(BaseHTTPRequestHandler):
             if LOG_FILE.exists():
                 log_lines = sum(1 for _ in open(LOG_FILE, errors="replace"))
 
-            # Parse regime/IVR from last log lines
+            # Parse regime/IVR/DDS from last log lines
             regime = "N/A"
             ivr = None
-            for line in reversed(_read_log_tail(50)):
+            dss_score = 0.0
+            margin_health = "OK"
+            
+            for line in reversed(_read_log_tail(150)):
                 if "Regime Refreshed:" in line:
                     parts = line.split("Regime Refreshed:")[-1].strip()
                     if "," in parts:
@@ -615,13 +624,45 @@ class SNDKLogHandler(BaseHTTPRequestHandler):
                             ivr = float(parts.split("IVR")[-1].strip())
                         except ValueError:
                             pass
-                    break
+                elif "DDS Evaluation - State:" in line:
+                    try:
+                        score_str = line.split("Score:")[-1].strip()
+                        dss_score = float(score_str)
+                    except:
+                        pass
+                elif "Margin health" in line:
+                    try:
+                        # Extract OK, CAUTION, WARNING, CRITICAL
+                        margin_health = line.split("Margin health")[1].strip().split()[0]
+                    except:
+                        pass
+                        
+            open_puts = sum(p.get("contracts", 1) for p in positions if p.get("opt_type") == "put")
+            open_calls = sum(p.get("contracts", 1) for p in positions if p.get("opt_type") == "call")
+            
+            if open_calls == 0 and open_puts == 0:
+                dds_state = "FLAT"
+            elif open_calls > open_puts and open_puts == 0:
+                dds_state = "ONE_SIDED"
+            elif open_puts > open_calls and open_calls == 0:
+                dds_state = "ONE_SIDED"
+            elif open_calls > open_puts:
+                dds_state = "CALL_HEAVY"
+            elif open_puts > open_calls:
+                dds_state = "PUT_HEAVY"
+            else:
+                dds_state = "BALANCED"
 
             self._send_json({
                 "service_status": service_status,
                 "uptime": uptime,
                 "regime": regime,
                 "ivr": ivr,
+                "dds_state": dds_state,
+                "dss_score": dss_score,
+                "margin_health": margin_health,
+                "open_puts": open_puts,
+                "open_calls": open_calls,
                 "open_positions": len(positions),
                 "total_trades": len(trades),
                 "log_lines": log_lines,
@@ -634,12 +675,55 @@ class SNDKLogHandler(BaseHTTPRequestHandler):
         elif path == "/sndk/positions":
             self._send_json(_read_positions())
 
+        elif path == "/sndk/dds":
+            # Endpoint for the DDS Dashboard Card external monitoring
+            positions = _read_positions()
+            open_puts = sum(p.get("contracts", 1) for p in positions if p.get("opt_type") == "put")
+            open_calls = sum(p.get("contracts", 1) for p in positions if p.get("opt_type") == "call")
+            
+            if open_calls == 0 and open_puts == 0:
+                dds_state = "FLAT"
+            elif open_calls > open_puts and open_puts == 0:
+                dds_state = "ONE_SIDED"
+            elif open_puts > open_calls and open_calls == 0:
+                dds_state = "ONE_SIDED"
+            elif open_calls > open_puts:
+                dds_state = "CALL_HEAVY"
+            elif open_puts > open_calls:
+                dds_state = "PUT_HEAVY"
+            else:
+                dds_state = "BALANCED"
+                
+            dss_score = 0.0
+            margin_health = "OK"
+            
+            for line in reversed(_read_log_tail(150)):
+                if "DDS Evaluation - State:" in line:
+                    try:
+                        score_str = line.split("Score:")[-1].strip()
+                        dss_score = float(score_str)
+                    except:
+                        pass
+                elif "Margin health" in line:
+                    try:
+                        margin_health = line.split("Margin health")[1].strip().split()[0]
+                    except:
+                        pass
+                        
+            self._send_json({
+                "dds_state": dds_state,
+                "dss_score": dss_score,
+                "open_puts": open_puts,
+                "open_calls": open_calls,
+                "margin_health": margin_health
+            })
+
         else:
-            self._send_json({"error": "Not found", "endpoints": ["/sndk/logs", "/sndk/status", "/sndk/trades", "/sndk/positions"]}, 404)
+            self._send_json({"error": "Not found", "endpoints": ["/sndk/logs", "/sndk/status", "/sndk/trades", "/sndk/positions", "/sndk/dds"]}, 404)
 
 
 if __name__ == "__main__":
-    print(f"🔍 SNDK Log Viewer starting on port {PORT}")
+    print(f"[SNDK] Log Viewer starting on port {PORT}")
     print(f"   Dashboard: http://localhost:{PORT}/sndk/logs")
     print(f"   Status:    http://localhost:{PORT}/sndk/status")
     print(f"   Trades:    http://localhost:{PORT}/sndk/trades")
