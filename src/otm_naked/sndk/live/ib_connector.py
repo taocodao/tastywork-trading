@@ -26,9 +26,9 @@ class IBConnector:
                 self.ib.connect(self.host, self.port, clientId=self.client_id, timeout=20)
                 logger.info("Connected to IB Gateway successfully.")
                 
-                # Request live data by default (Mode 1)
-                self.ib.reqMarketDataType(1)
-                logger.info("Market data type set to Live (1).")
+                # Request delayed data by default (Mode 3) since paper accounts often lack live OPRA feeds
+                self.ib.reqMarketDataType(3)
+                logger.info("Market data type set to Delayed (3).")
                 self.needs_reconnect = False
                 return True
             except Exception as e:
