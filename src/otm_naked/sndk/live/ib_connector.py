@@ -1,5 +1,6 @@
 import logging
 import time
+import random
 from ib_insync import IB, util
 
 logger = logging.getLogger(__name__)
@@ -34,6 +35,7 @@ class IBConnector:
             except Exception as e:
                 retries += 1
                 logger.warning(f"Connection failed ({retries}/{max_retries}): {e}")
+                self.client_id = random.randint(100, 999) # Randomize client id to bypass ghost connection
                 if retries < max_retries:
                     time.sleep(retry_delay) # Initial connect can use time.sleep
                 
