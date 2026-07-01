@@ -121,26 +121,31 @@ class SNDKMarketDataProvider:
 
     def get_current_price(self, ticker: str) -> float:
         """Get live (or delayed) last price."""
+        if self.live_bars and len(self.live_bars) > 0:
+            return self.live_bars[-1].close
+            
         ib = self._get_ib()
         contract = Stock(ticker, 'SMART', 'USD')
         ib.qualifyContracts(contract)
         
-        ticker_data = ib.reqTickers(contract)
-        if not ticker_data or len(ticker_data) == 0:
+        try:
+            ticker_data = ib.reqTickers(contract)
+            if not ticker_data or len(ticker_data) == 0:
+                return 0.0
+                
+            t = ticker_data[0]
+            price = t.last
+            if not price or price <= 0 or price != price:
+                price = t.close
+            if not price or price <= 0 or price != price:
+                if t.bid and t.ask and t.bid > 0 and t.ask > 0 and t.bid != -1 and t.ask != -1:
+                    price = (t.bid + t.ask) / 2
+                else:
+                    price = 0.0
+                
+            return price
+        except Exception:
             return 0.0
-            
-        t = ticker_data[0]
-        # Fallbacks: last price -> close price -> midpoint
-        price = t.last
-        if not price or price <= 0 or price != price:
-            price = t.close
-        if not price or price <= 0 or price != price:
-            if t.bid and t.ask and t.bid > 0 and t.ask > 0 and t.bid != -1 and t.ask != -1:
-                price = (t.bid + t.ask) / 2
-            else:
-                price = 0.0
-            
-        return price
         
     def get_vix_history(self, days: int = 150) -> pd.Series:
         """Get historical VIX daily closes."""
