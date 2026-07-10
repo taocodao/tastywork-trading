@@ -69,8 +69,8 @@ class LiveOptionSelector:
         # 3. Create Option contracts with REQUIRED tradingClass
         contracts = []
         for strike in candidates:
-            # SNDK specifically requires tradingClass='SNDK'
-            opt = Option(ticker, best_exp, strike, right, 'SMART', currency='USD', tradingClass=ticker)
+            # Remove tradingClass requirement so IB resolves it automatically
+            opt = Option(ticker, best_exp, strike, right, 'SMART', currency='USD')
             contracts.append(opt)
             
         # Qualify and fetch Greeks

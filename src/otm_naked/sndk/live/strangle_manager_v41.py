@@ -703,9 +703,9 @@ class StrangleManagerV41:
     # ============ HELPERS ============
 
     def _qualify(self, right, expiry, strike) -> Option:
-        c = Option('SNDK', expiry, strike, right, 'SMART', currency='USD', tradingClass='SNDK')
-        self.ib.qualifyContracts(c)
-        return c
+        contract = Option(self.cfg['ticker'], expiry, strike, right, 'SMART', currency='USD')
+        self.ib.qualifyContracts(contract)
+        return contract
 
     def _get_mark(self, contract: Option) -> Optional[float]:
         t = self.ib.reqMktData(contract, '', True, False)
