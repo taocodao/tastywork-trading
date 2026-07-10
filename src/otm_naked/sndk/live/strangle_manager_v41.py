@@ -703,7 +703,7 @@ class StrangleManagerV41:
     # ============ HELPERS ============
 
     def _qualify(self, right, expiry, strike) -> Option:
-        contract = Option(self.cfg['ticker'], expiry, strike, right, 'SMART', currency='USD')
+        contract = Option('SNDK', expiry, strike, right, 'SMART', currency='USD')
         self.ib.qualifyContracts(contract)
         return contract
 
