@@ -84,10 +84,12 @@ class LiveRiskManager:
         if nav > 0 and (projected_margin / nav) > (1 - self.cfg.cash_reserve_floor):
             return False, "Cash reserve floor breached"
 
-        # Excess liquidity gate
+        # Excess liquidity gate (Perplexity Audit Fix: 20% real-time margin buffer)
         projected_el = excess_liquidity - self.margin_per_contract
-        if projected_el < self.cfg.min_excess_liquidity:
-            return False, f"Excess liquidity too low: ${excess_liquidity:,.0f}"
+        required_el_buffer = max(self.cfg.min_excess_liquidity, nav * 0.20)
+        
+        if projected_el < required_el_buffer:
+            return False, f"Excess liquidity too low: ${excess_liquidity:,.0f} (Requires 20% NAV buffer: ${required_el_buffer:,.0f})"
 
         # Rung spacing gate — are we far enough from last entry on this side?
         side_rungs = [r for r in positions if r.opt_type == side]

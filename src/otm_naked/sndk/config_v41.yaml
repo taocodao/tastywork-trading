@@ -1,0 +1,132 @@
+# config_v41.yaml — SNDK DDS Bot v4.1 Master Configuration (CORRECTED)
+# Supersedes config_v40.yaml and all prior configs.
+
+mode: "paper"  # "backtest_research" | "paper" | "live"
+
+account:
+  nav: 100000
+  max_strangles: 3
+  max_puts: 3
+  max_calls: 3
+  capital_per_strangle_pct: 0.08       # CORRECTED from 0.15 -> sizing reduced for tail risk management
+  max_bpr_pct: 0.25                    # Hard ceiling, approx 3 x 0.08
+  nav_circuit_breaker: 0.85
+
+# CORRECTED: restored 5-tier IVR-adaptive DTE table (was collapsed to 2 tiers in v4.0)
+dte_by_ivr:
+  low:    {ivr_min: 35, ivr_max: 55, dte: 52}
+  mid:    {ivr_min: 55, ivr_max: 75, dte: 45}
+  high:   {ivr_min: 75, ivr_max: 90, dte: 38}
+  spike:  {ivr_min: 90, ivr_max: 200, dte: 30}
+  none:   {ivr_min: 0,  ivr_max: 35, dte: 0}   # No new strangles below IVR 35
+
+entry_gates:
+  ivr_min: 35
+  ml_entry_threshold: 0.62
+  min_combined_credit: 3.00
+  max_spread_pct_put: 0.40
+  max_spread_pct_call: 0.30
+
+phased_entry:
+  put_leg_first: true
+  max_days_to_open_call: 3
+  put_open_delta: 0.15
+  call_open_delta: 0.12
+
+# NEW in v4.1: call leg regime gate (replaces "always naked call")
+call_leg_regime_gate:
+  naked_regimes: ["SIDEWAYS", "REVERT_BEARISH"]
+  credit_spread_regimes: ["TREND_UP", "REVERT_BULLISH"]
+  credit_spread_adx_min: 25
+  blocked_regimes: ["EXTREME_UPTREND"]
+  credit_spread_width_atr_mult: 2.0    # buy strike = sell strike + 2 x ATR14
+
+delta_targets:
+  call: 0.12
+  put: 0.15
+
+lstm_strike_selection:
+  enabled: true
+  buffer_multiplier: 1.25
+
+management:
+  combined_pt_pct: 0.50                # Secondary accelerator only, see Part 2.3
+  delta_tested_threshold: 0.45         # CORRECTED from 0.35 -> matches cited Tastylive rule
+  delta_theta_max_ratio: 2.0
+
+  roll:
+    min_credit_to_roll: 0.50
+    max_roll_extension_weeks: 4
+    roll_put_when_tested: true         # Puts CAN be rolled when tested
+    roll_call_when_tested: false       # CORRECTED: tested calls are NEVER rolled directly
+    roll_winning_leg_on_opposite_test: true  # Roll the WINNING leg for extra credit instead
+
+  swing_re_leg:
+    put_buyback_trigger: 0.08
+    call_buyback_trigger: -0.08
+    re_leg_delay_bars: 2
+
+  # Per-leg GTC OCA bracket — PRIMARY protection (unchanged from v2.5, restored to primacy)
+  stop_loss_per_leg_mult: 3.0
+  profit_target_per_leg_pct: 0.50
+  # Combined stop is supplemental only — cannot be a native IB order
+  combined_stop_loss_mult: 2.0
+
+  dte_close_threshold: 21
+  eod_cancel_pending: "15:45"
+  daily_check_time: "16:05"
+
+# NEW in v4.1: pre-trade BPR headroom check before ANY new leg (roll, re-leg, new strangle)
+bpr_headroom_check:
+  enabled: true
+  max_bpr_pct: 0.25
+  reject_if_would_exceed: true
+
+slippage:
+  entry_pct: 0.06
+  exit_pt_pct: 0.08
+  exit_sl_pct: 0.15
+  roll_round_trip_pct: 0.12
+
+commission:
+  per_contract: 0.65
+  min_legs_per_trade: 2
+
+iv_model:
+  kappa: 0.0198                        # 35-day half-life, validated
+  long_term_window: 30
+  put_skew_vol_points: 0.10            # +10 vol points for 0.15-delta put
+  call_skew_vol_points: -0.03          # -3 vol points for 0.12-delta call
+
+ib:
+  host: "127.0.0.1"
+  port: 4004
+  client_id: 102
+  trading_mode: "paper"
+
+ml:
+  entry_gate_model: "models/xgb_entry_gate_v41.pkl"
+  regime_classifier_model: "models/xgb_regime_v41.pkl"
+  lstm_forecaster_model: "models/lstm_range_v41.pt"
+  regime_threshold: 0.62
+  retrain_schedule: "quarterly"
+
+scheduler:
+  management_interval_min: 5
+  market_open: "09:35"
+  market_close: "16:00"
+  eod_cleanup: "15:45"
+  daily_check: "16:05"
+  ml_retrain: "quarterly"
+  gtc_resubmit_check: "quarterly"      # IB auto-cancels GTC at calendar quarter end
+
+telegram:
+  enabled: true
+  bot_token: "${TELEGRAM_BOT_TOKEN}"
+  chat_id: "${TELEGRAM_CHAT_ID}"
+
+research_mode:
+  enabled: false
+  max_strangles: 5
+  max_puts: 5
+  max_calls: 5
