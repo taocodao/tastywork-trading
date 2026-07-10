@@ -4,7 +4,7 @@
 mode: "paper"  # "backtest_research" | "paper" | "live"
 
 account:
-  nav: 100000
+  nav: 250000
   max_strangles: 3
   max_puts: 3
   max_calls: 3
