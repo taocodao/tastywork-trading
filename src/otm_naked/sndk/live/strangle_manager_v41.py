@@ -111,7 +111,7 @@ class StrangleManagerV41:
     # ============ STRANGLE OPENING ============
 
     def open_strangle(self, expiry: str, spot: float, ivr: float,
-                       regime: str = 'SIDEWAYS') -> Optional[StrangleState]:
+                       regime: str = 'SIDEWAYS', put_strike: float = None) -> Optional[StrangleState]:
         """Phase 1: open the put leg. Call open_call_leg() within 3 days to complete."""
         if not self._can_open_strangle():
             return None
@@ -119,7 +119,8 @@ class StrangleManagerV41:
             logger.warning("BPR headroom check failed -- skipping new strangle")
             return None
 
-        put_strike = self._select_strike('P', spot, ivr)
+        if put_strike is None:
+            put_strike = self._select_strike('P', spot, ivr)
         if put_strike is None:
             return None
 

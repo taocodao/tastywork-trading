@@ -120,7 +120,8 @@ class SNDKDDSBotV41:
                             expiry=best_expiry, 
                             spot=self.spot, 
                             ivr=ivr, 
-                            regime=self.ml_regime
+                            regime=self.ml_regime,
+                            put_strike=candidate_put['strike']
                         )
                         
                         if new_strangle:
