@@ -18,7 +18,7 @@ from pathlib import Path
 from datetime import datetime
 
 PORT = 8005
-LOG_FILE = Path("logs/sndk_live.log")
+LOG_FILE = Path("logs/bot_v41.log")
 TRADE_LOG = Path("data/sndk_trades.jsonl")
 STATE_FILE = Path("data/sndk_live_state.json")
 

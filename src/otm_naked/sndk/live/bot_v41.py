@@ -8,7 +8,6 @@ from datetime import datetime, time
 from src.otm_naked.sndk.live.ib_connector import IBConnector
 from src.otm_naked.sndk.live.market_data import SNDKMarketDataProvider
 from src.otm_naked.sndk.live.option_chain_selector import LiveOptionSelector
-from src.otm_naked.sndk.circuit_breaker import CircuitBreaker
 from src.otm_naked.sndk.live.strangle_manager_v41 import StrangleManagerV41
 
 logger = logging.getLogger(__name__)
@@ -30,7 +29,6 @@ class SNDKDDSBotV41:
         
         self.market_data = SNDKMarketDataProvider(self.ib_connector)
         self.chain_selector = LiveOptionSelector(self.market_data)
-        self.circuit_breaker = CircuitBreaker(self.config)
         
         self.manager = StrangleManagerV41(self.ib, self.config)
         self.ml_regime = "SIDEWAYS" # Default until ML model evaluates
