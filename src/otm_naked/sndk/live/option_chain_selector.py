@@ -23,7 +23,11 @@ class LiveOptionSelector:
             logger.error(f"No option chains found for {ticker}")
             return None
             
-        smart = next((c for c in chains if c.exchange == 'SMART'), chains[0])
+        smart_chains = [c for c in chains if c.exchange == 'SMART']
+        if not smart_chains:
+            smart = sorted(chains, key=lambda x: len(x.expirations), reverse=True)[0]
+        else:
+            smart = sorted(smart_chains, key=lambda x: len(x.expirations), reverse=True)[0]
         
         # 1. Find closest expiration
         today = datetime.now().date()
@@ -99,6 +103,16 @@ class LiveOptionSelector:
                 best_data["expiry"] = best_exp
                 
         if best_contract:
+            premium = best_data['mid'] if best_data['mid'] > 0 else best_data['ask']
+            if premium < 0.80:
+                logger.warning(f"Premium {premium:.2f} < floor 0.80 for strike {best_data['strike']}. Skipping.")
+                return None
+                
+            otm_pct = abs(best_data['strike'] - spot_price) / spot_price
+            if otm_pct > 0.60:
+                logger.warning(f"{otm_pct:.0%} OTM exceeds 60% max for strike {best_data['strike']}. Skipping.")
+                return None
+                
             logger.info(f"Selected Strike {best_data['strike']} (Delta: {abs(best_data['delta']):.2f}, target: {target_delta:.2f})")
             best_data["contract"] = best_contract
             return best_data
