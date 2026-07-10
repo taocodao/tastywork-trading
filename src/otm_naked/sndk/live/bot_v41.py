@@ -102,10 +102,33 @@ class SNDKDDSBotV41:
         )
         
         # 2. Check Entry Conditions
-        # (This is simplified. In production, signals would come from ML entry gate)
-        ivr = 40.0 # Placeholder from market_data
+        ivr = 40.0 # Placeholder/Static IVR for live testing
         
-        # Phased Call Entry
+        # Autonomous Entry Logic
+        if ivr >= self.config['entry_gates']['ivr_min']:
+            if len(self.manager.strangles) < self.config['account']['max_strangles']:
+                if self.manager._can_open_strangle():
+                    logger.info(f"Entry Conditions Met: IVR={ivr}. Searching for valid expiry...")
+                    # Ask the chain selector for a put option near 45 DTE to extract the exact valid expiration date
+                    candidate_put = self.chain_selector.select_strike('SNDK', target_dte=45, target_delta=0.15, right='P')
+                    
+                    if candidate_put and 'expiry' in candidate_put:
+                        best_expiry = candidate_put['expiry']
+                        logger.info(f"Initiating new Strangle with expiry: {best_expiry}")
+                        # Call manager to open the new Strangle (which places the Put leg first)
+                        new_strangle = self.manager.open_strangle(
+                            expiry=best_expiry, 
+                            spot=self.spot, 
+                            ivr=ivr, 
+                            regime=self.ml_regime
+                        )
+                        
+                        if new_strangle:
+                            logger.info(f"Successfully initiated new Strangle: {new_strangle.strangle_id}")
+                    else:
+                        logger.warning("Could not find a valid option chain / expiry for entry.")
+        
+        # 3. Phased Call Entry
         for sid, s in self.manager.strangles.items():
             if s.state == 'PENDING_CALL':
                 days_open = (datetime.now() - s.opened_at).days if s.opened_at else 0
