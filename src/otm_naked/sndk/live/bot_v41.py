@@ -134,7 +134,9 @@ class SNDKDDSBotV41:
             if s.state == 'PENDING_CALL':
                 days_open = (datetime.now() - s.opened_at).days if s.opened_at else 0
                 if days_open <= self.config['phased_entry']['max_days_to_open_call']:
-                    self.manager.open_call_leg(sid, self.spot, ivr, self.ml_regime)
+                    candidate_call = self.chain_selector.select_strike('SNDK', target_dte=45, target_delta=0.12, right='C')
+                    if candidate_call and 'strike' in candidate_call:
+                        self.manager.open_call_leg(sid, self.spot, ivr, self.ml_regime, call_strike=candidate_call['strike'])
 
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)

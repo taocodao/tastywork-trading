@@ -139,7 +139,7 @@ class StrangleManagerV41:
         return s
 
     def open_call_leg(self, strangle_id: str, spot: float, ivr: float,
-                       regime: str, adx: float = 20.0, atr14: float = None) -> bool:
+                       regime: str, adx: float = 20.0, atr14: float = None, call_strike: float = None) -> bool:
         """
         Phase 2: add the call leg, regime-gated between NAKED / CREDIT_SPREAD / BLOCKED.
         """
@@ -156,7 +156,8 @@ class StrangleManagerV41:
 
         use_spread = (regime in gate['credit_spread_regimes'] and adx >= gate['credit_spread_adx_min'])
 
-        call_strike = self._select_strike('C', spot, ivr)
+        if call_strike is None:
+            call_strike = self._select_strike('C', spot, ivr)
         if call_strike is None:
             return False
 
