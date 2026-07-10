@@ -75,8 +75,13 @@ class SNDKDDSBotV41:
                 
             self.ib.sleep(60) # Wake up every minute to check time-based events
 
-    def on_5min_bar(self, bar):
+    def on_5min_bar(self, bars, has_new_bar):
         """Called every 5 minutes during market hours by market data provider."""
+        if not has_new_bar or len(bars) == 0:
+            return
+            
+        bar = bars[-1]
+        
         now = datetime.now().time()
         market_open = time.fromisoformat(self.config['scheduler']['market_open'])
         market_close = time.fromisoformat(self.config['scheduler']['market_close'])
