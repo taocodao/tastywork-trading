@@ -58,12 +58,18 @@ class SNDKDDSBotV41:
         while self.ib.isConnected():
             now = datetime.now().time()
             
-            # EOD Cleanup at 15:45
+            # 1. Poll Market Data for 5-minute bars
+            try:
+                self.market_data.poll_5min_bars('SNDK')
+            except Exception as e:
+                logger.error(f"Error polling market data: {e}")
+            
+            # 2. EOD Cleanup at 15:45
             eod_time = time.fromisoformat(self.config['scheduler']['eod_cleanup'])
             if now.hour == eod_time.hour and now.minute == eod_time.minute:
                 self.manager.eod_cleanup()
                 
-            # Quarterly GTC resubmit check (runs once per day)
+            # 3. Quarterly GTC resubmit check (runs once per day)
             if now.hour == 16 and now.minute == 5:
                 self.manager.gtc_quarterly_resubmit_check()
                 
