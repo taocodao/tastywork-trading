@@ -199,7 +199,7 @@ class StrangleManagerV41:
             return None
 
         # Sell short leg
-        sto = Order()
+        sto = Order(usePriceMgmtAlgo=False)
         sto.action = 'SELL'; sto.orderType = 'LMT'; sto.totalQuantity = quantity
         sto.lmtPrice = max(round(short_mid * 0.95, 2), 0.10)
         sto.tif = 'DAY'; sto.transmit = True
@@ -207,7 +207,7 @@ class StrangleManagerV41:
         self.ib.sleep(0.5)
 
         # Buy long (protective) leg
-        bto = Order()
+        bto = Order(usePriceMgmtAlgo=False)
         bto.action = 'BUY'; bto.orderType = 'LMT'; bto.totalQuantity = quantity
         bto.lmtPrice = round(long_mid * 1.05, 2)
         bto.tif = 'DAY'; bto.transmit = True
@@ -384,14 +384,14 @@ class StrangleManagerV41:
         # Cancel old GTC OCA bracket before closing the leg
         self._cancel_leg_gtc_bracket(leg)
 
-        btc = Order()
+        btc = Order(usePriceMgmtAlgo=False)
         btc.action = 'BUY'; btc.orderType = 'LMT'; btc.totalQuantity = leg.quantity
         btc.lmtPrice = round(old_mark * 1.05, 2); btc.tif = 'DAY'; btc.transmit = True
         self.ib.placeOrder(leg.contract, btc)
         self.ib.sleep(1.0)
 
         new_contract = self._qualify(right, new_expiry, new_strike)
-        sto = Order()
+        sto = Order(usePriceMgmtAlgo=False)
         sto.action = 'SELL'; sto.orderType = 'LMT'; sto.totalQuantity = 1
         sto.lmtPrice = max(round(new_mark * 0.95, 2), 0.10)
         sto.tif = 'DAY'; sto.transmit = True
@@ -414,7 +414,7 @@ class StrangleManagerV41:
         mark = self._get_mark(leg.contract)
         self._cancel_leg_gtc_bracket(leg)
 
-        btc = Order()
+        btc = Order(usePriceMgmtAlgo=False)
         btc.action = 'BUY'; btc.orderType = 'LMT'; btc.totalQuantity = leg.quantity
         btc.lmtPrice = max(round((mark or 0.20) * 1.10, 2), 0.05)
         btc.tif = 'DAY'; btc.transmit = True
@@ -424,7 +424,7 @@ class StrangleManagerV41:
         new_strike = self._select_strike(right, spot, ivr)
         if new_strike:
             new_premium = self._estimate_premium(right, s.expiry, new_strike, spot)
-            sto = Order()
+            sto = Order(usePriceMgmtAlgo=False)
             sto.action = 'SELL'; sto.orderType = 'LMT'; sto.totalQuantity = 1
             sto.lmtPrice = max(round(new_premium * 0.95, 2), 0.10)
             sto.tif = 'DAY'; sto.transmit = True
@@ -450,7 +450,7 @@ class StrangleManagerV41:
             return
         self._cancel_leg_gtc_bracket(leg)
         mark = self._get_mark(leg.contract) or leg.sto_fill_price * 0.30
-        btc = Order()
+        btc = Order(usePriceMgmtAlgo=False)
         btc.action = 'BUY'; btc.orderType = 'LMT'; btc.totalQuantity = leg.quantity
         btc.lmtPrice = max(round(mark * 1.10, 2), 0.05)
         btc.tif = 'DAY'; btc.transmit = True
@@ -458,7 +458,7 @@ class StrangleManagerV41:
         self.ib.sleep(0.5)
 
         if leg.is_spread and leg.spread_long_contract:
-            stc = Order()
+            stc = Order(usePriceMgmtAlgo=False)
             stc.action = 'SELL'; stc.orderType = 'LMT'; stc.totalQuantity = leg.quantity
             stc.lmtPrice = 0.05; stc.tif = 'DAY'; stc.transmit = True
             self.ib.placeOrder(leg.spread_long_contract, stc)
@@ -486,13 +486,13 @@ class StrangleManagerV41:
 
         oca_group = f"OCA_{leg.leg_id}_{int(datetime.now().timestamp())}"
 
-        pt_order = Order()
+        pt_order = Order(usePriceMgmtAlgo=False)
         pt_order.action = 'BUY'; pt_order.orderType = 'LMT'
         pt_order.totalQuantity = leg.quantity; pt_order.lmtPrice = pt_price
         pt_order.tif = 'GTC'; pt_order.ocaGroup = oca_group; pt_order.ocaType = 1
         pt_order.transmit = False
 
-        sl_order = Order()
+        sl_order = Order(usePriceMgmtAlgo=False)
         sl_order.action = 'BUY'; sl_order.orderType = 'STP LMT'
         sl_order.totalQuantity = leg.quantity
         sl_order.auxPrice = sl_trigger; sl_order.lmtPrice = sl_limit
@@ -603,7 +603,7 @@ class StrangleManagerV41:
             logger.info(f"SKIP {right} K={strike}: mid ${mid:.2f} < $0.50 minimum")
             return None
 
-        sto = Order()
+        sto = Order(usePriceMgmtAlgo=False)
         sto.action = 'SELL'; sto.orderType = 'LMT'; sto.totalQuantity = quantity
         sto.lmtPrice = max(round(mid * (1 - self.cfg['slippage']['entry_pct']), 2), 0.50)
         sto.tif = 'DAY'; sto.transmit = True
