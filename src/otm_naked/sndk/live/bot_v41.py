@@ -43,7 +43,8 @@ class SNDKDDSBotV41:
         self.manager.on_startup_reconcile()
         
         # Subscribe to market data updates (simplified for bot structure)
-        self.market_data.subscribe_5min_bars('SNDK', self.on_5min_bar)
+        self.ticker = self.config.get('ticker', 'SPY')
+        self.market_data.subscribe_5min_bars(self.ticker, self.on_5min_bar)
         
         # Run synchronous loop
         try:
@@ -60,7 +61,7 @@ class SNDKDDSBotV41:
             
             # 1. Poll Market Data for 5-minute bars
             try:
-                self.market_data.poll_5min_bars('SNDK')
+                self.market_data.poll_5min_bars(self.ticker)
             except Exception as e:
                 logger.error(f"Error polling market data: {e}")
             
@@ -110,7 +111,7 @@ class SNDKDDSBotV41:
                 if self.manager._can_open_strangle():
                     logger.info(f"Entry Conditions Met: IVR={ivr}. Searching for valid expiry...")
                     # Ask the chain selector for a put option near 45 DTE to extract the exact valid expiration date
-                    candidate_put = self.chain_selector.select_strike('SNDK', target_dte=45, target_delta=0.15, right='P')
+                    candidate_put = self.chain_selector.select_strike(self.ticker, target_dte=45, target_delta=0.15, right='P')
                     
                     if candidate_put and 'expiry' in candidate_put:
                         best_expiry = candidate_put['expiry']
@@ -134,7 +135,7 @@ class SNDKDDSBotV41:
             if s.state == 'PENDING_CALL':
                 days_open = (datetime.now() - s.opened_at).days if s.opened_at else 0
                 if days_open <= self.config['phased_entry']['max_days_to_open_call']:
-                    candidate_call = self.chain_selector.select_strike('SNDK', target_dte=45, target_delta=0.12, right='C')
+                    candidate_call = self.chain_selector.select_strike(self.ticker, target_dte=45, target_delta=0.12, right='C')
                     if candidate_call and 'strike' in candidate_call:
                         self.manager.open_call_leg(sid, self.spot, ivr, self.ml_regime, call_strike=candidate_call['strike'])
 

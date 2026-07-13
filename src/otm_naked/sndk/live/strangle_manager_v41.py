@@ -663,7 +663,7 @@ class StrangleManagerV41:
             for right_key, leg in [('P', s.put_leg), ('C', s.call_leg)]:
                 if not leg:
                     continue
-                has_pos = ('SNDK', leg.contract.strike, right_key) in open_positions
+                has_pos = (self.cfg.get('ticker', 'SPY'), leg.contract.strike, right_key) in open_positions
                 has_gtc = ((leg.btc_pt_trade and leg.btc_pt_trade.order.orderId in open_orders) or
                            (leg.btc_sl_trade and leg.btc_sl_trade.order.orderId in open_orders))
                 if not has_pos and not has_gtc:
@@ -705,7 +705,7 @@ class StrangleManagerV41:
     # ============ HELPERS ============
 
     def _qualify(self, right, expiry, strike) -> Option:
-        contract = Option('SNDK', expiry, strike, right, 'SMART', currency='USD')
+        contract = Option(self.cfg.get('ticker', 'SPY'), expiry, strike, right, 'SMART', currency='USD')
         self.ib.qualifyContracts(contract)
         return contract
 

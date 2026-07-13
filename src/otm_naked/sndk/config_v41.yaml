@@ -2,6 +2,7 @@
 # Supersedes config_v40.yaml and all prior configs.
 
 mode: "paper"  # "backtest_research" | "paper" | "live"
+ticker: "SPY"
 
 account:
   nav: 250000
