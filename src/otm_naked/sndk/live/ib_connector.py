@@ -17,6 +17,7 @@ class IBConnector:
         
         # Connect to disconnected event
         self.ib.disconnectedEvent += self._on_disconnect
+        self.ib.errorEvent += self._on_error
         
     def connect(self, max_retries=5, retry_delay=10):
         """Synchronous connect with retries. NEVER use asyncio.run() with ib_insync."""
@@ -57,6 +58,19 @@ class IBConnector:
         logger.warning("IB Gateway disconnected! Setting reconnect flag.")
         self.needs_reconnect = True
         
+    def _on_error(self, reqId, errorCode, errorString, contract):
+        """Handle IB API errors and warnings."""
+        if errorCode == 1100:
+            logger.error(f"IB Gateway lost connection to data farms (1100): {errorString}")
+        elif errorCode == 1102:
+            logger.info(f"IB Gateway restored connection to data farms (1102): {errorString}")
+        elif errorCode in [2104, 2106, 2108, 2158]:
+            # Informational messages (data farm connections)
+            logger.debug(f"IB Info {errorCode}: {errorString}")
+        else:
+            # Don't spam warnings for minor things, but log them
+            logger.warning(f"IB Error/Warning {errorCode} [reqId {reqId}]: {errorString}")
+            
     def get_ib(self) -> IB:
         """Return the underlying ib_insync IB object."""
         return self.ib
