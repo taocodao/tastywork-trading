@@ -29,7 +29,7 @@ class SNDKMarketDataProvider:
             endDateTime='',
             durationStr=f"{days} D",
             barSizeSetting='1 day',
-            whatToShow='TRADES',
+            whatToShow='MIDPOINT',
             useRTH=True,
             formatDate=1
         )
@@ -67,7 +67,7 @@ class SNDKMarketDataProvider:
             endDateTime='',
             durationStr='1 D',
             barSizeSetting='5 mins',
-            whatToShow='TRADES',
+            whatToShow='MIDPOINT',
             useRTH=True,
             formatDate=1,
             keepUpToDate=False
@@ -158,7 +158,7 @@ class SNDKMarketDataProvider:
                 endDateTime='',
                 durationStr=f"{days} D",
                 barSizeSetting='1 day',
-                whatToShow='TRADES',
+                whatToShow='MIDPOINT',
                 useRTH=True,
                 formatDate=1
             )
@@ -174,6 +174,34 @@ class SNDKMarketDataProvider:
         logger.warning("Defaulting to flat VIX 20.0")
         dates = pd.date_range(end=datetime.now(), periods=days, freq='B')
         return pd.Series(20.0, index=dates)
+
+    def get_vix3m_history(self, days: int = 150) -> pd.Series:
+        """Get historical VIX3M daily closes."""
+        ib = self._get_ib()
+        contract = Index('VIX3M', 'CBOE')
+        try:
+            ib.qualifyContracts(contract)
+            bars = ib.reqHistoricalData(
+                contract,
+                endDateTime='',
+                durationStr=f"{days} D",
+                barSizeSetting='1 day',
+                whatToShow='MIDPOINT',
+                useRTH=True,
+                formatDate=1
+            )
+            if bars:
+                df = util.df(bars)
+                df.set_index('date', inplace=True)
+                df.index = pd.to_datetime(df.index)
+                return df['close']
+        except Exception as e:
+            logger.warning(f"Could not fetch VIX3M history: {e}")
+            
+        # Fallback dummy VIX3M series
+        logger.warning("Defaulting to flat VIX3M 22.0")
+        dates = pd.date_range(end=datetime.now(), periods=days, freq='B')
+        return pd.Series(22.0, index=dates)
         
     def get_option_chain_data(self, ticker: str) -> list:
         """Get all option chain parameters (expirations, strikes)."""
