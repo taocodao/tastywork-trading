@@ -118,3 +118,76 @@ class LiveOptionSelector:
             return best_data
             
         return None
+
+    def select_strike_by_otm(self, ticker: str, target_dte: int, target_otm_pct: float, right: str) -> Optional[dict]:
+        """
+        Find the listed option contract whose strike is closest to spot*(1 +/- target_otm_pct)
+        (calls above spot, puts below spot) at the expiration closest to target_dte.
+
+        This is a % OTM-of-spot selector, NOT a delta selector -- added for the validated
+        MTAS ladder strategy (see live/mtas/), which was walk-forward tuned on OTM% targets
+        (43.4% call / 27.8% put), not delta. Does not touch or change select_strike() above,
+        which remains delta-based for bot_v41.py.
+        """
+        chains = self.md.get_option_chain_data(ticker)
+        if not chains:
+            logger.error(f"No option chains found for {ticker}")
+            return None
+
+        smart_chains = [c for c in chains if c.exchange == 'SMART']
+        if not smart_chains:
+            smart = sorted(chains, key=lambda x: len(x.expirations), reverse=True)[0]
+        else:
+            smart = sorted(smart_chains, key=lambda x: len(x.expirations), reverse=True)[0]
+
+        today = datetime.now().date()
+        target_date = today + pd.Timedelta(days=target_dte)
+        valid_expirations = [e for e in smart.expirations if (datetime.strptime(e, "%Y%m%d").date() - today).days > 0]
+        if not valid_expirations:
+            logger.error(f"No valid future expirations found for {ticker}")
+            return None
+        best_exp = min(
+            valid_expirations,
+            key=lambda e: abs((datetime.strptime(e, "%Y%m%d").date() - target_date).days)
+        )
+        logger.info(f"[OTM selector] Selected expiry {best_exp} (target DTE: {target_dte})")
+
+        spot_price = self.md.get_current_price(ticker)
+        if spot_price <= 0:
+            logger.error("Could not get current spot price.")
+            return None
+
+        target_strike = spot_price * (1 + target_otm_pct) if right == 'C' else spot_price * (1 - target_otm_pct)
+        all_strikes = sorted(smart.strikes)
+        if not all_strikes:
+            return None
+        # closest listed strike to the synthetic target, restricted to the correct OTM direction
+        if right == 'C':
+            candidates = [s for s in all_strikes if s >= spot_price]
+        else:
+            candidates = [s for s in all_strikes if s <= spot_price]
+        if not candidates:
+            candidates = all_strikes
+        best_strike = min(candidates, key=lambda s: abs(s - target_strike))
+
+        opt = Option(ticker, best_exp, best_strike, right, 'SMART', currency='USD')
+        greeks_data = self.md.get_contract_greeks_and_prices([opt])
+        if opt.conId not in greeks_data:
+            logger.error(f"Failed to get quote data for strike {best_strike}")
+            return None
+        data = greeks_data[opt.conId]
+        premium = data['mid'] if data['mid'] > 0 else data['ask']
+        if premium <= 0:
+            logger.warning(f"No usable quote (mid/ask) for strike {best_strike}, expiry {best_exp}. Skipping.")
+            return None
+
+        actual_otm_pct = abs(best_strike - spot_price) / spot_price
+        logger.info(f"[OTM selector] Selected strike {best_strike} (actual OTM: {actual_otm_pct:.1%}, "
+                    f"target: {target_otm_pct:.1%}), premium={premium:.2f}")
+        data["strike"] = best_strike
+        data["expiry"] = best_exp
+        data["contract"] = opt
+        data["premium"] = premium
+        data["actual_otm_pct"] = actual_otm_pct
+        data["spot_at_selection"] = spot_price
+        return data
