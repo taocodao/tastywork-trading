@@ -1,0 +1,23 @@
+# TurboCore Pro Paper Trader — Cron Schedule
+# Runs every hour during US market hours (9:30 AM - 4:00 PM ET)
+# Note: cron uses UTC. ET = UTC-4 (EDT) or UTC-5 (EST).
+# 9:30 AM ET = 13:30 UTC (EDT), 14:30 UTC (EST)
+# 4:00 PM ET = 20:00 UTC (EDT), 21:00 UTC (EST)
+#
+# This cron handles DST by running slightly before/after market hours
+# to catch the first/last bars. The strategy's skip_open_close flag
+# will skip the 9:30 and 15:00 bars anyway.
+
+SHELL=/bin/bash
+PATH=/home/ubuntu/.local/bin:/usr/local/bin:/usr/bin:/bin
+
+# TurboCore Pro paper trader — runs at :05 past each hour during market hours
+# (offset by 5 min to ensure the hourly bar is complete)
+30 13 * * 1-5 cd /home/ubuntu/turbocore-pro-live && /home/ubuntu/.local/bin/python3 live/paper_trader.py --live >> logs/cron.log 2>&1
+5  14 * * 1-5 cd /home/ubuntu/turbocore-pro-live && /home/ubuntu/.local/bin/python3 live/paper_trader.py --live >> logs/cron.log 2>&1
+5  15 * * 1-5 cd /home/ubuntu/turbocore-pro-live && /home/ubuntu/.local/bin/python3 live/paper_trader.py --live >> logs/cron.log 2>&1
+5  16 * * 1-5 cd /home/ubuntu/turbocore-pro-live && /home/ubuntu/.local/bin/python3 live/paper_trader.py --live >> logs/cron.log 2>&1
+5  17 * * 1-5 cd /home/ubuntu/turbocore-pro-live && /home/ubuntu/.local/bin/python3 live/paper_trader.py --live >> logs/cron.log 2>&1
+5  18 * * 1-5 cd /home/ubuntu/turbocore-pro-live && /home/ubuntu/.local/bin/python3 live/paper_trader.py --live >> logs/cron.log 2>&1
+5  19 * * 1-5 cd /home/ubuntu/turbocore-pro-live && /home/ubuntu/.local/bin/python3 live/paper_trader.py --live >> logs/cron.log 2>&1
+5  20 * * 1-5 cd /home/ubuntu/turbocore-pro-live && /home/ubuntu/.local/bin/python3 live/paper_trader.py --live >> logs/cron.log 2>&1

@@ -253,17 +253,17 @@ def run_daily_scan():
     if _should_retrain():
         _run_model_retrain()
 
-    # 1. Run QQQ LEAPS scanner
+    # 1. Run QQQ LEAPS canonical live signal (2y hourly engine, PR #1)
+    #    Replaces the legacy src.qqq_leaps.scanner path. The canonical signal
+    #    generator uses causal regime filtering + walk-forward GBM confidence
+    #    and writes the signal JSON consumed by the IBKR paper trader.
     try:
-        from src.qqq_leaps.scanner import run_qqq_leaps_scan
-        result = run_qqq_leaps_scan()
+        from src.qqq_leaps.canonical import qqq_live_signal
+        result = qqq_live_signal.main()
 
-        if result:
-            logger.info(f"Scan complete: action={result.action} | regime={result.regime} | conf={result.confidence:.2f}")
-        else:
-            logger.warning("Scanner returned None — market data issue?")
+        logger.info(f"Canonical QQQ LEAPS signal run complete: {result}")
     except Exception as e:
-        logger.error(f"QQQ LEAPS scanner failed: {e}", exc_info=True)
+        logger.error(f"QQQ LEAPS canonical signal failed: {e}", exc_info=True)
 
 
     # 2. Update TurboCore ETF MTM (daily mark)

@@ -37,11 +37,12 @@ def time_until_market_open() -> float:
 # Load environment variables
 load_dotenv()
 
-from src.turbocore_pro.data_pipeline import TurboCoreDataPipeline
-from src.turbocore_pro.base_strategy import BaseStrategy
-from src.turbocore_pro.ml.regime_detector import TurboCoreRegimeDetector
-from src.turbocore_pro.ml.signal_scorer import TurboCoreSignalScorer
-from src.turbocore_pro.allocation_optimizer import AllocationOptimizer
+# Canonical TurboCore Pro v3.3 — two-stage confidence pipeline with
+# hysteresis tiers (replaces the legacy data_pipeline/base_strategy/
+# regime_detector/signal_scorer/allocation_optimizer chain).
+import yaml
+from pathlib import Path
+from src.turbocore_pro.live.signal_runner import SignalRunner
 from signal_publisher.turbocore import publish_turbocore_rebalance_signal
 
 # Configure logging
@@ -82,69 +83,67 @@ class TurboCoreProScheduler:
             logger.error(f"Error saving scan state: {e}")
 
     def __init__(self):
-        self.data_pipe = TurboCoreDataPipeline()
-        self.regime_detector = TurboCoreRegimeDetector()
-        self.scorer = TurboCoreSignalScorer()
-        self.allocator = AllocationOptimizer()
+        # Load canonical v3.3 config and signal runner
+        cfg_path = Path(__file__).parent / "src" / "turbocore_pro" / "live" / "config" / "paper_web3aistore.yaml"
+        with open(cfg_path) as f:
+            self.config = yaml.safe_load(f)
+        self.signal_runner = SignalRunner(self.config, Path(__file__).parent)
+        self.signal_runner.load_models()
         self.tz = pytz.timezone('US/Eastern')
         self.last_scan_date = self._load_last_scan_date()
         
     def run_daily_scan(self):
         logger.info("--- Starting TurboCore Pro ML Daily Scan ---")
         
-        # 1. Fetch & Prepare Data
-        self.data_pipe.fetch_data("2y")
-        master_df = self.data_pipe.prepare_core_features()
-        
-        if master_df.empty:
-            logger.error("Data pipeline returned empty dataframe. Aborting.")
+        # 1. Fetch live bars + VIX and build features via the canonical pipeline
+        from src.turbocore_pro.live.data_fetcher import fetch_all_vix_indices
+        try:
+            # Hourly bars via yfinance (signal-only path; the IBKR paper trader
+            # fetches its own bars through ib_insync for execution).
+            import yfinance as yf
+            lookback_days = int(self.config["strategy"].get("lookback_bars", 1500) / 6.5) + 10
+            ibkr_bars = {}
+            for sym in ("QQQ", "TQQQ", "QLD", "SGOV", "HYG"):
+                df = yf.download(sym, period=f"{min(lookback_days, 729)}d", interval="1h",
+                                 auto_adjust=True, progress=False)
+                if df is not None and not df.empty:
+                    df.columns = [c[0].lower() if isinstance(c, tuple) else c.lower() for c in df.columns]
+                    ibkr_bars[sym] = df
+            vix_data = fetch_all_vix_indices(self.config["strategy"].get("vix_indices", ["VIX"]))
+        except Exception as e:
+            logger.error(f"Live data fetch failed: {e}", exc_info=True)
             return
-            
-        # 2. Base Rules + HMM + XGBoost Layers
-        base = BaseStrategy(master_df)
-        df = base.evaluate()
-        
-        df = self.regime_detector.predict_regimes(df)
-        df = self.scorer.predict_confidence(df)
-        
-        # 3. Assess Today's Actionable Output
-        today_row = df.iloc[-1]
-        
-        regime = str(today_row['final_regime'])
-        base_signal = int(today_row.get('base_signal', 0))
-        confidence = float(today_row.get('ml_confidence', 0.5))
-        is_sma_forced = bool(today_row.get('qqq_below_sma200_sell', False))
-        qqq_drawdown = float(today_row.get('qqq_drawdown_ath', 0.0))
-        
-        # BUG FIX: Override regime to BEAR_SMA_FORCED BEFORE allocator call.
-        # Previously is_sma_forced was only used in the rationale string, meaning
-        # the strongest risk-off gate never actually triggered 100% SGOV allocation.
-        if is_sma_forced:
-            regime = "BEAR_SMA_FORCED"
-        
-        # 4. Determine Dynamic Allocation Matrix
-        target_allocation = self.allocator.get_target_allocation(
-            regime=regime,
-            signal=base_signal,
-            ml_confidence=confidence,
-            qqq_drawdown=qqq_drawdown
-        )
-        
-        logger.info(f"Generated Allocation: {target_allocation}")
-        
-        rationale = f"Regime: {regime} | Conf: {confidence:.0%} | SMA Drop: {is_sma_forced}"
-        
-        
-        # 5. Publish ML regime signal — mark as pending while IV-Switching overlay computes
+
+        master = self.signal_runner.build_features(ibkr_bars, vix_data)
+        if master.empty:
+            logger.error("Feature build returned empty dataframe. Aborting.")
+            return
+
+        # 2. Canonical v3.3 signal: HMM regime -> two-stage XGBoost confidence
+        #    -> hysteresis-tier allocation (QQQ/QLD/TQQQ/SGOV)
+        result = self.signal_runner.compute_signal(master)
+
+        regime = str(result.get("regime", "BEAR"))
+        base_signal = int(result.get("signal", 0))
+        confidence = float(result.get("confidence", 0.0))
+        target_allocation = result.get("target_allocation", {"SGOV": 1.0})
+
+        logger.info(f"Canonical v3.3 allocation: {target_allocation} "
+                    f"(regime={regime}, signal={base_signal}, conf={confidence:.3f})")
+
+        rationale = (f"TurboCore Pro v3.3 | Regime: {regime} | Conf: {confidence:.0%} | "
+                     f"QQQ close: {result.get('qqq_close', 0):.2f}")
+
+        # 3. Publish rebalance signal (no IV-Switching overlay — retired)
         publish_turbocore_rebalance_signal(
             regime=regime,
             confidence=confidence,
             alloc_dict=target_allocation,
             rationale=rationale,
             ema_signal=base_signal,
-            sma200_gate=not is_sma_forced,
+            sma200_gate=True,
             strategy="TQQQ_TURBOCORE_PRO",
-            iv_switching_pending=True,   # IV-Switching overlay publishes next
+            iv_switching_pending=False,
         )
         
         # 6. Notify trademind.bot Web Application via SSE Push

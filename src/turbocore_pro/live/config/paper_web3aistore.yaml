@@ -1,0 +1,64 @@
+# TurboCore Pro Paper Trading Configuration
+# Account: DUQ105198 (paper) — alias "web3aistore"
+# Deployed on EC2: ubuntu@54.80.47.153 alongside existing LEAPS trader
+
+ibkr:
+  # IB Gateway connection (same as existing LEAPS trader)
+  host: "127.0.0.1"
+  port: 4004              # IB Gateway paper trading port (7497 for TWS paper)
+  client_id: 12           # unique — LEAPS trader likely uses 11; must not conflict
+  account: ""             # auto-detect from connection (paper account DUQ105198)
+  timeout: 30             # connection timeout in seconds
+
+strategy:
+  # v3.3 config — hysteresis + execution timing adopted, dynamic floor rejected
+  version: "v3.3"
+  bull_sgov_floor: 0.15
+  use_percentile_confidence: true
+  graduated_sma200: true
+  caution_enabled: true
+  leverage_mode: "both"
+  vix_ratio_entry_max: 1.00
+  vix_ratio_exit_max: 1.05
+  both_bear_override_scope: "all"
+  drift_threshold: 0.05
+  hysteresis_band: 0.05
+  dynamic_floor: false
+  skip_open_close: true
+
+  # Model artifacts — frozen fold-10 (latest train window) from walk-forward
+  # These will go stale over time; set up periodic retraining separately
+  hmm_model: "turbocore_hmm_v2_v32final_fold10.joblib"
+  hmm_scaler: "turbocore_hmm_v2_v32final_fold10_scaler.joblib"
+  xgb_model: "turbocore_xgboost_v2_v32final_fold10.joblib"
+  msgarch_model: "turbocore_msgarch.joblib"
+
+  # Universe
+  symbols:
+    - { ticker: "QQQ",  exchange: "SMART", currency: "USD", sec_type: "STK" }
+    - { ticker: "QLD",  exchange: "SMART", currency: "USD", sec_type: "STK" }
+    - { ticker: "TQQQ", exchange: "SMART", currency: "USD", sec_type: "STK" }
+    - { ticker: "SGOV", exchange: "SMART", currency: "USD", sec_type: "STK" }
+    - { ticker: "HYG",  exchange: "SMART", currency: "USD", sec_type: "STK" }  # market guard only
+
+  # VIX indices — fetched from CBOE web, not IBKR
+  vix_indices:
+    - "VIX"     # CBOE volatility index
+    - "VIX9D"   # 9-day VIX (CBOE, since 2023)
+    - "VIX3M"   # 3-month VIX (CBOE)
+
+  # Bar settings
+  bar_size: "1 hour"
+  rth_only: true          # regular trading hours only (9:30-16:00 ET)
+  lookback_bars: 1500     # bars of history to fetch for feature computation (~230 trading days)
+
+risk:
+  initial_capital: 100000   # $100K paper starting capital
+  max_gross_exposure: 3.0   # max 3x leverage (TQQQ = 3x)
+  kill_switch_nav_pct: 0.80 # stop trading if NAV drops 20% from start
+  max_order_notional: 50000 # single order cap
+
+execution:
+  dry_run: true             # SAFETY: log orders, don't submit. Set false to trade paper.
+  log_dir: "logs"
+  log_db: "paper_trades.db"  # SQLite audit log (under log_dir)
