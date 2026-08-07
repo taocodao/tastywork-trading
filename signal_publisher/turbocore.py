@@ -29,7 +29,12 @@ class TurboCoreEntrySignal:
     # Set to True on the first (ML-regime) publish when an IV-Switching overlay
     # is still computing and will be published moments later.
     iv_switching_pending: bool = False
-    
+
+    # Per-risk-tier allocation variants: {"conservative": {...}, "moderate": {...},
+    # "aggressive": {...}}. The app selects the tier matching each account's
+    # configured risk level when generating that account's per-user signal.
+    risk_tiers: dict = field(default_factory=dict)
+
     def to_dict(self) -> dict:
         import uuid
 
@@ -68,6 +73,7 @@ class TurboCoreEntrySignal:
             "ema_signal": self.ema_signal,
             "sma200_gate": self.sma200_gate,
             "iv_switching_pending": self.iv_switching_pending,
+            "risk_tiers": self.risk_tiers,
         }
 
 def publish_turbocore_rebalance_signal(
@@ -86,6 +92,7 @@ def publish_turbocore_rebalance_signal(
     cost_override: float = None,         # Limit price for options orders
     iv_switching_pending: bool = False,  # True when IV-Switching overlay is still computing
     options_intent: dict = None,         # Generic options intent (Phase 1: replaces hardcoded legs)
+    risk_tiers: dict = None,             # {"conservative": {...}, "moderate": {...}, "aggressive": {...}}
 ):
     import logging
     logger = logging.getLogger(__name__)
@@ -102,6 +109,7 @@ def publish_turbocore_rebalance_signal(
         ema_signal=ema_signal,
         sma200_gate=sma200_gate,
         iv_switching_pending=iv_switching_pending,
+        risk_tiers=risk_tiers or {},
     )
 
     data = sig.to_dict()

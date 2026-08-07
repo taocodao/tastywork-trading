@@ -24,6 +24,7 @@ def publish_qqq_leaps_signal(
     exit_px: float = 0.0,
     exit_reason: str = "",
     rationale: str = "",
+    tiers: dict = None,   # {"conservative": {...}, "moderate": {...}, "aggressive": {...}}
 ) -> dict:
     """
     Publish QQQ LEAPS signal to PostgreSQL.
@@ -65,6 +66,10 @@ def publish_qqq_leaps_signal(
         "spot":        round(spot, 2),
         "exit_px":     round(exit_px, 4),
         "exit_reason": exit_reason,
+
+        # Per-risk-tier entry/sizing variants — the app selects the tier
+        # matching each account's configured risk level.
+        "tiers": tiers or {},
 
         # Leg format (for DB compatibility)
         "legs": [{

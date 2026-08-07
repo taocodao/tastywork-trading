@@ -42,8 +42,48 @@ IB_PORT = int(os.getenv("IB_PORT", "4005"))
 IB_CLIENT_ID = int(os.getenv("IB_CLIENT_ID", "200"))
 CAPITAL = float(os.getenv("QQQ_CAPITAL", "75000"))
 
-CFG = Config()  # Same parameters as backtest
+CFG = Config()  # Same parameters as backtest (== "moderate" tier)
 CFG.initial_capital = CAPITAL  # Override with runtime capital
+
+# ─── Risk tiers ──────────────────────────────────────────────────────────────
+# Per-account risk level (set by each user) selects one of these tiers. Each
+# tier is a full Config with its own entry gate strictness, NAV sizing %, and
+# PMCC skip-gate thresholds — "moderate" reproduces the CFG/backtest defaults
+# exactly; conservative/aggressive shift entry strictness and position size
+# in the same direction as TurboCore Pro's risk ladder.
+RISK_TIERS = ("conservative", "moderate", "aggressive")
+
+
+def _build_tier_config(risk: str) -> Config:
+    """Return a Config for the given risk tier, based on CFG (moderate defaults).
+
+    Conservative and aggressive values below are backtest-validated via the
+    canonical 2-year hourly causal replay (qqq_leaps_enhanced_2y_hourly.py),
+    same feature pipeline and walk-forward methodology as the moderate baseline.
+    See qqq_leaps_tier_optimization_results.md for full results.
+    """
+    import copy
+    tier_cfg = copy.copy(CFG)
+    if risk == "conservative":
+        # 2y hourly replay: 20.19% CAGR, -11.13% max DD, 1.49 Sharpe
+        tier_cfg.entry_ml_min = 0.55             # require higher model confidence to enter
+        tier_cfg.entry_vix_max = 30.0            # more cautious about elevated vol
+        tier_cfg.entry_rsi14_max = 35.0          # require deeper pullback (higher conviction)
+        tier_cfg.max_position_pct = 0.20         # smaller NAV allocation per position
+        tier_cfg.max_contracts = 2
+        tier_cfg.pmcc_skip_adx_min = 24.0        # fewer PMCC skips = less naked LEAPS exposure
+        tier_cfg.pmcc_skip_vrp_max = 0.50
+    elif risk == "aggressive":
+        # 2y hourly replay: 33.94% CAGR, -15.70% max DD, 1.29 Sharpe
+        tier_cfg.entry_ml_min = 0.40             # accept lower model confidence
+        tier_cfg.entry_vix_max = 45.0
+        tier_cfg.entry_rsi14_max = 38.0          # allow entries on shallower pullbacks
+        tier_cfg.max_position_pct = 0.50
+        tier_cfg.max_contracts = 8
+        tier_cfg.pmcc_skip_adx_min = 12.0        # more PMCC skips = more naked long exposure
+        tier_cfg.pmcc_skip_vrp_max = 0.90
+    # "moderate" == CFG as-is (31.82% CAGR, -15.39% max DD, 1.28 Sharpe on fresh replay)
+    return tier_cfg
 
 
 # =============================================================================
@@ -312,7 +352,8 @@ def main():
             print(f"  above_sma100={bool(latest['above_sma100'])}  gap_down_pct={latest['gap_down_pct']:.3%}")
             print(f"  ml_confidence={latest['ml_confidence']:.3f}")
 
-        # 3. Evaluate entry
+        # 3. Evaluate entry (moderate tier == CFG defaults, used for top-level
+        #    back-compat fields; all 3 tiers computed below for per-account routing)
         entry_result = evaluate_entry(latest, CFG)
         if not args.quiet:
             print(f"\n{'='*60}")
@@ -343,7 +384,7 @@ def main():
             for k, v in leaps.items():
                 print(f"  {k}: {v}")
 
-        # 5. Sizing (if entry triggered)
+        # 5. Sizing (if entry triggered) — moderate tier, mirrors top-level fields
         contracts = 0
         est_cost = 0.0
         if entry_result["enter"] and leaps.get("mid"):
@@ -353,6 +394,36 @@ def main():
             contracts = max(1, int(max_outlay / per_contract_cost))
             contracts = min(contracts, CFG.max_contracts)
             est_cost = contracts * per_contract_cost
+
+        # 5b. Per-risk-tier entry + sizing — reuses the SAME hourly-derived
+        #     `latest` feature row and `leaps` candidate as above (identical
+        #     hourly data/pipeline as the backtest); only the gate strictness
+        #     and NAV sizing % vary per tier.
+        tiers = {}
+        for risk in RISK_TIERS:
+            tier_cfg = _build_tier_config(risk)
+            tier_entry = evaluate_entry(latest, tier_cfg)
+            tier_contracts, tier_cost = 0, 0.0
+            if tier_entry["enter"] and leaps.get("mid"):
+                tier_nav = CAPITAL
+                tier_max_outlay = tier_nav * tier_cfg.max_position_pct
+                tier_per_contract_cost = 100 * leaps["mid"] + tier_cfg.commission
+                tier_contracts = max(1, int(tier_max_outlay / tier_per_contract_cost))
+                tier_contracts = min(tier_contracts, tier_cfg.max_contracts)
+                tier_cost = tier_contracts * tier_per_contract_cost
+            tiers[risk] = {
+                "enter": tier_entry["enter"],
+                "gates": tier_entry["gates"],
+                "contracts": tier_contracts,
+                "estimated_cost": tier_cost,
+                "cost_pct_of_capital": tier_cost / CAPITAL if CAPITAL else 0,
+                "max_position_pct": tier_cfg.max_position_pct,
+                "entry_ml_min": tier_cfg.entry_ml_min,
+            }
+        if not args.quiet:
+            print(f"\nPer-risk-tier sizing (same hourly feature row, tier-scaled gates):")
+            for risk, t in tiers.items():
+                print(f"  {risk}: enter={t['enter']} contracts={t['contracts']} cost=${t['estimated_cost']:.2f}")
 
         # 6. Assemble final signal
         signal = {
@@ -380,6 +451,9 @@ def main():
                 "estimated_cost": est_cost,
                 "cost_pct_of_capital": est_cost / CAPITAL if CAPITAL else 0,
             },
+            # Per-risk-tier entry/sizing variants — the app selects the tier
+            # matching each account's configured risk level.
+            "tiers": tiers,
             "action": (
                 f"BUY {contracts} QQQ {leaps['expiry']} ${leaps['strike']:.0f} CALL @ ~${leaps['mid']:.2f}"
                 if entry_result["enter"] and contracts > 0
