@@ -126,15 +126,22 @@ class TurboCoreProScheduler:
         regime = str(result.get("regime", "BEAR"))
         base_signal = int(result.get("signal", 0))
         confidence = float(result.get("confidence", 0.0))
+        tiers = result.get("tiers", {})
+        # Back-compat flat allocation mirrors the moderate tier
         target_allocation = result.get("target_allocation", {"SGOV": 1.0})
 
-        logger.info(f"Canonical v3.3 allocation: {target_allocation} "
+        logger.info(f"Canonical v3.3 allocation (moderate): {target_allocation} "
                     f"(regime={regime}, signal={base_signal}, conf={confidence:.3f})")
+        for risk, tier_result in tiers.items():
+            logger.info(f"  tier[{risk}] -> {tier_result.get('target_allocation')} "
+                        f"(ladder={tier_result.get('tier')})")
 
         rationale = (f"TurboCore Pro v3.3 | Regime: {regime} | Conf: {confidence:.0%} | "
                      f"QQQ close: {result.get('qqq_close', 0):.2f}")
 
-        # 3. Publish rebalance signal (no IV-Switching overlay — retired)
+        # 3. Publish rebalance signal with all 3 risk-tier allocations attached.
+        #    The app selects the tier matching each account's risk level at
+        #    per-account signal-generation time (no IV-Switching overlay — retired).
         publish_turbocore_rebalance_signal(
             regime=regime,
             confidence=confidence,
@@ -144,6 +151,7 @@ class TurboCoreProScheduler:
             sma200_gate=True,
             strategy="TQQQ_TURBOCORE_PRO",
             iv_switching_pending=False,
+            risk_tiers=tiers,
         )
         
         # 6. Notify trademind.bot Web Application via SSE Push
@@ -162,111 +170,6 @@ class TurboCoreProScheduler:
         
         logger.info("--- TurboCore Pro Scan Complete ---")
 
-        # ── IV-Switching Composite Strategy — Unified Signal (equity + options) ──
-        # Publishes ONE combined signal:
-        #   - equity legs: target_pct (generic, no absolute quantities)
-        #   - options_intent: mode/type/underlying/delta/dte + market data for per-user sizing
-        #   - legs_override: retained for backward compat with manual-approve UI card
-        try:
-            import sys as _sys, os as _os
-            from datetime import date as _date
-            _ivs_dir = _os.path.join(_os.path.dirname(_os.path.abspath(__file__)),
-                                     'iv-switching-composite')
-            if _ivs_dir not in _sys.path:
-                _sys.path.insert(0, _ivs_dir)
-            from daily_order_generator import (
-                generate_daily_signal,
-                reconcile_and_generate_order,
-                format_as_turbocore_signal,
-            )
-
-            _signal = generate_daily_signal(_date.today())
-            _mode = _signal['mode']
-
-            # ── Build generic options_intent (Phase 1 output) ────────────────
-            _mode_map = {
-                'A':  {'type': 'CSP',   'underlying': 'TQQQ', 'delta': 0.12, 'dte': 7},
-                'B':  {'type': 'ZEBRA', 'underlying': 'QQQM', 'delta': 0.70, 'dte': 75},
-                'C':  {'type': 'CCS',   'underlying': 'QQQ',  'delta': 0.30, 'dte': 45},
-                'D2': {'type': 'SQQQ',  'underlying': 'SQQQ', 'delta': None, 'dte': None},
-                'D3': {'type': 'ZEBRA', 'underlying': 'QQQM', 'delta': 0.70, 'dte': 75},
-            }
-            _intent_base = _mode_map.get(_mode, {'type': None, 'underlying': None, 'delta': None, 'dte': None})
-            _options_intent = {
-                'mode':      _mode,
-                **_intent_base,
-                'qqq_px':    _signal.get('qqq_px'),
-                'qqqm_px':   _signal.get('qqqm_px'),
-                'tqqq_px':   _signal.get('tqqq_px'),
-                'sqqq_px':   _signal.get('sqqq_px'),
-                'iv_short':  _signal.get('iv_short'),
-                'iv_tqqq':   _signal.get('iv_tqqq_10d'),
-                'rf':        _signal.get('rf'),
-                'vix':       _signal.get('vix'),
-                'vix_vix3m': _signal.get('vix_vix3m'),
-            }
-
-            # ── Legacy: reference account for manual-approve UI card ─────────
-            # (Still needed so the approve-options route can show a preview card)
-            _ref_account = {
-                'nlv': 25000, 'cash': 25000, 'buying_power': 25000,
-                'position_counts': {'zebra_units': 0, 'csp_count': 0,
-                                    'ccs_count': 0, 'sqqq_shares': 0},
-            }
-            _order = reconcile_and_generate_order(_signal, _ref_account)
-
-            if _order.get('signal_type') not in ('NO_ACTION', 'HOLD', 'ERROR') \
-               and _order.get('order_legs'):
-                _tc_signal = format_as_turbocore_signal(_signal, _order, order_db_id='')
-
-                # Equity legs (generic — no absolute quantities)
-                _equity_legs = [
-                    {'symbol': sym, 'action': 'BUY', 'target_pct': float(pct), 'leg_type': 'equity'}
-                    for sym, pct in target_allocation.items()
-                ]
-                # Legacy options legs retained for manual-approve UI card only
-                _options_legs = [
-                    {**leg, 'leg_type': 'options'}
-                    for leg in _tc_signal.get('legs', [])
-                ]
-                _combined_legs = _equity_legs + _options_legs
-
-                publish_turbocore_rebalance_signal(
-                    regime=_tc_signal['regime'],
-                    confidence=_tc_signal['confidence'],
-                    alloc_dict={},
-                    rationale=_tc_signal['rationale'],
-                    ema_signal=_tc_signal['ema_signal'],
-                    sma200_gate=_tc_signal.get('sma200_gate', True),
-                    strategy='TQQQ_TURBOCORE_PRO',
-                    legs_override=_combined_legs,
-                    action_override=_order.get('signal_type'),
-                    iv_switching_order_id='',
-                    cost_override=_tc_signal.get('cost', 0),
-                    options_intent=_options_intent,   # ← Phase 1: generic intent for Ghost Executor
-                )
-                logger.info(
-                    f"✅ IV-Switching unified signal: Mode={_mode} → {_order.get('signal_type')} | "
-                    f"{len(_equity_legs)} equity legs + options_intent[type={_options_intent['type']}]"
-                )
-
-                # ── Trigger demo executor 15 min after signal ────────────────
-                # Runs as a background process so it doesn't block the scheduler
-                try:
-                    import subprocess
-                    subprocess.Popen(
-                        ['python3', 'run_demo_executor.py'],
-                        cwd=_os.path.dirname(_os.path.abspath(__file__)),
-                    )
-                    logger.info("🤖 Demo executor launched in background")
-                except Exception as _demo_e:
-                    logger.warning(f"Demo executor launch failed (non-fatal): {_demo_e}")
-
-            else:
-                logger.info(f"IV-Switching HOLD (Mode={_mode}): {_order.get('skip_reason', '')}")
-        except Exception as _e:
-            logger.error(f"❌ IV-Switching signal publish failed (non-fatal): {_e}",
-                         exc_info=True)
 
 
 

@@ -23,6 +23,55 @@ sys.path.insert(0, str(REPO_ROOT))                   # enables `src.turbocore_pr
 # Import the actual feature engineering pipeline
 from src.turbocore_pro.ml.feature_engineering_v2 import generate_technical_features_v2  # noqa: E402
 
+# ─── Risk tiers ─────────────────────────────────────────────────────────────
+# Per-account risk level (set by each user) selects one of these tiers. The
+# HMM regime + XGBoost confidence are computed ONCE per run (model outputs do
+# not change per tier); only the allocation policy shifts:
+#   - bull_sgov_floor: minimum defensive SGOV weight held even at full risk-on
+#   - hysteresis_band: how sticky the tier ladder is (higher = less flip-flop)
+#   - hi/lo confidence thresholds and the leverage-tier weights themselves
+#     scale so conservative accounts see less TQQQ/QLD and more SGOV at every
+#     confidence level, aggressive accounts see the opposite.
+RISK_TIERS = ("conservative", "moderate", "aggressive")
+
+# Conservative and aggressive values below are backtest-validated via the
+# canonical 11-fold walk-forward engine (backtest/walk_forward_hourly_backtest.py)
+# against cached hourly data, same cost model and methodology as the moderate
+# v3.3 baseline. See turbocore_tier_optimization_results.md for full results.
+# Moderate is unchanged from canonical v3.3 (paper_web3aistore.yaml).
+TIER_ALLOCATION_PARAMS = {
+    # Walk-forward OOS: 10.10% CAGR, -12.65% max DD, 0.946 Sharpe
+    "conservative": {
+        "bull_sgov_floor": 0.25,
+        "hysteresis_band": 0.075,
+        "hi_thresh": 0.75,
+        "lo_thresh": 0.45,
+        "high_tier_weights": {"QLD": 0.35, "TQQQ": 0.05, "QQQ": 0.475, "SGOV": 0.125},
+        "low_tier_weights": {"QQQ": 0.25, "SGOV": 0.75},
+        "bear_soft_weights": {"QQQ": 0.30, "SGOV": 0.70},
+    },
+    # Canonical v3.3: 13.73% CAGR, -15.01% max DD, 1.048 Sharpe
+    "moderate": {
+        "bull_sgov_floor": 0.15,
+        "hysteresis_band": 0.05,
+        "hi_thresh": 0.70,
+        "lo_thresh": 0.40,
+        "high_tier_weights": {"QLD": 0.50, "TQQQ": 0.35, "QQQ": 0.0, "SGOV": 0.15},
+        "low_tier_weights": {"QQQ": 0.50, "SGOV": 0.50},
+        "bear_soft_weights": {"QQQ": 0.30, "SGOV": 0.70},
+    },
+    # Walk-forward OOS: 17.75% CAGR, -22.29% max DD, 0.898 Sharpe
+    "aggressive": {
+        "bull_sgov_floor": 0.00,
+        "hysteresis_band": 0.00,
+        "hi_thresh": 0.60,
+        "lo_thresh": 0.30,
+        "high_tier_weights": {"QLD": 0.20, "TQQQ": 0.60, "QQQ": 0.20, "SGOV": 0.00},
+        "low_tier_weights": {"QQQ": 1.00, "SGOV": 0.00},
+        "bear_soft_weights": {"QQQ": 0.30, "SGOV": 0.70},
+    },
+}
+
 
 class SignalRunner:
     """Computes the target allocation from live market data."""
@@ -36,7 +85,10 @@ class SignalRunner:
         self._hmm_scaler = None
         self._xgb = None        # full dict: {meta, primary, features}
         self._msgarch = None
-        self._prev_tier = "none"  # hysteresis state
+        # Hysteresis state is tracked PER RISK TIER since each tier has its own
+        # confidence thresholds and band, so tiers can be in different rungs
+        # of their own ladder at the same time.
+        self._prev_tier_by_risk = {t: "none" for t in RISK_TIERS}
 
     def load_models(self):
         """Load frozen fold-10 model artifacts."""
@@ -227,40 +279,51 @@ class SignalRunner:
             except Exception as e:
                 log.error(f"XGBoost prediction failed: {e}")
 
-        # ─── Target Allocation ───────────────────────────────────────────────
-        target = self._compute_allocation(regime, signal, confidence, latest)
+        # ─── Target Allocation — one per risk tier ───────────────────────────
+        tiers = {}
+        for risk in RISK_TIERS:
+            tiers[risk] = self._compute_allocation(regime, signal, confidence, latest, risk)
 
         return {
             "regime": regime,
             "signal": signal,
             "confidence": confidence,
-            "target_allocation": target,
+            # Back-compat: "target_allocation" mirrors the "moderate" tier so any
+            # caller still reading the old flat field keeps working unchanged.
+            "target_allocation": tiers["moderate"]["target_allocation"],
+            "tiers": tiers,
             "timestamp": str(master.index[-1]),
             "qqq_close": float(latest.get("qqq_close", 0)),
         }
 
     def _compute_allocation(self, regime: str, signal: int,
-                            confidence: float, latest) -> dict:
+                            confidence: float, latest, risk: str = "moderate") -> dict:
         """
-        Compute target allocation using v3.3 config.
-        Returns {symbol: weight} dict.
+        Compute target allocation for a given risk tier.
+        Returns {"target_allocation": {symbol: weight}, "tier": "high"|"med"|"low", ...}.
+
+        Risk tier parameters (thresholds, floor, band, leverage weights) come
+        from TIER_ALLOCATION_PARAMS — "moderate" reproduces the canonical v3.3
+        config exactly; "conservative"/"aggressive" shift the same ladder
+        structure toward more/less defensive SGOV weight at every rung.
         """
-        strat = self.config["strategy"]
-        floor = strat["bull_sgov_floor"]
+        params = TIER_ALLOCATION_PARAMS[risk]
+        floor = params["bull_sgov_floor"]
 
         if regime == "BULL":
-            band = strat.get("hysteresis_band", 0.0)
-            hi_thresh = 0.70
-            lo_thresh = 0.40
+            band = params["hysteresis_band"]
+            hi_thresh = params["hi_thresh"]
+            lo_thresh = params["lo_thresh"]
 
+            prev_tier = self._prev_tier_by_risk[risk]
             if band > 0:
-                if self._prev_tier == "high":
+                if prev_tier == "high":
                     hi_thresh -= band
                     lo_thresh -= band
-                elif self._prev_tier == "med":
+                elif prev_tier == "med":
                     hi_thresh += band
                     lo_thresh -= band
-                elif self._prev_tier == "low":
+                elif prev_tier == "low":
                     hi_thresh += band
                     lo_thresh += band
 
@@ -273,17 +336,25 @@ class SignalRunner:
             else:
                 tier = "low"
 
-            self._prev_tier = tier
+            self._prev_tier_by_risk[risk] = tier
 
             if tier == "high":
-                return {"QLD": 0.50, "TQQQ": 0.35, "QQQ": 0.0, "SGOV": floor}
+                allocation = dict(params["high_tier_weights"])
             elif tier == "med":
-                return {"QQQ": 1.0 - floor, "SGOV": floor}
+                allocation = {"QQQ": 1.0 - floor, "SGOV": floor}
             else:
-                return {"QQQ": 0.50, "SGOV": 0.50}
+                allocation = dict(params["low_tier_weights"])
         else:
             # BEAR regime
+            tier = "bear_hard"
             if latest.get("pct_below_sma200", 0) < -0.05:
-                return {"SGOV": 1.0}  # all cash
+                allocation = {"SGOV": 1.0}  # all cash
             else:
-                return {"QQQ": 0.30, "SGOV": 0.70}  # reduced equity
+                tier = "bear_soft"
+                allocation = dict(params["bear_soft_weights"])
+
+        return {
+            "target_allocation": allocation,
+            "tier": tier,
+            "risk_level": risk,
+        }

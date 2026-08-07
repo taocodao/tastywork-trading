@@ -261,7 +261,31 @@ def run_daily_scan():
         from src.qqq_leaps.canonical import qqq_live_signal
         result = qqq_live_signal.main()
 
-        logger.info(f"Canonical QQQ LEAPS signal run complete: {result}")
+        logger.info(f"Canonical QQQ LEAPS signal run complete: {result.get('action') if result else None}")
+
+        # Persist to Postgres (previously dead — canonical signal never reached
+        # the DB/app). Publishes ENTER/EXIT/HOLD with all 3 risk-tier variants
+        # attached so the app can select by each account's risk level.
+        if result:
+            from signal_publisher.qqq_leaps import publish_qqq_leaps_signal
+            entry_decision = result.get("entry_decision", {})
+            sizing = result.get("sizing", {})
+            target_leaps = result.get("target_leaps", {})
+            action = "ENTER" if entry_decision.get("enter") and sizing.get("contracts", 0) > 0 else "HOLD"
+            publish_qqq_leaps_signal(
+                action=action,
+                regime=result.get("features", {}).get("regime", "UNKNOWN"),
+                confidence=result.get("features", {}).get("ml_confidence", 0.0),
+                spot=result.get("spot", {}).get("qqq", 0.0),
+                strike=target_leaps.get("strike", 0.0),
+                expiry_date=target_leaps.get("expiry", ""),
+                entry_px=target_leaps.get("mid", 0.0),
+                contracts=sizing.get("contracts", 0),
+                delta=target_leaps.get("delta", 0.0),
+                rationale=f"QQQ LEAPS canonical | regime={result.get('features', {}).get('regime')} | {result.get('action')}",
+                tiers=result.get("tiers", {}),
+            )
+            logger.info("QQQ LEAPS signal published to Postgres (with risk tiers)")
     except Exception as e:
         logger.error(f"QQQ LEAPS canonical signal failed: {e}", exc_info=True)
 
