@@ -20,8 +20,11 @@ class BaseSignal:
     created_at: datetime
     expires_at: datetime
     
-    # Strategy-specific metadata
-    metadata: Dict[str, Any] = None
+    # Strategy-specific metadata. Declared WITHOUT a default so subclasses can add
+    # their own required (no-default) fields — a defaulted base field would force
+    # every subclass field to also be optional (dataclass field-ordering rule).
+    # All constructor call sites pass metadata explicitly; to_dict() guards None.
+    metadata: Dict[str, Any]
     
     def to_dict(self) -> Dict[str, Any]:
         """Convert signal to dictionary for JSON serialization."""
