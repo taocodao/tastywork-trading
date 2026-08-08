@@ -2,362 +2,186 @@
 Combined Signal Generator
 =========================
 
-Simplified orchestrator for the unified Diagonal Spread strategy.
+Orchestrator for the two canonical TradeMind strategies:
 
-The Diagonal Spread strategy handles both:
-- Directional trades (PMCC/PMCP) when confidence is high (70%+)
-- Neutral trades (Calendar-like) when confidence is lower
+1. QQQ_LEAPS — Automated QQQ LEAPS + gated PMCC overlay.
+   Canonical engine: src/qqq_leaps/canonical/qqq_leaps_enhanced_2y_hourly.py
+   (causal regime filtering, walk-forward GBM confidence, NAV-based sizing,
+   PMCC gate pmcc_skip_adx_min=16 / VRP 0.9, max 5 contracts per entry).
+   Live executor: src/qqq_leaps/canonical/qqq_live_trader.py (hourly, IBKR).
 
-It also supports Theta Sprint for larger accounts.
+2. TURBOCORE_PRO — ETF-only regime allocator (QQQ/QLD/TQQQ/SGOV), v3.3.
+   Canonical engine: src/turbocore_pro/ (two-stage confidence pipeline,
+   0.05 hysteresis tier band, skip open/close bars, 15% bull SGOV floor).
+   Live executor: src/turbocore_pro/live/paper_trader.py (hourly, IBKR).
+
+All other strategies in this repository (TQQQ, TurboBounce, Zebra, Theta,
+Calendar, Diagonal, Vertical, OTM/SNDK, DVO, PMCC standalone, Dual-Core,
+EMA-CCI-MACD) are DISABLED as of the canonical-model consolidation.
+Their code is kept in-tree for reference but is not scheduled, not
+published, and not selectable here.
 """
 
 import logging
 from dataclasses import dataclass
-from datetime import datetime
 from typing import Dict, List, Optional, Any
 
 logger = logging.getLogger(__name__)
+
+# Canonical strategy lineup — the only strategies this orchestrator will run.
+ENABLED_STRATEGIES = ("QQQ_LEAPS", "TURBOCORE_PRO")
 
 
 @dataclass
 class StrategyRecommendation:
     """Recommended strategy with confidence and reasoning."""
-    strategy: str  # "THETA_SPRINT" or "DIAGONAL_SPREAD"
+    strategy: str  # "QQQ_LEAPS" or "TURBOCORE_PRO"
     confidence: float
     reasoning: str
     signal: Optional[Any] = None  # The actual signal object
 
 
-@dataclass  
-class MarketConditions:
-    """Current market conditions for strategy selection."""
-    iv_rank: float  # 0-100
-    iv_percentile: float  # 0-100
-    trend_direction: str  # "BULL", "BEAR", "NEUTRAL"
-    trend_strength: int  # 0-100
-    vix_level: float
-    days_to_earnings: int
-    liquidity_score: float
-
-
 class CombinedSignalGenerator:
     """
-    Generates signals using the unified Diagonal Spread strategy.
-    
-    Strategy Selection:
-    
-    1. THETA SPRINT (Cash-secured puts) - For larger accounts
-       - Best when: IV Rank > 50, Neutral-Bullish, Far from earnings
-       - Capital: $5K-$50K
-       - Win rate: ~97%
-       
-    2. DIAGONAL SPREAD (Unified: PMCC/PMCP + Calendar)
-       - Directional (70%+ confidence): BULL_DIAGONAL or BEAR_DIAGONAL
-       - Neutral (<70% confidence): NEUTRAL_DIAGONAL (Calendar-like)
-       - Capital: $500-$5K
-       - Win rate: ~66-75%
+    Generates signals from the two canonical strategies only.
+
+    - QQQ_LEAPS: options strategy; requires options approval. Produces
+      ENTER/EXIT/HOLD signals for deep-ITM long-dated QQQ calls with an
+      optional short-call (PMCC) overlay.
+    - TURBOCORE_PRO: ETF-only tactical allocator; no options approval
+      required. Produces REBALANCE signals with target weights across
+      QQQ / QLD / TQQQ / SGOV.
+
+    The two strategies are complementary, not competitive: LEAPS targets
+    bullish convexity with options, TurboCore Pro targets drawdown-controlled
+    participation with ETFs. Both run hourly during market hours and publish
+    independently.
     """
-    
+
     def __init__(
         self,
-        theta_enabled: bool = True,
-        diagonal_enabled: bool = True
+        qqq_leaps_enabled: bool = True,
+        turbocore_pro_enabled: bool = True,
     ):
-        """
-        Initialize combined generator.
-        
-        Args:
-            theta_enabled: Enable Theta Sprint strategy (large accounts)
-            diagonal_enabled: Enable Diagonal Spread strategy (unified)
-        """
-        self.theta_enabled = theta_enabled
-        self.diagonal_enabled = diagonal_enabled
-        
-        # Initialize individual generators
-        self.generators = {}
-        
-        if theta_enabled:
+        self.qqq_leaps_enabled = qqq_leaps_enabled
+        self.turbocore_pro_enabled = turbocore_pro_enabled
+        self.generators: Dict[str, Any] = {}
+
+        if qqq_leaps_enabled:
             try:
-                from src.theta_spreads.signal_generator import ThetaSprintSignalGenerator
-                self.generators["THETA_SPRINT"] = ThetaSprintSignalGenerator()
-                logger.info("Theta Sprint generator initialized")
-            except ImportError as e:
-                logger.warning(f"Could not import Theta Sprint generator: {e}")
-        
-        if diagonal_enabled:
+                from src.qqq_leaps.scanner import QQQLeapsScanner
+                self.generators["QQQ_LEAPS"] = QQQLeapsScanner()
+                logger.info("QQQ LEAPS scanner initialized")
+            except Exception as e:
+                logger.warning(f"Could not initialize QQQ LEAPS scanner: {e}")
+
+        if turbocore_pro_enabled:
             try:
-                from src.diagonal_spreads.signal_generator import DiagonalSpreadSignalGenerator
-                self.generators["DIAGONAL_SPREAD"] = DiagonalSpreadSignalGenerator()
-                logger.info("Diagonal Spread generator initialized")
-            except ImportError as e:
-                logger.warning(f"Could not import Diagonal generator: {e}")
-    
-    def analyze_conditions(
-        self,
-        symbol: str,
-        stock_data: Dict,
-        account_data: Dict
-    ) -> MarketConditions:
-        """
-        Analyze current market conditions for a symbol.
-        
-        Args:
-            symbol: Stock symbol
-            stock_data: Price, IV, technicals
-            account_data: Balance, risk settings
-        
-        Returns:
-            MarketConditions object
-        """
-        iv_rank = stock_data.get("iv_rank", stock_data.get("ivRank", 50))
-        iv_percentile = stock_data.get("iv_percentile", iv_rank)
-        
-        # Determine trend from technicals
-        rsi = stock_data.get("rsi", 50)
-        ma_50 = stock_data.get("ma_50", stock_data.get("price", 0))
-        ma_200 = stock_data.get("ma_200", stock_data.get("price", 0))
-        price = stock_data.get("price", 0)
-        
-        # Simple trend detection
-        if price > ma_50 > ma_200 and rsi > 50:
-            trend_direction = "BULL"
-            trend_strength = min(int((rsi - 50) * 2), 100)
-        elif price < ma_50 < ma_200 and rsi < 50:
-            trend_direction = "BEAR"
-            trend_strength = min(int((50 - rsi) * 2), 100)
-        else:
-            trend_direction = "NEUTRAL"
-            trend_strength = 50 - abs(rsi - 50)
-        
-        return MarketConditions(
-            iv_rank=iv_rank,
-            iv_percentile=iv_percentile,
-            trend_direction=trend_direction,
-            trend_strength=trend_strength,
-            vix_level=stock_data.get("vix", 20),
-            days_to_earnings=stock_data.get("days_to_earnings", 999),
-            liquidity_score=stock_data.get("liquidity_score", 0.7)
-        )
-    
-    def select_strategy(
-        self,
-        conditions: MarketConditions,
-        account_size: float
-    ) -> str:
-        """
-        Select optimal strategy based on conditions.
-        
-        Args:
-            conditions: Current market conditions
-            account_size: Account balance
-        
-        Returns:
-            Strategy name
-        """
-        scores = {}
-        
-        # Score Theta Sprint (only for larger accounts)
-        if self.theta_enabled and "THETA_SPRINT" in self.generators:
-            theta_score = 0
-            
-            # IV rank (higher = better for selling premium)
-            if conditions.iv_rank >= 70:
-                theta_score += 30
-            elif conditions.iv_rank >= 50:
-                theta_score += 20
-            else:
-                theta_score += 5
-            
-            # Trend (neutral to bullish is good)
-            if conditions.trend_direction in ("NEUTRAL", "BULL"):
-                theta_score += 25
-            else:
-                theta_score += 5
-            
-            # Account size (need $5K+, this is the key differentiator)
-            if account_size >= 10000:
-                theta_score += 30
-            elif account_size >= 5000:
-                theta_score += 20
-            else:
-                theta_score -= 100  # Too small for Theta Sprint
-            
-            # Earnings (stay away)
-            if conditions.days_to_earnings > 14:
-                theta_score += 20
-            elif conditions.days_to_earnings > 7:
-                theta_score += 10
-            else:
-                theta_score -= 20
-            
-            scores["THETA_SPRINT"] = max(theta_score, 0)
-        
-        # Score Diagonal Spread (works for all account sizes)
-        if self.diagonal_enabled and "DIAGONAL_SPREAD" in self.generators:
-            diagonal_score = 50  # Base score - unified strategy always available
-            
-            # Account size (works with smaller accounts)
-            if account_size >= 2000:
-                diagonal_score += 20
-            elif account_size >= 500:
-                diagonal_score += 15
-            
-            # Earnings (avoid)
-            if conditions.days_to_earnings > 14:
-                diagonal_score += 20
-            elif conditions.days_to_earnings > 7:
-                diagonal_score += 10
-            else:
-                diagonal_score -= 10
-            
-            scores["DIAGONAL_SPREAD"] = max(diagonal_score, 0)
-        
-        # Select highest score
-        if not scores:
-            return "NONE"
-        
-        best_strategy = max(scores, key=scores.get)
-        logger.info(f"Strategy scores: {scores} -> Selected: {best_strategy}")
-        
-        return best_strategy
-    
+                from src.turbocore_pro.base_strategy import TurboCoreProStrategy
+                self.generators["TURBOCORE_PRO"] = TurboCoreProStrategy()
+                logger.info("TurboCore Pro strategy initialized")
+            except Exception as e:
+                logger.warning(f"Could not initialize TurboCore Pro strategy: {e}")
+
     def generate_signal(
         self,
-        symbol: str,
-        stock_data: Dict,
+        strategy: str,
+        market_data: Dict,
         account_data: Dict,
-        force_strategy: Optional[str] = None
     ) -> Optional[StrategyRecommendation]:
         """
-        Generate signal using optimal strategy.
-        
+        Generate a signal from one canonical strategy.
+
         Args:
-            symbol: Stock symbol
-            stock_data: Price, IV, technicals
-            account_data: Balance, risk settings
-            force_strategy: Optional strategy override
-        
+            strategy: "QQQ_LEAPS" or "TURBOCORE_PRO"
+            market_data: bars/features required by the strategy
+            account_data: NAV, risk settings
+
         Returns:
-            StrategyRecommendation with signal
+            StrategyRecommendation or None
         """
-        # Analyze conditions
-        conditions = self.analyze_conditions(symbol, stock_data, account_data)
-        
-        # Select strategy
-        if force_strategy and force_strategy in self.generators:
-            strategy = force_strategy
-        else:
-            strategy = self.select_strategy(
-                conditions, 
-                account_data.get("balance", 5000)
+        if strategy not in ENABLED_STRATEGIES:
+            logger.warning(
+                f"Strategy '{strategy}' is not in the canonical lineup "
+                f"{ENABLED_STRATEGIES} — request ignored."
             )
-        
-        if strategy == "NONE" or strategy not in self.generators:
-            logger.info(f"{symbol}: No suitable strategy found")
             return None
-        
-        # Generate signal with selected strategy
-        generator = self.generators[strategy]
-        signal = None
-        
+
+        generator = self.generators.get(strategy)
+        if generator is None:
+            logger.info(f"{strategy}: generator not available")
+            return None
+
         try:
-            signal = generator.generate_signal(symbol, stock_data, account_data)
+            if hasattr(generator, "generate_signal"):
+                signal = generator.generate_signal(market_data, account_data)
+            elif hasattr(generator, "scan"):
+                signal = generator.scan(market_data, account_data)
+            else:
+                logger.error(f"{strategy}: generator has no signal entrypoint")
+                return None
         except Exception as e:
-            logger.error(f"Error generating {strategy} signal for {symbol}: {e}")
+            logger.error(f"Error generating {strategy} signal: {e}")
             return None
-        
+
         if not signal:
-            logger.debug(f"{symbol}: {strategy} generated no signal")
             return None
-        
-        # Build recommendation
-        reasoning = self._build_reasoning(strategy, conditions)
-        
+
         return StrategyRecommendation(
             strategy=strategy,
-            confidence=getattr(signal, 'confidence', conditions.iv_rank),
-            reasoning=reasoning,
-            signal=signal
+            confidence=getattr(signal, "confidence", 0.0),
+            reasoning=self._build_reasoning(strategy, signal),
+            signal=signal,
         )
-    
+
     def generate_all_signals(
         self,
-        symbols: List[str],
-        stock_data_provider,  # Function(symbol) -> Dict
-        account_data: Dict
+        market_data: Dict,
+        account_data: Dict,
     ) -> List[StrategyRecommendation]:
-        """
-        Generate signals for multiple symbols.
-        
-        Args:
-            symbols: List of stock symbols
-            stock_data_provider: Function returning stock data
-            account_data: Account information
-        
-        Returns:
-            List of recommendations sorted by confidence
-        """
+        """Generate signals from every enabled canonical strategy."""
         recommendations = []
-        
-        for symbol in symbols:
-            try:
-                stock_data = stock_data_provider(symbol)
-                rec = self.generate_signal(symbol, stock_data, account_data)
-                
-                if rec:
-                    recommendations.append(rec)
-                    
-            except Exception as e:
-                logger.error(f"Error processing {symbol}: {e}")
-        
-        # Sort by confidence
+        for strategy in ENABLED_STRATEGIES:
+            rec = self.generate_signal(strategy, market_data, account_data)
+            if rec:
+                recommendations.append(rec)
         recommendations.sort(key=lambda x: x.confidence, reverse=True)
-        
         return recommendations
-    
-    def _build_reasoning(
-        self,
-        strategy: str,
-        conditions: MarketConditions
-    ) -> str:
-        """Build human-readable reasoning for strategy selection."""
-        parts = []
-        
-        if strategy == "THETA_SPRINT":
-            parts.append(f"IV Rank {conditions.iv_rank:.0f}% (good for premium selling)")
-            if conditions.trend_direction in ("NEUTRAL", "BULL"):
-                parts.append(f"{conditions.trend_direction} trend supports put selling")
-        
-        elif strategy == "DIAGONAL_SPREAD":
-            if conditions.trend_strength >= 70:
-                parts.append(f"{conditions.trend_direction} trend with {conditions.trend_strength}% strength (PMCC/PMCP)")
-            else:
-                parts.append(f"Neutral mode (Calendar-like) with {conditions.trend_strength}% trend strength")
-            parts.append(f"IV Rank {conditions.iv_rank:.0f}%")
-        
-        if conditions.days_to_earnings < 999:
-            parts.append(f"Earnings in {conditions.days_to_earnings} days")
-        
-        return " | ".join(parts)
-    
+
+    def _build_reasoning(self, strategy: str, signal: Any) -> str:
+        regime = getattr(signal, "regime", None) or getattr(signal, "ml_regime", "n/a")
+        conf = getattr(signal, "confidence", None) or getattr(signal, "ml_confidence", 0.0)
+        if strategy == "QQQ_LEAPS":
+            return (f"QQQ LEAPS canonical engine | regime={regime} | "
+                    f"ml_confidence={conf:.2f} | gated pullback entry + PMCC overlay")
+        return (f"TurboCore Pro v3.3 | regime={regime} | confidence={conf:.2f} | "
+                f"hysteresis-tier allocation across QQQ/QLD/TQQQ/SGOV")
+
     def get_strategy_summary(self) -> Dict[str, Any]:
-        """Get summary of available strategies and their status."""
+        """Get summary of the canonical strategy lineup."""
         return {
             "strategies": {
-                "THETA_SPRINT": {
-                    "enabled": self.theta_enabled,
-                    "available": "THETA_SPRINT" in self.generators,
-                    "description": "Cash-secured puts for income",
-                    "capital_required": "$5K-$50K",
-                    "best_for": "High IV, neutral-bullish, larger accounts"
+                "QQQ_LEAPS": {
+                    "enabled": self.qqq_leaps_enabled,
+                    "available": "QQQ_LEAPS" in self.generators,
+                    "description": "Deep-ITM QQQ LEAPS calls after gated pullbacks + PMCC overlay",
+                    "instrument": "QQQ options (LEAPS + short-dated calls)",
+                    "engine": "src/qqq_leaps/canonical/qqq_leaps_enhanced_2y_hourly.py",
+                    "requires_options_approval": True,
                 },
-                "DIAGONAL_SPREAD": {
-                    "enabled": self.diagonal_enabled,
-                    "available": "DIAGONAL_SPREAD" in self.generators,
-                    "description": "Unified: PMCC/PMCP (directional) + Calendar (neutral)",
-                    "capital_required": "$500-$5K",
-                    "best_for": "All market conditions, smaller accounts"
-                }
+                "TURBOCORE_PRO": {
+                    "enabled": self.turbocore_pro_enabled,
+                    "available": "TURBOCORE_PRO" in self.generators,
+                    "description": "ETF-only regime allocator with drawdown control (v3.3)",
+                    "instrument": "QQQ / QLD / TQQQ / SGOV",
+                    "engine": "src/turbocore_pro (two-stage confidence pipeline)",
+                    "requires_options_approval": False,
+                },
             },
-            "generators_loaded": list(self.generators.keys())
+            "disabled_strategies": [
+                "TQQQ", "TURBOBOUNCE", "ZEBRA", "THETA_SPRINT", "CALENDAR",
+                "DIAGONAL_SPREAD", "VERTICAL_SPREAD", "OTM_NAKED", "SNDK",
+                "DVO", "PMCC_STANDALONE", "DUAL_CORE", "EMA_CCI_MACD",
+            ],
+            "generators_loaded": list(self.generators.keys()),
         }

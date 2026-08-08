@@ -1,8 +1,14 @@
 #!/bin/bash
 # =============================================================
 # install_signal_crons.sh
-# Run ONCE on EC2 to set up cron jobs for all three strategy
-# scanners at 3:00 PM Eastern Time, Monday through Friday.
+# Run ONCE on EC2 to set up cron jobs for the TWO canonical
+# strategy signal generators at 3:00 PM Eastern Time, Mon-Fri.
+#
+# Canonical lineup (see CANONICAL_STRATEGIES.md):
+#   - TurboCore Pro (ETF allocator, v3.3)
+#   - QQQ LEAPS (options; hourly trader runs separately via
+#     src/qqq_leaps/canonical/qqq_trader_cron.sh)
+# All other strategy schedulers are DISABLED.
 #
 # EC2 Usage:
 #   cd ~/tastywork-trading
@@ -44,7 +50,7 @@ crontab -l > /tmp/crontab.backup 2>/dev/null || true
 echo "✓ Existing crontab backed up to /tmp/crontab.backup"
 
 # 5. Strip any old TradeMind signal cron entries (idempotent)
-CLEAN_CRON=$(crontab -l 2>/dev/null | grep -v "run_turbocore_scheduler\|run_turbocore_pro_scheduler\|run_turbobounce_scheduler\|TradeMind Signal" || true)
+CLEAN_CRON=$(crontab -l 2>/dev/null | grep -v "run_turbocore_scheduler\|run_turbocore_pro_scheduler\|run_turbobounce_scheduler\|run_qqq_leaps_scheduler\|run_tqqq_scheduler\|run_theta_scheduler\|run_calendar_scheduler\|run_ema_cci_macd_scheduler\|TradeMind Signal" || true)
 
 # 6. Build new cron block
 # 0 15 * * 1-5  = 3:00 PM ET, Monday-Friday
@@ -52,8 +58,9 @@ CLEAN_CRON=$(crontab -l 2>/dev/null | grep -v "run_turbocore_scheduler\|run_turb
 NEW_CRON=$(cat <<EOF
 
 # TradeMind Signal Generators — 3:00 PM ET, Mon-Fri (installed $(date))
-0 15 * * 1-5 cd $PROJECT_DIR && $PYTHON_BIN run_turbocore_scheduler.py --once >> $LOGS_DIR/run_turbocore_scheduler.log 2>&1
-1 15 * * 1-5 cd $PROJECT_DIR && $PYTHON_BIN run_turbocore_pro_scheduler.py --once >> $LOGS_DIR/run_turbocore_pro_scheduler.log 2>&1
+# Canonical lineup only: TurboCore Pro + QQQ LEAPS
+0 15 * * 1-5 cd $PROJECT_DIR && $PYTHON_BIN run_turbocore_pro_scheduler.py --once >> $LOGS_DIR/run_turbocore_pro_scheduler.log 2>&1
+1 15 * * 1-5 cd $PROJECT_DIR && $PYTHON_BIN run_qqq_leaps_scheduler.py --once >> $LOGS_DIR/run_qqq_leaps_scheduler.log 2>&1
 EOF
 )
 
@@ -63,11 +70,11 @@ EOF
 echo ""
 echo "✅ Cron jobs installed. Active TradeMind entries:"
 echo "----------------------------------------------"
-crontab -l | grep -E "TradeMind|turbocore|turbobounce"
+crontab -l | grep -E "TradeMind|turbocore|qqq_leaps"
 echo "----------------------------------------------"
 echo ""
 echo "Signals will be generated Monday-Friday at 3:00 PM ET."
 echo "Logs: $LOGS_DIR/"
 echo ""
 echo "To verify: crontab -l"
-echo "To test now: cd $PROJECT_DIR && $PYTHON_BIN run_turbocore_pro_scheduler.py --once"
+echo "To test now: cd $PROJECT_DIR && $PYTHON_BIN run_turbocore_pro_scheduler.py --once\n# or: $PYTHON_BIN run_qqq_leaps_scheduler.py --once"

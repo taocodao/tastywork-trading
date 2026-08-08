@@ -313,32 +313,47 @@ class TurboCoreSignalScorer:
         n_meta_cv = min(5, max(2, len(X_meta) // 8))
         self.meta_model = CalibratedClassifierCV(
             estimator=base_meta,
-            method='isotonic',  # Isotonic (non-parametric) for better calibration
+            # FIX (v2 rebuild, Aug 2026): switched isotonic -> sigmoid (Platt).
+            # Deep-research finding: isotonic regression is a non-parametric,
+            # sample-size-sensitive method prone to overfitting/over-compression
+            # on small calibration folds. On our meta-model's ~15-1500 samples
+            # (frequently on the low end of that range at hourly cadence with
+            # coarser walk-forward folds), a 2025 benchmark on XGBoost found
+            # Platt/sigmoid achieved a larger ECE reduction than isotonic.
+            # This is the single most directly-evidenced, lowest-risk fix from
+            # the research and is consistent with the previously measured
+            # confidence compression (mean 0.476, std 0.059, max 0.655 -- rarely
+            # reaching the 0.60 high-conviction Kelly threshold).
+            method='sigmoid',
             cv=n_meta_cv,
         )
         self.meta_model.fit(X_meta, y_meta)
         self.active_meta_features = available_meta
 
-        # ── STEP 7: SHAP Feature Pruning ──────────────────────────────────────
+        # ── STEP 7: SHAP Feature Diagnostics ──────────────────────────────────
+        # FIX (v2 rebuild, Aug 2026): previously this block SHRANK
+        # active_meta_features (the columns used at INFERENCE time) without
+        # retraining the already-fitted booster on the pruned column set.
+        # That caused a train/predict feature-count mismatch the first time
+        # predict_confidence() ran after a pruning event ("Feature shape
+        # mismatch, expected: N, got N-k"), silently breaking inference.
+        # Kept diagnostic-only now: SHAP importances are logged but
+        # active_meta_features always equals the exact columns the booster
+        # was fit on (available_meta).
         try:
             import shap
-            # Get the base estimator from the first calibrated fold
             base_est = self.meta_model.calibrated_classifiers_[0].estimator
             explainer = shap.TreeExplainer(base_est)
             shap_vals = explainer.shap_values(X_meta)
             mean_shap = np.abs(shap_vals).mean(axis=0)
-            # Keep features with mean |SHAP| >= 0.005
-            keep_mask = mean_shap >= 0.005
-            pruned    = [f for f, keep in zip(available_meta, keep_mask) if keep]
-            pruned_n  = len(available_meta) - len(pruned)
-            if pruned_n > 0 and len(pruned) >= 5:
-                self.active_meta_features = pruned
-                logger.info(f"SHAP pruning: removed {pruned_n} low-impact features, "
-                            f"keeping {len(pruned)}: {pruned}")
+            low_impact = [f for f, m in zip(available_meta, mean_shap) if m < 0.005]
+            if low_impact:
+                logger.info(f"SHAP: {len(low_impact)} low-impact features "
+                            f"(kept for train/predict consistency): {low_impact}")
         except ImportError:
-            logger.debug("shap not installed. Skipping SHAP feature pruning.")
+            logger.debug("shap not installed. Skipping SHAP diagnostics.")
         except Exception as e:
-            logger.debug(f"SHAP pruning failed (non-critical): {e}")
+            logger.debug(f"SHAP diagnostics failed (non-critical): {e}")
 
         self.is_trained = True
         self._save_models()
