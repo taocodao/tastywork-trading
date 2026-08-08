@@ -30,9 +30,17 @@ from ml_confidence_model import compute_ml_confidence_walkforward
 warnings.filterwarnings("ignore", category=UserWarning, module="hmmlearn")
 warnings.filterwarnings("ignore", category=RuntimeWarning)
 
-OUT_DIR = Path(os.getenv("QQQ_OUT_DIR", "/home/user/workspace/qqq_leaps_2y_hourly_output"))
-OUT_DIR.mkdir(exist_ok=True, parents=True)
-DATA_DIR = os.getenv("QQQ_DATA_DIR", "/home/user/workspace/qqq_leaps_data_2y_hourly")
+# Default output/data dirs live under the current user's workspace so the module
+# imports cleanly on any host (dev machine, EC2, CI). Override with QQQ_OUT_DIR /
+# QQQ_DATA_DIR env vars. mkdir is deferred so a bare import never touches the FS.
+_WORKSPACE = Path.home() / "workspace"
+OUT_DIR = Path(os.getenv("QQQ_OUT_DIR", str(_WORKSPACE / "qqq_leaps_2y_hourly_output")))
+DATA_DIR = os.getenv("QQQ_DATA_DIR", str(_WORKSPACE / "qqq_leaps_data_2y_hourly"))
+
+def ensure_out_dir() -> Path:
+    """Create OUT_DIR on first real use (not at import time)."""
+    OUT_DIR.mkdir(exist_ok=True, parents=True)
+    return OUT_DIR
 
 logging.basicConfig(level=logging.INFO,
     format="%(asctime)s [%(levelname)s] %(message)s", force=True)
@@ -1099,6 +1107,7 @@ def main():
         if k == "nav_series": continue
         print(f"  {k:.<35} {v:>15,.4f}")
 
+    ensure_out_dir()
     result["nav_series"].to_csv(OUT_DIR / "nav_2y.csv", index=False)
     pd.DataFrame(result["fills"]).to_csv(OUT_DIR / "reconcile_2y.csv", index=False)
     qqq_bh["nav_series"].to_csv(OUT_DIR / "qqq_bh_nav_2y.csv")
