@@ -1,0 +1,87 @@
+# =============================================================================
+# NAV-Based Phase System — QQQ LEAPS + PMCC
+# =============================================================================
+# Self-adjusting capital-scaling phases. NAV is the sole trigger; phases are
+# evaluated at DAILY CLOSE (causal: today's entries use params set from the
+# prior day's closing NAV). See src/qqq_leaps/phase_manager.py.
+#
+# Provenance:
+#   - SEED tier parameters incorporate the 5y hourly seed backtest
+#     (2021-08 -> 2026-07, $8,600 start): Scenario D — seed sizing WITH a
+#     defensive PMCC overlay at 0.15 delta — beat seed-without-PMCC on every
+#     metric (CAGR 8.03% vs 7.39%, Sharpe 0.65 vs 0.58, MaxDD -23.7% vs -27.6%).
+#     SEED therefore enables PMCC at a flat defensive 0.15 delta, deviating from
+#     the original plan (which had pmcc_enabled: false).
+#   - GROWTH / TARGET deltas and sizing follow the original implementation plan.
+#   - TARGET sizing (0.33 pct / 3 positions / 5 contracts) matches the canonical
+#     production Config validated at $30K.
+#
+# Only ENTRY/SIZING-time Config fields may appear in a phase (whitelist enforced
+# by PhaseManager): delta_bull/neutral/bear, dte_bull/neutral/bear,
+# max_positions, max_contracts, max_position_pct, pmcc_enabled,
+# pmcc_delta_bull_strong/moderate/defensive, cash_reserve.
+# Management-time params (pmcc profit-take, roll, loss multiple) are NOT
+# phase-varying, so open positions are grandfathered automatically.
+# =============================================================================
+
+phase_system:
+  enabled: true
+  nav_check_frequency: "daily_close"     # causal: evaluate once per day on prior close NAV
+  demotion_buffer_pct: 0.05              # NAV must fall 5% below a phase's floor to demote (hysteresis)
+  min_dwell_days: 5                      # minimum days in a phase before promotion/demotion allowed
+  emergency_demotion_dd_pct: 0.15        # instant demotion if close-over-close drawdown exceeds this
+
+  phases:
+    - name: SEED
+      nav_min: 0
+      nav_max: 14999
+      delta_bull: 0.55
+      delta_neutral: 0.50
+      delta_bear: 0.45
+      dte_bull: 365
+      dte_neutral: 540
+      dte_bear: 730
+      max_positions: 1
+      max_contracts: 1
+      max_position_pct: 0.95
+      pmcc_enabled: true                 # Scenario D: defensive PMCC improves all metrics at seed size
+      pmcc_delta_bull_strong: 0.15       # flat defensive posture at seed size
+      pmcc_delta_bull_moderate: 0.15
+      pmcc_delta_defensive: 0.15
+      cash_reserve: 0.05
+
+    - name: GROWTH
+      nav_min: 15000
+      nav_max: 29999
+      delta_bull: 0.75
+      delta_neutral: 0.70
+      delta_bear: 0.60
+      dte_bull: 365
+      dte_neutral: 540
+      dte_bear: 730
+      max_positions: 2
+      max_contracts: 2
+      max_position_pct: 0.45
+      pmcc_enabled: true
+      pmcc_delta_bull_strong: 0.25
+      pmcc_delta_bull_moderate: 0.20
+      pmcc_delta_defensive: 0.12
+      cash_reserve: 0.05
+
+    - name: TARGET
+      nav_min: 30000
+      nav_max: null                      # no upper bound
+      delta_bull: 0.85
+      delta_neutral: 0.80
+      delta_bear: 0.65
+      dte_bull: 365
+      dte_neutral: 540
+      dte_bear: 730
+      max_positions: 3
+      max_contracts: 5
+      max_position_pct: 0.33
+      pmcc_enabled: true
+      pmcc_delta_bull_strong: 0.28
+      pmcc_delta_bull_moderate: 0.23
+      pmcc_delta_defensive: 0.15
+      cash_reserve: 0.05
