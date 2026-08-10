@@ -95,6 +95,9 @@ class Config:
     max_position_pct: float = 0.33
     max_contracts: int = 5
     cash_reserve: float = 0.05
+    # Phase system: gates PMCC short-call opens. True preserves legacy behavior;
+    # a phase may set False to stop NEW PMCC opens (existing shorts unaffected).
+    pmcc_enabled: bool = True
     # Optional portfolio guard for the common-underlying LEAPS book.  Exposure
     # is contracts * 100 * QQQ spot * option delta (not option market value).
     # Disabled until an OOS validation supports a specific cap.
@@ -770,6 +773,8 @@ class EnhancedEngine:
         return True, ""
 
     def try_open_short(self, ts, pos, spot, row, rf):
+        if not self.cfg.pmcc_enabled:  # phase gate: no NEW PMCC opens (existing shorts unaffected)
+            return
         if any(s.leaps_id == pos.id for s in self.shorts):
             return
         should_open, reason = self.pmcc_should_open(row, pos)
@@ -917,8 +922,15 @@ class EnhancedEngine:
 # =============================================================================
 # BACKTEST DRIVER
 # =============================================================================
-def run_enhanced(start_date, end_date, data, features, cfg: Optional[Config] = None):
-    """Run a backtest with an explicit config to support isolated A/B validation."""
+def run_enhanced(start_date, end_date, data, features, cfg: Optional[Config] = None, phase_manager=None):
+    """Run a backtest with an explicit config to support isolated A/B validation.
+
+    phase_manager (optional): a PhaseManager enabling NAV-driven capital-scaling
+    phases. Evaluated causally at the START of each day using the PRIOR day's
+    closing NAV; the active phase's whitelisted entry/sizing params govern that
+    day's NEW entries. Open positions are unaffected (grandfathered) because
+    management-time params are not phase-varying.
+    """
     cfg = cfg or CFG
     engine = EnhancedEngine(cfg)
     hourly = data["qqq_1h"].copy()
@@ -926,8 +938,16 @@ def run_enhanced(start_date, end_date, data, features, cfg: Optional[Config] = N
 
     features = features[(features.index >= start_date) & (features.index <= end_date)]
     nav_series = []
+    prev_close_nav: Optional[float] = None
 
     for date, row in features.iterrows():
+        # ── Phase evaluation (causal): today's sizing from yesterday's close ──
+        if phase_manager is not None:
+            nav_for_phase = prev_close_nav if prev_close_nav is not None else cfg.initial_capital
+            active_phase = phase_manager.evaluate(date, nav_for_phase, prev_close_nav)
+            if active_phase is not None:
+                engine.cfg = phase_manager.apply_to(cfg)
+
         spot_daily = row["Close"]
         vix_val = row["vix"]
         rf = row["rf"]
@@ -937,7 +957,9 @@ def run_enhanced(start_date, end_date, data, features, cfg: Optional[Config] = N
         day_bars = hourly[hourly["date"] == date]
         if len(day_bars) == 0:
             nav = engine.total_nav(spot_daily, date, iv_long, iv_short, rf)
-            nav_series.append({"ts": date, "nav": nav, "spot": spot_daily, "regime": row["regime"]})
+            nav_series.append({"ts": date, "nav": nav, "spot": spot_daily, "regime": row["regime"],
+                               "phase": phase_manager.current_phase.name if phase_manager is not None and phase_manager.current_phase else None})
+            prev_close_nav = nav
             continue
 
         # 09:45 exit-only scan (10:30 bar proxy)
@@ -963,7 +985,9 @@ def run_enhanced(start_date, end_date, data, features, cfg: Optional[Config] = N
                 engine.try_open_short(ts_300, pos, spot_300, row, rf)
 
         nav = engine.total_nav(spot_daily, date, iv_long, iv_short, rf)
-        nav_series.append({"ts": date, "nav": nav, "spot": spot_daily, "regime": row["regime"]})
+        nav_series.append({"ts": date, "nav": nav, "spot": spot_daily, "regime": row["regime"],
+                           "phase": phase_manager.current_phase.name if phase_manager is not None and phase_manager.current_phase else None})
+        prev_close_nav = nav
 
     # Close remaining
     final_ts = features.index[-1]
@@ -982,6 +1006,11 @@ def run_enhanced(start_date, end_date, data, features, cfg: Optional[Config] = N
         "pmcc_skip_count": engine.pmcc_skip_count,
         "pmcc_open_count": engine.pmcc_open_count,
         "pmcc_skip_reasons": engine.pmcc_skip_reasons,
+        "phase_transitions": [
+            {"ts": str(e.ts), "from": e.from_phase, "to": e.to_phase,
+             "nav": e.nav_at_transition, "reason": e.reason}
+            for e in (phase_manager.transition_log if phase_manager is not None else [])
+        ],
     }
 
 
