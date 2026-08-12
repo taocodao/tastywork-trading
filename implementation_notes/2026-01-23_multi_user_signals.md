@@ -86,7 +86,7 @@ Updated `handle_approve_signal`:
 
 ### Backend (EC2)
 ```bash
-ssh ubuntu@34.235.119.67
+ssh ubuntu@34.203.194.137
 cd ~/tastywork-trading
 git pull
 pkill -f websocket_server.py && nohup python3 websocket_server.py > websocket.log 2>&1 &

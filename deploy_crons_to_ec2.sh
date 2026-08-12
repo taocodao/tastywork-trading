@@ -4,12 +4,12 @@
 # Run from LOCAL machine (Git Bash / WSL) to push the cron
 # installer to EC2 and execute it via SSH.
 #
-# EC2:  ubuntu@34.235.119.67
+# EC2:  ubuntu@34.203.194.137
 # Key:  D:\Projects\IB-program-trading\tradecoin-bot-key.pem
 # =============================================================
 
 EC2_USER="ubuntu"
-EC2_HOST="34.235.119.67"
+EC2_HOST="34.203.194.137"
 EC2_KEY="D:/Projects/IB-program-trading/tradecoin-bot-key.pem"
 REMOTE_DIR="~/tastywork-trading"
 

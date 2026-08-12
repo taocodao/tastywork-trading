@@ -21,7 +21,7 @@ Accounts: ['DUK782510']
 
 ## What Was Fixed
 
-1. **Changed IB_HOST** from `34.235.119.67` (public IP) to `127.0.0.1` (localhost)
+1. **Changed IB_HOST** from `34.203.194.137` (public IP) to `127.0.0.1` (localhost)
 2. **Restarted IB Gateway** Docker container
 3. **Stopped interfering containers** (IB-program-trading services)
 

@@ -1,7 +1,7 @@
 # EC2 Server & WebSocket Startup Guide
 
 ## Issue
-- EC2 instance `34.235.119.67` is unreachable
+- EC2 instance `34.203.194.137` is unreachable
 - SSH connection timing out on port 22
 - WebSocket server at `wss://ws.trademind.bot` is down
 
@@ -11,7 +11,7 @@
 1. Go to [AWS EC2 Console](https://console.aws.amazon.com/ec2/)
 2. Select **US East (N. Virginia)** region
 3. Click **Instances** in left sidebar
-4. Look for instance with IP `34.235.119.67`
+4. Look for instance with IP `34.203.194.137`
 5. Check **Instance State**:
    - ✅ **Running** - Instance is up (proceed to Step 2)
    - ❌ **Stopped** - Instance is stopped (see below)
@@ -41,7 +41,7 @@ If EC2 public IP changed after restart:
 1. Go to your DNS provider (where `trademind.bot` is hosted)
 2. Update A records:
    - `ws.trademind.bot` → new IP
-   - `34.235.119.67` references → new IP
+   - `34.203.194.137` references → new IP
 3. Wait 5-10 minutes for DNS propagation
 
 ## Step 4: SSH into EC2
@@ -49,12 +49,12 @@ If EC2 public IP changed after restart:
 Once instance is running:
 
 ```bash
-ssh -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@ec2-34-235-119-67.compute-1.amazonaws.com
+ssh -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@ec2-34-203-194-137.compute-1.amazonaws.com
 ```
 
 Or use the IP directly:
 ```bash
-ssh -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.235.119.67
+ssh -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.203.194.137
 ```
 
 ## Step 5: Start WebSocket Server
@@ -197,7 +197,7 @@ sudo systemctl restart trademind-api
 
 ```bash
 # SSH into EC2
-ssh -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.235.119.67
+ssh -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.203.194.137
 
 # Deploy latest code from git (on EC2)
 cd ~/tastywork-trading

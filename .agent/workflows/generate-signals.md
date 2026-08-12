@@ -9,7 +9,7 @@ Kick off signal generation on EC2 exactly as the 3:00 PM ET cron does.
 - **TurboCore Pro** → `run_turbocore_pro_scheduler.py --once` (cron: `1 15 * * 1-5`)
 
 **EC2 details:**
-- Host: `ubuntu@34.235.119.67`
+- Host: `ubuntu@34.203.194.137`
 - PEM: `D:\Projects\IB-program-trading\tradecoin-bot-key.pem`
 - Project dir: `~/tastywork-trading`
 - Logs dir: `~/tastywork-trading/logs/`
@@ -24,12 +24,12 @@ Kick off signal generation on EC2 exactly as the 3:00 PM ET cron does.
 // turbo
 1. Launch both schedulers in the background on EC2 (appends to their log files):
 ```powershell
-ssh -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" -o StrictHostKeyChecking=no ubuntu@34.235.119.67 "cd ~/tastywork-trading && nohup /usr/bin/python3 run_turbocore_scheduler.py --once >> logs/run_turbocore_scheduler.log 2>&1 & nohup /usr/bin/python3 run_turbocore_pro_scheduler.py --once >> logs/run_turbocore_pro_scheduler.log 2>&1 &"
+ssh -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" -o StrictHostKeyChecking=no ubuntu@34.203.194.137 "cd ~/tastywork-trading && nohup /usr/bin/python3 run_turbocore_scheduler.py --once >> logs/run_turbocore_scheduler.log 2>&1 & nohup /usr/bin/python3 run_turbocore_pro_scheduler.py --once >> logs/run_turbocore_pro_scheduler.log 2>&1 &"
 ```
 
 2. Wait ~2 minutes for ML pipelines to complete, then check both logs:
 ```powershell
-ssh -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" -o StrictHostKeyChecking=no ubuntu@34.235.119.67 "echo '=== TURBOCORE ===' && tail -15 ~/tastywork-trading/logs/run_turbocore_scheduler.log && echo '=== TURBOCORE PRO ===' && tail -15 ~/tastywork-trading/logs/run_turbocore_pro_scheduler.log"
+ssh -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" -o StrictHostKeyChecking=no ubuntu@34.203.194.137 "echo '=== TURBOCORE ===' && tail -15 ~/tastywork-trading/logs/run_turbocore_scheduler.log && echo '=== TURBOCORE PRO ===' && tail -15 ~/tastywork-trading/logs/run_turbocore_pro_scheduler.log"
 ```
 
 ---
@@ -39,12 +39,12 @@ ssh -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" -o StrictHostKeyCh
 // turbo
 1. Launch in background and log:
 ```powershell
-ssh -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" -o StrictHostKeyChecking=no ubuntu@34.235.119.67 "cd ~/tastywork-trading && nohup /usr/bin/python3 run_turbocore_scheduler.py --once >> logs/run_turbocore_scheduler.log 2>&1 &"
+ssh -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" -o StrictHostKeyChecking=no ubuntu@34.203.194.137 "cd ~/tastywork-trading && nohup /usr/bin/python3 run_turbocore_scheduler.py --once >> logs/run_turbocore_scheduler.log 2>&1 &"
 ```
 
 2. Check log after ~2 min:
 ```powershell
-ssh -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" -o StrictHostKeyChecking=no ubuntu@34.235.119.67 "tail -20 ~/tastywork-trading/logs/run_turbocore_scheduler.log"
+ssh -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" -o StrictHostKeyChecking=no ubuntu@34.203.194.137 "tail -20 ~/tastywork-trading/logs/run_turbocore_scheduler.log"
 ```
 
 ---
@@ -54,12 +54,12 @@ ssh -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" -o StrictHostKeyCh
 // turbo
 1. Launch in background and log:
 ```powershell
-ssh -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" -o StrictHostKeyChecking=no ubuntu@34.235.119.67 "cd ~/tastywork-trading && nohup /usr/bin/python3 run_turbocore_pro_scheduler.py --once >> logs/run_turbocore_pro_scheduler.log 2>&1 &"
+ssh -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" -o StrictHostKeyChecking=no ubuntu@34.203.194.137 "cd ~/tastywork-trading && nohup /usr/bin/python3 run_turbocore_pro_scheduler.py --once >> logs/run_turbocore_pro_scheduler.log 2>&1 &"
 ```
 
 2. Check log after ~2 min:
 ```powershell
-ssh -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" -o StrictHostKeyChecking=no ubuntu@34.235.119.67 "tail -20 ~/tastywork-trading/logs/run_turbocore_pro_scheduler.log"
+ssh -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" -o StrictHostKeyChecking=no ubuntu@34.203.194.137 "tail -20 ~/tastywork-trading/logs/run_turbocore_pro_scheduler.log"
 ```
 
 ---
@@ -68,7 +68,7 @@ ssh -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" -o StrictHostKeyCh
 
 // turbo
 ```powershell
-cmd /c ssh -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" -o StrictHostKeyChecking=no ubuntu@34.235.119.67 "crontab -l" > D:\Projects\tastywork-trading-1\ec2_cron.txt 2>&1
+cmd /c ssh -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" -o StrictHostKeyChecking=no ubuntu@34.203.194.137 "crontab -l" > D:\Projects\tastywork-trading-1\ec2_cron.txt 2>&1
 ```
 Then read file: `D:\Projects\tastywork-trading-1\ec2_cron.txt`
 

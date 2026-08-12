@@ -337,7 +337,7 @@ Also deployed:
 
 **Context**:
 - Scheduler connects then immediately disconnects
-- Config had `IB_HOST = "34.235.119.67"` (public IP)
+- Config had `IB_HOST = "34.203.194.137"` (public IP)
 - On EC2, should connect via localhost since IB Gateway is local
 
 **Resolution**:

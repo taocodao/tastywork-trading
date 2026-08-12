@@ -6,7 +6,7 @@ Runs the signal generator on EC2 to create a fresh test signal
 import subprocess
 import sys
 
-EC2_HOST = "ubuntu@ec2-34-235-119-67.compute-1.amazonaws.com"
+EC2_HOST = "ubuntu@ec2-34-203-194-137.compute-1.amazonaws.com"
 SSH_KEY = r"D:\Projects\IB-program-trading\tradecoin-bot-key.pem"
 
 # Simple command to run signal generator

@@ -118,14 +118,14 @@ scp -i tradecoin-bot-key.pem \
     calendar_monitor_continuous.py \
     calendar-monitor.service \
     deploy_calendar_monitor.sh \
-    ubuntu@ec2-34-235-119-67.compute-1.amazonaws.com:~/tastywork-trading/
+    ubuntu@ec2-34-203-194-137.compute-1.amazonaws.com:~/tastywork-trading/
 ```
 
 ### Step 2: Deploy Service
 
 ```bash
 # SSH to EC2
-ssh -i tradecoin-bot-key.pem ubuntu@ec2-34-235-119-67.compute-1.amazonaws.com
+ssh -i tradecoin-bot-key.pem ubuntu@ec2-34-203-194-137.compute-1.amazonaws.com
 
 # Make script executable
 chmod +x ~/tastywork-trading/deploy_calendar_monitor.sh

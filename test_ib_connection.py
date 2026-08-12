@@ -6,8 +6,8 @@ import sys
 IB_HOSTS = [
     ('127.0.0.1', 4001, 'Local Paper Trading'),
     ('127.0.0.1', 7496, 'Local Live Trading'),
-    ('34.235.119.67', 4002, 'EC2 IB Gateway (Port 4002)'),
-    ('34.235.119.67', 4004, 'EC2 IB Gateway (Port 4004)'),
+    ('34.203.194.137', 4002, 'EC2 IB Gateway (Port 4002)'),
+    ('34.203.194.137', 4004, 'EC2 IB Gateway (Port 4004)'),
 ]
 
 print("Testing IB Gateway connections...\n")

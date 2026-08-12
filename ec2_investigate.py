@@ -2,7 +2,7 @@
 import subprocess, os
 
 KEY = os.path.join(os.path.dirname(os.path.abspath(__file__)), "tradecoin-bot-key.pem")
-HOST = "ubuntu@34.235.119.67"
+HOST = "ubuntu@34.203.194.137"
 OUT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "ec2_diag.txt")
 
 def ssh(cmd):

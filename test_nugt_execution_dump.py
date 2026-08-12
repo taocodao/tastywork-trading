@@ -1,7 +1,7 @@
 import urllib.request
 import json
 
-API_URL = 'http://34.235.119.67:8002/api'
+API_URL = 'http://34.203.194.137:8002/api'
 
 req = urllib.request.Request(f'{API_URL}/signals')
 res = urllib.request.urlopen(req)

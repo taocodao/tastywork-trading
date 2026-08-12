@@ -17,7 +17,7 @@ def check_account_activity():
     
     try:
         print("Connecting to EC2 IB Gateway...")
-        ib.connect('34.235.119.67', 4004, clientId=7000)
+        ib.connect('34.203.194.137', 4004, clientId=7000)
         print("✅ Connected!\n")
         
         # Get account summary

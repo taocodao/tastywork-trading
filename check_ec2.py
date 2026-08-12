@@ -1,7 +1,7 @@
 import subprocess, sys
 
 KEY = r"D:\Projects\IB-program-trading\tradecoin-bot-key.pem"
-IPS = ["34.235.119.67", "54.89.159.18", "34.235.119.76"]
+IPS = ["34.203.194.137", "54.89.159.18", "34.235.119.76"]
 
 CMD = """
 echo '=== HOME ==='

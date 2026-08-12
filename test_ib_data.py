@@ -20,8 +20,8 @@ def test_connection():
     
     # Try AWS EC2 first on port 4001 (confirmed from docker ps)
     ports_to_try = [
-        ("34.235.119.67", 4004, "AWS EC2 Gateway (tradecoinbot) - Port 4004"),
-        ("34.235.119.67", 4001, "AWS EC2 Gateway (tradecoinbot) - Port 4001"),
+        ("34.203.194.137", 4004, "AWS EC2 Gateway (tradecoinbot) - Port 4004"),
+        ("34.203.194.137", 4001, "AWS EC2 Gateway (tradecoinbot) - Port 4001"),
         ("127.0.0.1", 4004, "Local Gateway (Docker) - Port 4004"),
         ("127.0.0.1", 4001, "Local Gateway - Port 4001"),
     ]

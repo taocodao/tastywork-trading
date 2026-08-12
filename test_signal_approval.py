@@ -13,7 +13,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 # Configuration
-BACKEND_URL = "http://34.235.119.67:8002"
+BACKEND_URL = "http://34.203.194.137:8002"
 SIGNAL_ID = "5a2b9650-8bbd-4c6f-948b-2134fb5f5e55"  # SPY signal in database
 REFRESH_TOKEN = os.getenv("TASTYTRADE_REFRESH_TOKEN")
 ACCOUNT_NUMBER = os.getenv("TASTYTRADE_ACCOUNT_NUMBER", "5WV69035")

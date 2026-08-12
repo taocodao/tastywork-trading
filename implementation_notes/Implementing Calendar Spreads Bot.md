@@ -3647,16 +3647,16 @@ Share that IP with me and I'll give you the exact commands to:
 
 ### User Input
 
-34.235.119.67
+34.203.194.137
 
 ### Planner Response
 
-## Deployment Instructions for `34.235.119.67`
+## Deployment Instructions for `34.203.194.137`
 
 ### Step 1: SSH into Your Server
 Open PowerShell and run:
 ```powershell
-ssh -i "C:\Users\erich\Downloads\tradecoin-bot-key.pem" ubuntu@34.235.119.67
+ssh -i "C:\Users\erich\Downloads\tradecoin-bot-key.pem" ubuntu@34.203.194.137
 ```
 *(Adjust the path to where you saved the `.pem` file)*
 
@@ -3691,7 +3691,7 @@ docker --version
 ### Step 3: Upload Your Code
 From your **local Windows machine** (new PowerShell window):
 ```powershell
-scp -i "C:\Users\erich\Downloads\tradecoin-bot-key.pem" -r "D:\Projects\IB-program-trading" ubuntu@34.235.119.67:~/app
+scp -i "C:\Users\erich\Downloads\tradecoin-bot-key.pem" -r "D:\Projects\IB-program-trading" ubuntu@34.203.194.137:~/app
 ```
 
 ---
@@ -3709,8 +3709,8 @@ Add these A records in Namecheap → Advanced DNS:
 
 | Type | Host | Value |
 |------|------|-------|
-| A | `@` | `34.235.119.67` |
-| A | `dashboard` | `34.235.119.67` |
+| A | `@` | `34.203.194.137` |
+| A | `dashboard` | `34.203.194.137` |
 
 After DNS propagates (~5-30 mins), access:
 ```
@@ -3723,7 +3723,7 @@ Ready to start? Try **Step 1** (SSH) first and let me know if it works!
 
 ### User Input
 
-ssh -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.235.119.67
+ssh -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.203.194.137
 
 ### Planner Response
 
@@ -3757,7 +3757,7 @@ icacls "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" /inheritance:r /gr
 
 Then try SSH again:
 ```powershell
-ssh -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.235.119.67
+ssh -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.203.194.137
 ```
 
 ### User Input
@@ -3771,7 +3771,7 @@ ssh -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.235.119.
 The permissions are fixed. Now try SSH again:
 
 ```powershell
-ssh -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.235.119.67
+ssh -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.203.194.137
 ```
 
 ### User Input
@@ -3818,7 +3818,7 @@ Docker is installed and you're back in. Now let's upload your code.
 Open a **new PowerShell window** (keep the SSH session open) and run:
 
 ```powershell
-scp -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" -r "D:\Projects\IB-program-trading\*" ubuntu@34.235.119.67:~/app/
+scp -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" -r "D:\Projects\IB-program-trading\*" ubuntu@34.203.194.137:~/app/
 ```
 
 This will copy your entire project to the server.
@@ -3848,7 +3848,7 @@ I see the issue - you ran the `scp` command **inside the SSH session**. You need
 1.  Open a **new PowerShell window** on your Windows PC.
 2.  Run the upload command there:
     ```powershell
-    scp -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" -r D:\Projects\IB-program-trading\* ubuntu@34.235.119.67:~/app/
+    scp -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" -r D:\Projects\IB-program-trading\* ubuntu@34.203.194.137:~/app/
     ```
 
 Keep your SSH session open in the other terminal. After the upload finishes, go back to the SSH session and run:
@@ -3875,7 +3875,7 @@ Creating app_dashboard_1   ... done
 ### Access Your Dashboard
 Try this URL now:
 ```
-http://34.235.119.67:8501
+http://34.203.194.137:8501
 ```
 
 If it doesn't load, you need to add port 8501 to your EC2 Security Group:
@@ -3886,7 +3886,7 @@ If it doesn't load, you need to add port 8501 to your EC2 Security Group:
     *   **Source**: `0.0.0.0/0` (or My IP)
 3.  Save.
 
-Then refresh `http://34.235.119.67:8501`.
+Then refresh `http://34.203.194.137:8501`.
 
 ---
 
@@ -3894,8 +3894,8 @@ Then refresh `http://34.235.119.67:8501`.
 Go to **Namecheap** → **Advanced DNS** for `tradecoin.bot` and add:
 | Type | Host | Value |
 |------|------|-------|
-| A | `@` | `34.235.119.67` |
-| A | `dashboard` | `34.235.119.67` |
+| A | `@` | `34.203.194.137` |
+| A | `dashboard` | `34.203.194.137` |
 
 After 5-30 mins, you'll access: `http://dashboard.tradecoin.bot:8501`
 
@@ -3918,7 +3918,7 @@ Absolutely! Since the market is closed, here are the testing options:
 | **C** | Generate Synthetic Test Data | Populate dashboard with sample trades for UI testing |
 | **D** | Run Unit Tests | Validate stop calculator, screener formulas |
 
-**Recommendation**: Let's do **Option A** - run the historical backtest and save results to your AWS database. Then you can see the P&L charts and trade history in your live dashboard at `http://34.235.119.67:8501`.
+**Recommendation**: Let's do **Option A** - run the historical backtest and save results to your AWS database. Then you can see the P&L charts and trade history in your live dashboard at `http://34.203.194.137:8501`.
 
 This requires updating [ib_historical_backtest.py](cci:7://file:///d:/Projects/IB-program-trading/tests/ib_historical_backtest.py:0:0-0:0) to write to the database. Should I implement that?
 
@@ -4022,7 +4022,7 @@ how can we make the IB Gateway run on the cloud
 Great question! **IB Gateway is already configured to run on your EC2 instance** via Docker. We set this up earlier in [docker-compose.yml](cci:7://file:///d:/Projects/IB-program-trading/docker-compose.yml:0:0-0:0).
 
 ### Current Setup (Already Deployed)
-Your EC2 at `34.235.119.67` has 3 containers:
+Your EC2 at `34.203.194.137` has 3 containers:
 1.  `app_ib-gateway_1` - IB Gateway (headless)
 2.  `app_trading-bot_1` - Your Python bot
 3.  `app_dashboard_1` - Streamlit dashboard
@@ -4035,7 +4035,7 @@ The IB Gateway container needs your **IB login credentials** to connect. Current
 
 1.  **SSH into your EC2**:
     ```powershell
-    ssh -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.235.119.67
+    ssh -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.203.194.137
     ```
 
 2.  **Edit the [.env](cci:7://file:///d:/Projects/IB-program-trading/.env:0:0-0:0) file**:
@@ -4426,7 +4426,7 @@ Look for:
 If you see `Permission denied` again, we may need to use the `user: "0:0"` trick I mentioned earlier, but this clean config might have fixed it (old config had stale volume paths).
 
 While that's checking, you can verify the dashboard is up at:
-`http://34.235.119.67:8501`
+`http://34.203.194.137:8501`
 
 ### User Input
 
@@ -4550,7 +4550,7 @@ docker-compose logs -f ib-gateway
 
 If you see **`Broker: Connected`** eventually, it's working!
 
-Once confirmed, your dashboard `http://34.235.119.67:8501` will show the data (currently empty or "No trades found" until the bot places trades).
+Once confirmed, your dashboard `http://34.203.194.137:8501` will show the data (currently empty or "No trades found" until the bot places trades).
 
 ### User Input
 
@@ -4920,7 +4920,7 @@ services:
 
 I will run the command to apply this cleaning. Then I'll wipe containers again to be 100% sure no old volumes are attached.
 
-*User accepted the command `ssh -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.235.119.67 "cat <<EOF > ~/app/docker-compose.yml
+*User accepted the command `ssh -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.203.194.137 "cat <<EOF > ~/app/docker-compose.yml
 version: '3.8'
 
 services:
@@ -5016,7 +5016,7 @@ docker-compose up -d --build
 
 This removes the problematic volume mappings and should fix the permission error. Let me know when it's done!
 
-*User accepted the command `ssh -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.235.119.67`*
+*User accepted the command `ssh -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.203.194.137`*
 
 ### User Input
 
@@ -5032,7 +5032,7 @@ If the SSH process is hung, it might be due to network timeout or the previous `
 2.  Open a **new PowerShell window**.
 3.  Reconnect:
     ```powershell
-    ssh -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.235.119.67
+    ssh -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.203.194.137
     ```
 4.  Once connected, run the fix command block I provided above.
 
@@ -5123,7 +5123,7 @@ You should see startup logs. If everything is good, it will eventually say:
 > `Broker: Connected`
 > `Open listen port 4002`
 
-And your dashboard should be live at: `http://34.235.119.67:8501`
+And your dashboard should be live at: `http://34.203.194.137:8501`
 
 ### User Input
 
@@ -5150,7 +5150,7 @@ Once you log out locally, the cloud instance will automatically grab the session
 
 ### Check Dashboard
 While it's connecting, check:
-`http://34.235.119.67:8501`
+`http://34.203.194.137:8501`
 
 It should show up soon!
 
@@ -5175,7 +5175,7 @@ The site is unreachable (`ERR_CONNECTION_TIMED_OUT`). This means the **AWS Secur
     *   **Source**: `Anywhere-IPv4` (`0.0.0.0/0`)
 7.  Click **Save rules**.
 
-Wait 10 seconds and try refreshing the page `http://34.235.119.67:8501`. It should load instantly!
+Wait 10 seconds and try refreshing the page `http://34.203.194.137:8501`. It should load instantly!
 
 ### User Input
 
@@ -5192,7 +5192,7 @@ Wait 10 seconds and try refreshing the page `http://34.235.119.67:8501`. It shou
 Your trading bot is now fully running in the cloud with:
 1.  **IB Gateway**: Connected (Paper Trading)
 2.  **Trading Bot**: Running
-3.  **Dashboard**: Live at `http://34.235.119.67:8501`
+3.  **Dashboard**: Live at `http://34.203.194.137:8501`
 
 **Next Steps:**
 -   **Monitor**: Watch the dashboard tomorrow (9:30 AM EST) to see it trade live.
@@ -5204,7 +5204,7 @@ You can now close your local terminal. The bot will keep running 24/7 on AWS.
 
 
 
-*User accepted the command `ssh -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.235.119.67 "cd ~/app && docker-compose ps && docker-compose logs dashboard"`*
+*User accepted the command `ssh -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.203.194.137 "cd ~/app && docker-compose ps && docker-compose logs dashboard"`*
 
 ### User Input
 
@@ -5233,7 +5233,7 @@ I'll create a simple one with valid symbols.
 
 I will perform these actions now.
 
-*User accepted the command `ssh -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.235.119.67 "echo 'Symbol,Beta,Sector
+*User accepted the command `ssh -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.203.194.137 "echo 'Symbol,Beta,Sector
 SPY,1.0,ETF
 QQQ,1.2,ETF
 AAPL,1.2,Tech
@@ -5272,13 +5272,13 @@ cd ~/app
 docker-compose restart trading-bot
 ```
 
-After running this, wait about 1 minute, then refresh your dashboard (`http://34.235.119.67:8501`). It should start showing data!
+After running this, wait about 1 minute, then refresh your dashboard (`http://34.203.194.137:8501`). It should start showing data!
 
 ### User Input
 
 
 
-*User accepted the command `ssh -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.235.119.67 "cd ~/app && docker-compose ps && ls -l watchlist.csv && docker-compose logs --tail=20 dashboard"`*
+*User accepted the command `ssh -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.203.194.137 "cd ~/app && docker-compose ps && ls -l watchlist.csv && docker-compose logs --tail=20 dashboard"`*
 
 ### User Input
 
@@ -5409,7 +5409,7 @@ docker-compose down -v --remove-orphans
 docker-compose up -d --build
 ```
 
-This will clear the corrupted state and start the dashboard correctly with the new command we just added. Then check `http://34.235.119.67:8501`.
+This will clear the corrupted state and start the dashboard correctly with the new command we just added. Then check `http://34.203.194.137:8501`.
 
 ### User Input
 
@@ -5720,7 +5720,7 @@ Running this now... (If prompted for input, I'll let you know, but `-y` should h
 
 @[TerminalName: ssh, ProcessId: 18276] 
 
-*User accepted the command `ssh -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.235.119.67 "sudo apt-get update && sudo apt-get remove -y docker-compose && sudo apt-get install -y docker-compose-plugin && docker compose version"`*
+*User accepted the command `ssh -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.203.194.137 "sudo apt-get update && sudo apt-get remove -y docker-compose && sudo apt-get install -y docker-compose-plugin && docker compose version"`*
 
 ### User Input
 
@@ -5744,7 +5744,7 @@ docker compose down -v --remove-orphans
 docker compose up -d --build
 ```
 
-Wait about 30 seconds after running this, then refresh your dashboard (`http://34.235.119.67:8501`). It will work this time! 🎉
+Wait about 30 seconds after running this, then refresh your dashboard (`http://34.203.194.137:8501`). It will work this time! 🎉
 
 ### User Input
 
@@ -5767,7 +5767,7 @@ docker compose exec dashboard pip install python-dotenv
 docker compose restart dashboard
 ```
 
-After that, refresh `http://34.235.119.67:8501`. It should show the dashboard properly!
+After that, refresh `http://34.203.194.137:8501`. It should show the dashboard properly!
 
 ### User Input
 
@@ -5791,7 +5791,7 @@ This means the **RDS Security Group** is blocking traffic from your **EC2 instan
     *   **Type**: `PostgreSQL` (5432).
     *   **Source**: Select "Custom" -> Then start typing `sg-`.
     *   **Select the Security Group ID of your EC2 instance** (found in your EC2 details, usually `launch-wizard-1` or similar).
-    *   *Alternatively, you can just whitelist the EC2 Public IP `34.235.119.67/32`, but using the Security Group ID is cleaner.*
+    *   *Alternatively, you can just whitelist the EC2 Public IP `34.203.194.137/32`, but using the Security Group ID is cleaner.*
 7.  Click **Save rules**.
 
 Once you save, refresh the dashboard. The Database error will disappear and you'll see "No trades found" (which is correct, as trading just started!).
@@ -5807,7 +5807,7 @@ I see you've updated the **Security Group rules** in the screenshot!
 You added a rule for `sg-0a7...` (EC2 Security Group - Inbound). This is **perfect**.
 
 ### Verify One Last Time
-Refresh the dashboard: `http://34.235.119.67:8501`
+Refresh the dashboard: `http://34.203.194.137:8501`
 
 *   The red error banner (`psycopg2.OperationalError`) should be **GONE**.
 *   It should simply say **"No trades found..."** or show empty charts (since the bot just started).
@@ -5832,29 +5832,29 @@ If that's the case, **YOU ARE DONE!** 🏁
 
 
 
-*User accepted the command `ssh -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.235.119.67 "uptime && cd ~/app && docker compose ps && docker compose logs --tail=20 dashboard"`*
+*User accepted the command `ssh -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.203.194.137 "uptime && cd ~/app && docker compose ps && docker compose logs --tail=20 dashboard"`*
 
-*User accepted the command `ping 34.235.119.67`*
+*User accepted the command `ping 34.203.194.137`*
 
-*User accepted the command `ping 34.235.119.67`*
+*User accepted the command `ping 34.203.194.137`*
 
 ### User Input
 
-34.235.119.67
+34.203.194.137
 
 ### User Input
 
 can you check the port 8501
 
-*User accepted the command `curl -v --connect-timeout 5 http://34.235.119.67:8501`*
+*User accepted the command `curl -v --connect-timeout 5 http://34.203.194.137:8501`*
 
-*User accepted the command `ssh -o ConnectTimeout=5 -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.235.119.67 "uptime"`*
+*User accepted the command `ssh -o ConnectTimeout=5 -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.203.194.137 "uptime"`*
 
 ### Planner Response
 
 Note: The status of port 8501 is **Unreachable** (Connection Timed Out).
 
-Since `curl` and `ping` both failed, the server at `34.235.119.67` is currently accessible.
+Since `curl` and `ping` both failed, the server at `34.203.194.137` is currently accessible.
 
 **If you restarted the EC2 instance**, it almost certainly has a **NEW IP ADDRESS** now (unless you have an Elastic IP).
 
@@ -5866,7 +5866,7 @@ can you check to see if the trading is ready in production, I know right now mar
 
 *Searched filesystem*
 
-*User accepted the command `ssh -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.235.119.67 "date"`*
+*User accepted the command `ssh -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.203.194.137 "date"`*
 
 *Viewed [trading_system.py](file:///d:/Projects/IB-program-trading/src/trading_system.py) *
 
@@ -5874,15 +5874,15 @@ can you check to see if the trading is ready in production, I know right now mar
 
 *Edited relevant file*
 
-*User accepted the command `scp -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" "d:\Projects\IB-program-trading\src\trading_system.py" ubuntu@34.235.119.67:~/app/src/trading_system.py`*
+*User accepted the command `scp -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" "d:\Projects\IB-program-trading\src\trading_system.py" ubuntu@34.203.194.137:~/app/src/trading_system.py`*
 
-*User accepted the command `ssh -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.235.119.67 "cd ~/app && docker compose up -d --build trading-bot"`*
+*User accepted the command `ssh -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.203.194.137 "cd ~/app && docker compose up -d --build trading-bot"`*
 
-*User accepted the command `ssh -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.235.119.67 "docker compose logs --tail=50 trading-bot"`*
+*User accepted the command `ssh -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.203.194.137 "docker compose logs --tail=50 trading-bot"`*
 
-*User accepted the command `ssh -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.235.119.67 "docker ps"`*
+*User accepted the command `ssh -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.203.194.137 "docker ps"`*
 
-*User accepted the command `curl -I http://34.235.119.67:8501`*
+*User accepted the command `curl -I http://34.203.194.137:8501`*
 
 *Edited relevant file*
 
@@ -5904,11 +5904,11 @@ can you review the code and see what is the enhencement on RL
 
 can you check if the trading is on?
 
-*User accepted the command `ssh -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.235.119.67 "docker compose logs --tail=50 trading-bot"`*
+*User accepted the command `ssh -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.203.194.137 "docker compose logs --tail=50 trading-bot"`*
 
 *Viewed [task.md](file:///C:/Users/erich/.gemini/antigravity/brain/a12ac56e-9d80-4f62-86a8-8c394139c4a0/task.md) *
 
-*User accepted the command `ssh -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.235.119.67 "docker ps"`*
+*User accepted the command `ssh -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.203.194.137 "docker ps"`*
 
 *Viewed [implementation_plan.md](file:///C:/Users/erich/.gemini/antigravity/brain/a12ac56e-9d80-4f62-86a8-8c394139c4a0/implementation_plan.md) *
 
@@ -5956,19 +5956,19 @@ is it done now
 
 *Edited relevant file*
 
-*User accepted the command `scp -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" src/dashboard.py src/trading_system.py ubuntu@34.235.119.67:/home/ubuntu/IB-program-trading/src/`*
+*User accepted the command `scp -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" src/dashboard.py src/trading_system.py ubuntu@34.203.194.137:/home/ubuntu/IB-program-trading/src/`*
 
-*User accepted the command `ssh -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.235.119.67 "cd IB-program-trading && docker compose restart dashboard trading-bot && docker compose exec dashboard pip install redis && docker compose restart dashboard"`*
+*User accepted the command `ssh -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.203.194.137 "cd IB-program-trading && docker compose restart dashboard trading-bot && docker compose exec dashboard pip install redis && docker compose restart dashboard"`*
 
 *Viewed [task.md](file:///C:/Users/erich/.gemini/antigravity/brain/a12ac56e-9d80-4f62-86a8-8c394139c4a0/task.md) *
 
-*User accepted the command `ssh -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.235.119.67 "cd IB-program-trading && docker compose restart dashboard trading-bot"`*
+*User accepted the command `ssh -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.203.194.137 "cd IB-program-trading && docker compose restart dashboard trading-bot"`*
 
-*User accepted the command `ssh -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.235.119.67 "ls -la"`*
+*User accepted the command `ssh -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.203.194.137 "ls -la"`*
 
-*User accepted the command `ssh -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.235.119.67 "docker ps"`*
+*User accepted the command `ssh -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.203.194.137 "docker ps"`*
 
-*User accepted the command `ssh -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.235.119.67 "cd /home/ubuntu/IB-program-trading && docker compose up -d dashboard trading-bot"`*
+*User accepted the command `ssh -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.203.194.137 "cd /home/ubuntu/IB-program-trading && docker compose up -d dashboard trading-bot"`*
 
 ### User Input
 
@@ -5986,41 +5986,41 @@ continue
 
 *Edited relevant file*
 
-*User accepted the command `scp -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" remote_update.sh requirements.txt src/dashboard.py src/trading_system.py ubuntu@34.235.119.67:/home/ubuntu/IB-program-trading/`*
+*User accepted the command `scp -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" remote_update.sh requirements.txt src/dashboard.py src/trading_system.py ubuntu@34.203.194.137:/home/ubuntu/IB-program-trading/`*
 
 *Viewed [task.md](file:///C:/Users/erich/.gemini/antigravity/brain/a12ac56e-9d80-4f62-86a8-8c394139c4a0/task.md) *
 
-*User accepted the command `ssh -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.235.119.67 "chmod +x remote_update.sh && ./remote_update.sh"`*
+*User accepted the command `ssh -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.203.194.137 "chmod +x remote_update.sh && ./remote_update.sh"`*
 
-*User accepted the command `ssh -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.235.119.67 "cd IB-program-trading && docker compose down dashboard trading-bot && docker compose build --no-cache dashboard && docker compose up -d dashboard trading-bot"`*
+*User accepted the command `ssh -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.203.194.137 "cd IB-program-trading && docker compose down dashboard trading-bot && docker compose build --no-cache dashboard && docker compose up -d dashboard trading-bot"`*
 
-*User accepted the command `ssh -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.235.119.67 "echo 'SSH Connection Test' && ls -F"`*
+*User accepted the command `ssh -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.203.194.137 "echo 'SSH Connection Test' && ls -F"`*
 
 *Viewed [task.md](file:///C:/Users/erich/.gemini/antigravity/brain/a12ac56e-9d80-4f62-86a8-8c394139c4a0/task.md) *
 
 *Edited relevant file*
 
-*User accepted the command `ssh -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.235.119.67 "cd IB-program-trading && docker compose down dashboard trading-bot && docker compose build --no-cache dashboard && docker compose up -d dashboard trading-bot"`*
+*User accepted the command `ssh -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.203.194.137 "cd IB-program-trading && docker compose down dashboard trading-bot && docker compose build --no-cache dashboard && docker compose up -d dashboard trading-bot"`*
 
-*User accepted the command `ssh -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.235.119.67 "cd IB-program-trading && docker compose stop dashboard"`*
+*User accepted the command `ssh -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.203.194.137 "cd IB-program-trading && docker compose stop dashboard"`*
 
-*User accepted the command `ssh -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.235.119.67 "cd IB-program-trading && docker compose build dashboard"`*
+*User accepted the command `ssh -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.203.194.137 "cd IB-program-trading && docker compose build dashboard"`*
 
-*User accepted the command `ssh -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.235.119.67 "cd IB-program-trading && docker compose up -d dashboard && docker compose restart trading-bot"`*
+*User accepted the command `ssh -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.203.194.137 "cd IB-program-trading && docker compose up -d dashboard && docker compose restart trading-bot"`*
 
 *Viewed [implementation_plan.md](file:///C:/Users/erich/.gemini/antigravity/brain/a12ac56e-9d80-4f62-86a8-8c394139c4a0/implementation_plan.md) *
 
-*User accepted the command `ssh -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.235.119.67 "cd IB-program-trading && docker compose up -d dashboard"`*
+*User accepted the command `ssh -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.203.194.137 "cd IB-program-trading && docker compose up -d dashboard"`*
 
-*User accepted the command `ssh -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.235.119.67 "cd IB-program-trading && docker compose restart trading-bot"`*
+*User accepted the command `ssh -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.203.194.137 "cd IB-program-trading && docker compose restart trading-bot"`*
 
 *Viewed [walkthrough.md](file:///C:/Users/erich/.gemini/antigravity/brain/a12ac56e-9d80-4f62-86a8-8c394139c4a0/walkthrough.md) *
 
 *Edited relevant file*
 
-*User accepted the command `ssh -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.235.119.67 "cd IB-program-trading && docker compose restart trading-system"`*
+*User accepted the command `ssh -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.203.194.137 "cd IB-program-trading && docker compose restart trading-system"`*
 
-*User accepted the command `ssh -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.235.119.67 "docker ps"`*
+*User accepted the command `ssh -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.203.194.137 "docker ps"`*
 
 *Viewed [task.md](file:///C:/Users/erich/.gemini/antigravity/brain/a12ac56e-9d80-4f62-86a8-8c394139c4a0/task.md) *
 
@@ -6028,33 +6028,33 @@ continue
 
 I don't see any signal at all
 
-*User accepted the command `ssh -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.235.119.67 "cd IB-program-trading && docker compose logs --tail=100 trading-system dashboard"`*
+*User accepted the command `ssh -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.203.194.137 "cd IB-program-trading && docker compose logs --tail=100 trading-system dashboard"`*
 
-*User accepted the command `ssh -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.235.119.67 "docker ps -a"`*
+*User accepted the command `ssh -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.203.194.137 "docker ps -a"`*
 
-*User accepted the command `ssh -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.235.119.67 "uname -a"`*
+*User accepted the command `ssh -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.203.194.137 "uname -a"`*
 
-*User accepted the command `ssh -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.235.119.67 "sudo docker ps"`*
+*User accepted the command `ssh -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.203.194.137 "sudo docker ps"`*
 
-*User accepted the command `ssh -tt -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.235.119.67 "docker ps"`*
+*User accepted the command `ssh -tt -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.203.194.137 "docker ps"`*
 
 *Viewed [watchlist.csv](file:///d:/Projects/IB-program-trading/watchlist.csv) *
 
 *Edited relevant file*
 
-*User accepted the command `scp -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" src/test_signal.py ubuntu@34.235.119.67:/home/ubuntu/IB-program-trading/src/`*
+*User accepted the command `scp -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" src/test_signal.py ubuntu@34.203.194.137:/home/ubuntu/IB-program-trading/src/`*
 
-*User accepted the command `ssh -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.235.119.67 "cd IB-program-trading && docker compose exec trading-system python src/test_signal.py"`*
+*User accepted the command `ssh -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.203.194.137 "cd IB-program-trading && docker compose exec trading-system python src/test_signal.py"`*
 
-*User accepted the command `ssh -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.235.119.67 "cd IB-program-trading && docker compose exec trading-system pip install redis && docker compose exec trading-system python src/test_signal.py"`*
+*User accepted the command `ssh -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.203.194.137 "cd IB-program-trading && docker compose exec trading-system pip install redis && docker compose exec trading-system python src/test_signal.py"`*
 
 *Viewed [task.md](file:///C:/Users/erich/.gemini/antigravity/brain/a12ac56e-9d80-4f62-86a8-8c394139c4a0/task.md) *
 
-*User accepted the command `ssh -tt -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.235.119.67 "cd IB-program-trading && docker compose build --no-cache trading-system"`*
+*User accepted the command `ssh -tt -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.203.194.137 "cd IB-program-trading && docker compose build --no-cache trading-system"`*
 
-*User accepted the command `ssh -tt -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.235.119.67 "cd IB-program-trading && docker compose up -d trading-system"`*
+*User accepted the command `ssh -tt -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.203.194.137 "cd IB-program-trading && docker compose up -d trading-system"`*
 
-*User accepted the command `ssh -tt -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.235.119.67 "cd IB-program-trading && docker compose exec trading-system python src/test_signal.py"`*
+*User accepted the command `ssh -tt -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.203.194.137 "cd IB-program-trading && docker compose exec trading-system python src/test_signal.py"`*
 
 ### User Input
 
@@ -6068,9 +6068,9 @@ The terminal shows the real issue: **The `trading-system` container is in a rest
 
 This explains why no signals are appearing – the bot keeps crashing and restarting.
 
-*User accepted the command `ssh -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.235.119.67 "cd IB-program-trading && docker compose logs --tail=50 trading-system 2>&1"`*
+*User accepted the command `ssh -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.203.194.137 "cd IB-program-trading && docker compose logs --tail=50 trading-system 2>&1"`*
 
-*User accepted the command `ssh -tt -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.235.119.67 "docker logs --tail=50 ib-program-trading-trading-system-1 2>&1"`*
+*User accepted the command `ssh -tt -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.203.194.137 "docker logs --tail=50 ib-program-trading-trading-system-1 2>&1"`*
 
 ### User Input
 
@@ -6098,11 +6098,11 @@ Let me add the missing constant:
 
 *Edited relevant file*
 
-*User accepted the command `scp -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" src/config_advanced.py ubuntu@34.235.119.67:/home/ubuntu/IB-program-trading/src/`*
+*User accepted the command `scp -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" src/config_advanced.py ubuntu@34.203.194.137:/home/ubuntu/IB-program-trading/src/`*
 
-*User accepted the command `ssh -tt -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.235.119.67 "cd IB-program-trading && docker compose build --no-cache trading-system && docker compose up -d trading-system"`*
+*User accepted the command `ssh -tt -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.203.194.137 "cd IB-program-trading && docker compose build --no-cache trading-system && docker compose up -d trading-system"`*
 
-*User accepted the command `ssh -tt -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.235.119.67 "docker ps"`*
+*User accepted the command `ssh -tt -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.203.194.137 "docker ps"`*
 
 ### User Input
 
@@ -6110,27 +6110,27 @@ Let me add the missing constant:
 
 *Read terminal output: Antigravity Agent*
 
-*User accepted the command `ssh -tt -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.235.119.67 "docker logs --tail=50 ib-program-trading-trading-system-1"`*
+*User accepted the command `ssh -tt -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.203.194.137 "docker logs --tail=50 ib-program-trading-trading-system-1"`*
 
-*User accepted the command `ssh -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.235.119.67 "docker logs --tail=20 ib-program-trading-trading-system-1 2>&1"`*
+*User accepted the command `ssh -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.203.194.137 "docker logs --tail=20 ib-program-trading-trading-system-1 2>&1"`*
 
-*User accepted the command `ssh -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.235.119.67 "cat IB-program-trading/src/config_advanced.py | grep EXIT_TRAIL_PCT"`*
+*User accepted the command `ssh -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.203.194.137 "cat IB-program-trading/src/config_advanced.py | grep EXIT_TRAIL_PCT"`*
 
 *Viewed [trading_system.py](file:///d:/Projects/IB-program-trading/src/trading_system.py) *
 
 *Viewed [config_advanced.py](file:///d:/Projects/IB-program-trading/src/config_advanced.py) *
 
-*User accepted the command `ssh -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.235.119.67 "ls -la IB-program-trading/src/config_advanced.py"`*
+*User accepted the command `ssh -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.203.194.137 "ls -la IB-program-trading/src/config_advanced.py"`*
 
 *Viewed [docker-compose.yml](file:///d:/Projects/IB-program-trading/docker-compose.yml) *
 
-*User accepted the command `scp -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" src/config_advanced.py ubuntu@34.235.119.67:/tmp/config_advanced.py`*
+*User accepted the command `scp -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" src/config_advanced.py ubuntu@34.203.194.137:/tmp/config_advanced.py`*
 
-*User accepted the command `ssh -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.235.119.67 "cat /tmp/config_advanced.py > IB-program-trading/src/config_advanced.py && grep EXIT_TRAIL_PCT IB-program-trading/src/config_advanced.py"`*
+*User accepted the command `ssh -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.203.194.137 "cat /tmp/config_advanced.py > IB-program-trading/src/config_advanced.py && grep EXIT_TRAIL_PCT IB-program-trading/src/config_advanced.py"`*
 
-*User accepted the command `ssh -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.235.119.67 "cd IB-program-trading && docker compose restart trading-system"`*
+*User accepted the command `ssh -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.203.194.137 "cd IB-program-trading && docker compose restart trading-system"`*
 
-*User accepted the command `ssh -tt -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.235.119.67 "docker ps"`*
+*User accepted the command `ssh -tt -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.203.194.137 "docker ps"`*
 
 ### User Input
 
@@ -6174,9 +6174,9 @@ This is a system-generated message that is sent due to the user's review policy.
 
 *Edited relevant file*
 
-*User accepted the command `scp -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" src/entry_manager.py ubuntu@34.235.119.67:/home/ubuntu/IB-program-trading/src/`*
+*User accepted the command `scp -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" src/entry_manager.py ubuntu@34.203.194.137:/home/ubuntu/IB-program-trading/src/`*
 
-*User accepted the command `ssh -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.235.119.67 "cd IB-program-trading && docker compose restart trading-system"`*
+*User accepted the command `ssh -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.203.194.137 "cd IB-program-trading && docker compose restart trading-system"`*
 
 *Edited relevant file*
 

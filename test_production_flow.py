@@ -122,7 +122,7 @@ def test_ec2_api():
     """Test 4: Check EC2 Python API accessibility."""
     print_step(4, "Testing EC2 Python API")
     
-    ec2_api = "http://34.235.119.67:8002"
+    ec2_api = "http://34.203.194.137:8002"
     
     try:
         # Test health/signals endpoint

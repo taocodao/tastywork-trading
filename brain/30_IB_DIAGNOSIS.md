@@ -30,7 +30,7 @@ ERROR - API connection failed: CancelledError()
 ### Root Cause Analysis:
 
 **What's Happening:**
-1. Scheduler tries to connect to IB Gateway at `34.235.119.67:4004`
+1. Scheduler tries to connect to IB Gateway at `34.203.194.137:4004`
 2. Connection succeeds briefly
 3. Immediately disconnects with `CancelledError`
 4. Cannot fetch market data → No qualified puts found
@@ -39,7 +39,7 @@ ERROR - API connection failed: CancelledError()
 
 The config in [config.py](file:///d:/Projects/tastywork-trading-1/config.py) line 79:
 ```python
-IB_HOST: str = "34.235.119.67"  # Public EC2 IP
+IB_HOST: str = "34.203.194.137"  # Public EC2 IP
 ```
 
 But on EC2, the scheduler is connecting to **itself via public IP** instead of `127.0.0.1` (localhost). This can cause:
@@ -102,7 +102,7 @@ This is a **completely different trading system** from the Theta strategy!
 ## 📊 System Architecture (Actual)
 
 ```
-EC2 Server (34.235.119.67)
+EC2 Server (34.203.194.137)
 ├── Port 4004: IB Gateway (Docker)
 │
 ├── tastywork-trading/ (Theta Strategy - YOUR SYSTEM)

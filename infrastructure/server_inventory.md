@@ -8,9 +8,9 @@
 - **Instance ID:** `i-0b10eeefed7f2481b`
 - **Instance Type:** c5.large
 - **Region:** us-east-1 (N. Virginia)
-- **Public IPv4:** `34.235.119.67`
+- **Public IPv4:** `34.203.194.137`
 - **Private IPv4:** `172.31.34.178`
-- **Public DNS:** `ec2-34-235-119-67.compute-1.amazonaws.com`
+- **Public DNS:** `ec2-34-203-194-137.compute-1.amazonaws.com`
 - **VPC ID:** `vpc-0729fe1236920b1f4`
 
 ## Connection Details
@@ -18,7 +18,7 @@
 - **Key File:** `D:\Projects\IB-program-trading\tradecoin-bot-key.pem`
 - **SSH Command:**
   ```powershell
-  ssh -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.235.119.67
+  ssh -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.203.194.137
   ```
 
 ## Deployed Services (Backend)

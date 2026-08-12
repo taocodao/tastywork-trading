@@ -11,7 +11,7 @@ import subprocess
 import sys
 
 # EC2 connection details
-EC2_HOST = "ubuntu@ec2-34-235-119-67.compute-1.amazonaws.com"
+EC2_HOST = "ubuntu@ec2-34-203-194-137.compute-1.amazonaws.com"
 SSH_KEY = r"D:\Projects\IB-program-trading\tradecoin-bot-key.pem"
 
 # Python script to run on EC2

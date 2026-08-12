@@ -2,7 +2,7 @@ import subprocess
 import os
 import sys
 
-ip_list = ['ec2', '54.89.159.18', '34.235.119.76', '34.235.119.67']
+ip_list = ['ec2', '54.89.159.18', '34.235.119.76', '34.203.194.137']
 success = False
 
 for ip in ip_list:

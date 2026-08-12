@@ -43,7 +43,7 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 # API endpoints
-PYTHON_API = os.getenv("TASTYTRADE_API_URL", "http://34.235.119.67:8002")
+PYTHON_API = os.getenv("TASTYTRADE_API_URL", "http://34.203.194.137:8002")
 SIGNAL_API = f"{PYTHON_API}/api/signals"
 
 

@@ -6,7 +6,7 @@
 
 **Via SSH:**
 ```bash
-ssh -i "path/to/key.pem" ubuntu@ec2-34-235-119-67.compute-1.amazonaws.com
+ssh -i "path/to/key.pem" ubuntu@ec2-34-203-194-137.compute-1.amazonaws.com
 cd ~/tastywork-trading
 tail -f theta_scheduler.log
 ```

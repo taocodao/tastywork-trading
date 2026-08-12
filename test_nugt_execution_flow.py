@@ -2,7 +2,7 @@ import urllib.request
 import json
 import os
 
-API_URL = 'http://34.235.119.67:8002/api'
+API_URL = 'http://34.203.194.137:8002/api'
 
 print(f"Fetching signals from {API_URL}/signals...")
 req = urllib.request.Request(f'{API_URL}/signals')

@@ -64,9 +64,9 @@ def update_env(token):
     print(f"✅ Updated local {env_path}")
     print("\nNEXT STEPS:")
     print("1. Copy the .env to the server:")
-    print("   scp -i \"D:\\Projects\\IB-program-trading\\tradecoin-bot-key.pem\" .env ubuntu@34.235.119.67:/home/ubuntu/.env")
+    print("   scp -i \"D:\\Projects\\IB-program-trading\\tradecoin-bot-key.pem\" .env ubuntu@34.203.194.137:/home/ubuntu/.env")
     print("2. Restart the API server:")
-    print("   ssh -i \"D:\\Projects\\IB-program-trading\\tradecoin-bot-key.pem\" ubuntu@34.235.119.67 \"sudo systemctl restart api-server\"")
+    print("   ssh -i \"D:\\Projects\\IB-program-trading\\tradecoin-bot-key.pem\" ubuntu@34.203.194.137 \"sudo systemctl restart api-server\"")
 
 if __name__ == "__main__":
     setup_token()

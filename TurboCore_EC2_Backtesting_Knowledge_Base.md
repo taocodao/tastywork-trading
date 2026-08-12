@@ -9,7 +9,7 @@ This document serves as a comprehensive guide consolidating all the processes ar
 The primary backend environment runs on an AWS EC2 instance containing the `tastywork-trading` repository. Since the environment is primarily managed via PowerShell on Windows, use the following variables and commands to connect.
 
 ### EC2 Connection Details
-*   **Username & Host:** `ubuntu@34.235.119.67`
+*   **Username & Host:** `ubuntu@34.203.194.137`
 *   **SSH Key (PEM) Path:** `D:\Projects\IB-program-trading\tradecoin-bot-key.pem`
 *   **Project Code Location:** `~/tastywork-trading`
 *   **Background Logs Location:** `~/tastywork-trading/logs/`
@@ -18,7 +18,7 @@ The primary backend environment runs on an AWS EC2 instance containing the `tast
 To securely log in to the EC2 shell from your Windows terminal:
 ```powershell
 $PEM = "D:\Projects\IB-program-trading\tradecoin-bot-key.pem"
-$EC2HOST = "ubuntu@34.235.119.67"
+$EC2HOST = "ubuntu@34.203.194.137"
 ssh -i $PEM -o StrictHostKeyChecking=no $EC2HOST
 ```
 
@@ -47,7 +47,7 @@ When running intensive or long backtesting sequences, executing them on the EC2 
 Ensure the latest version of your backtesting scripts are pulled to the EC2 server before running:
 ```powershell
 $PEM = "D:\Projects\IB-program-trading\tradecoin-bot-key.pem"
-$EC2HOST = "ubuntu@34.235.119.67"
+$EC2HOST = "ubuntu@34.203.194.137"
 ssh -i $PEM -o StrictHostKeyChecking=no $EC2HOST "cd ~/tastywork-trading && git pull origin main"
 ```
 

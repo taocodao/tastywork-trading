@@ -6,7 +6,7 @@ import asyncio
 async def test_ib_historical_option():
     ib = IB()
     try:
-        await ib.connectAsync('34.235.119.67', 4004, clientId=999)
+        await ib.connectAsync('34.203.194.137', 4004, clientId=999)
         print("Connected to IB Gateway")
         
         # Try to define an option that expired recently

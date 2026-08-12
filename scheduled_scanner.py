@@ -94,7 +94,7 @@ def run_scanner(use_mock: bool = False) -> int:
     if not use_mock:
         # 1. Try IB Gateway FIRST for Market Data (Option Chains)
         # Tastytrade SDK has issues with empty option chain responses
-        # IB Gateway is already running at 34.235.119.67:4004
+        # IB Gateway is already running at 34.203.194.137:4004
         logger.info("🔍 Connecting to Data Provider...")
         
         ib_host = os.getenv('IB_HOST', 'localhost')  # On EC2, set to localhost since IB Gateway runs locally

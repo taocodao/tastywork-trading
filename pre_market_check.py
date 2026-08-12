@@ -113,7 +113,7 @@ except Exception as e:
 print("\n--- EC2 API SERVER ---")
 try:
     import requests
-    r = requests.get('http://34.235.119.67:8002/account', timeout=10)
+    r = requests.get('http://34.203.194.137:8002/account', timeout=10)
     if r.status_code == 200:
         d = r.json()
         acct = d.get('account_number', 'N/A')
@@ -130,7 +130,7 @@ except Exception as e:
 
 # 7. EC2 Positions
 try:
-    r = requests.get('http://34.235.119.67:8002/positions', timeout=10)
+    r = requests.get('http://34.203.194.137:8002/positions', timeout=10)
     if r.status_code == 200:
         d = r.json()
         pos = d.get('positions', [])
@@ -143,7 +143,7 @@ except Exception as e:
 # 8. WebSocket Server
 print("\n--- WEBSOCKET SERVER ---")
 try:
-    r = requests.post('http://34.235.119.67:8004/', json={"channel": "ping", "signal": {}}, timeout=5)
+    r = requests.post('http://34.203.194.137:8004/', json={"channel": "ping", "signal": {}}, timeout=5)
     check("WS Broadcast (EC2 :8004)", True, f"Status {r.status_code}")
 except requests.exceptions.ConnectionError:
     check("WS Broadcast (EC2 :8004)", False, "Connection refused")
@@ -151,7 +151,7 @@ except Exception as e:
     check("WS Broadcast (EC2 :8004)", False, str(e))
 
 # Also check the local WS broadcast URL from config
-ws_url = os.getenv('WEBSOCKET_BROADCAST_URL', 'http://ec2-34-235-119-67.compute-1.amazonaws.com:8004/')
+ws_url = os.getenv('WEBSOCKET_BROADCAST_URL', 'http://ec2-34-203-194-137.compute-1.amazonaws.com:8004/')
 try:
     r = requests.post(ws_url, json={"channel": "ping", "signal": {}}, timeout=5)
     check(f"WS Broadcast (config URL)", True, f"Status {r.status_code}")

@@ -606,7 +606,7 @@ can I use connect button
 **Yes!** Click the **"Connect"** button.
 
 Also, I spotted the problem! Look at the **Public IPv4 address**:
-- **Correct IP: `34.235.119.67`**
+- **Correct IP: `34.203.194.137`**
 - You were trying: `34.235.119.76` ❌
 
 The last digits are different! That's why SSH was timing out.
@@ -622,7 +622,7 @@ The last digits are different! That's why SSH was timing out.
 
 ### Option 2: Fix SSH Command
 ```powershell
-ssh ubuntu@34.235.119.67
+ssh ubuntu@34.203.194.137
 ```
 (Note: `.67` not `.76`)
 
@@ -648,7 +648,7 @@ nano websocket_server.py
 I see the issue now:
 
 1. **`34.235.119.76` times out** (wrong IP)
-2. **`34.235.119.67` gives "Permission denied (publickey)"**
+2. **`34.203.194.137` gives "Permission denied (publickey)"**
 
 The correct IP (`.67`) works but you need an **SSH key**. Your SSH key isn't being used or recognized.
 
@@ -659,7 +659,7 @@ The correct IP (`.67`) works but you need an **SSH key**. Your SSH key isn't bei
 You need to specify the SSH key when connecting. Try:
 
 ```powershell
-ssh -i C:\path\to\your\key.pem ubuntu@34.235.119.67
+ssh -i C:\path\to\your\key.pem ubuntu@34.203.194.137
 ```
 
 **To find your key:** 
@@ -692,7 +692,7 @@ Would you like to try Session Manager?
 
 provide the ssh command use D:\Projects\IB-program-trading\tradecoin-bot-key.pem
 
-*User rejected the command `ssh -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.235.119.67`*
+*User rejected the command `ssh -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.203.194.137`*
 
 ### User Input
 
@@ -979,7 +979,7 @@ INFO:websockets.server:server listening on 0.0.0.0:8003
 1.  **Check your Frontend URL**:
     Ensure your Vercel/Next.js environment variable `NEXT_PUBLIC_WEBSOCKET_URL` is set to:
     ```
-    ws://34.235.119.67:8003
+    ws://34.203.194.137:8003
     ```
     *(Note: Using the correct IP ending in .67)*
 
@@ -996,7 +996,7 @@ Would you like the command to run it in the background properly now?
 
 can you make it always run while instance is up
 
-*User accepted the command `ssh -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.235.119.67 "sudo pkill -f websocket_server.py; echo '[Unit]
+*User accepted the command `ssh -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.203.194.137 "sudo pkill -f websocket_server.py; echo '[Unit]
 Description=TradeMind WebSocket Server
 After=network.target
 
@@ -1016,7 +1016,7 @@ WantedBy=multi-user.target' | sudo tee /etc/systemd/system/websocket.service && 
 
 
 
-*User accepted the command `ssh -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.235.119.67 "sudo pkill -f websocket_server.py; echo '[Unit]
+*User accepted the command `ssh -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.203.194.137 "sudo pkill -f websocket_server.py; echo '[Unit]
 Description=TradeMind WebSocket Server
 After=network.target
 
@@ -1098,7 +1098,7 @@ Your WebSocket server is now production-ready and will restart automatically if 
 For your frontend to connect to this new server, go to **Vercel Dashboard → Settings → Environment Variables** and add/update:
 
 ```
-NEXT_PUBLIC_WEBSOCKET_URL = ws://34.235.119.67:8003
+NEXT_PUBLIC_WEBSOCKET_URL = ws://34.203.194.137:8003
 ```
 
 *(Note: Use `.67`, not `.76`)*
@@ -1269,9 +1269,9 @@ I need to check the DNS output and then SSH into EC2 to set up Nginx. Let me run
 
 *User accepted the command `ping ws.trademind.bot -n 1`*
 
-*User accepted the command `ssh -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.235.119.67 "sudo apt update && sudo apt install -y nginx certbot python3-certbot-nginx"`*
+*User accepted the command `ssh -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.203.194.137 "sudo apt update && sudo apt install -y nginx certbot python3-certbot-nginx"`*
 
-*User accepted the command `ssh -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.235.119.67 "echo 'server {
+*User accepted the command `ssh -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.203.194.137 "echo 'server {
     listen 80;
     server_name ws.trademind.bot;
 
@@ -1286,7 +1286,7 @@ I need to check the DNS output and then SSH into EC2 to set up Nginx. Let me run
     }
 }' | sudo tee /etc/nginx/sites-available/websocket && sudo ln -sf /etc/nginx/sites-available/websocket /etc/nginx/sites-enabled/ && sudo nginx -t && sudo systemctl reload nginx"`*
 
-*User accepted the command `ssh -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.235.119.67 "sudo certbot --nginx -d ws.trademind.bot --non-interactive --agree-tos --email eric@trademind.bot"`*
+*User accepted the command `ssh -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.203.194.137 "sudo certbot --nginx -d ws.trademind.bot --non-interactive --agree-tos --email eric@trademind.bot"`*
 
 ### User Input
 
@@ -1298,7 +1298,7 @@ I need to check the DNS output and then SSH into EC2 to set up Nginx. Let me run
 
 The SSL certificate was **successfully obtained** but couldn't auto-install because of a minor Nginx config issue. Let me fix it and complete the setup:
 
-*User rejected the command `ssh -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.235.119.67 "echo 'server {
+*User rejected the command `ssh -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.203.194.137 "echo 'server {
     listen 443 ssl;
     server_name ws.trademind.bot;
 
@@ -1330,7 +1330,7 @@ server {
 
 Continue
 
-*User accepted the command `ssh -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.235.119.67 "echo 'server {
+*User accepted the command `ssh -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.203.194.137 "echo 'server {
     listen 443 ssl;
     server_name ws.trademind.bot;
 
@@ -1364,7 +1364,7 @@ server {
 
 *Viewed [task.md](file:///C:/Users/erich/.gemini/antigravity/brain/50662aea-7aff-4adc-9d2a-6f7b1fcf3d3a/task.md) *
 
-*User accepted the command `ssh -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.235.119.67 "sudo bash -c 'cat > /etc/nginx/sites-available/websocket << \"EOF\"
+*User accepted the command `ssh -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.203.194.137 "sudo bash -c 'cat > /etc/nginx/sites-available/websocket << \"EOF\"
 server {
     listen 443 ssl;
     server_name ws.trademind.bot;
@@ -1398,7 +1398,7 @@ EOF' && sudo ln -sf /etc/nginx/sites-available/websocket /etc/nginx/sites-enable
 
 *Edited relevant file*
 
-*User accepted the command `scp -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" d:\Projects\trademind-app\nginx_websocket_config ubuntu@34.235.119.67:/home/ubuntu/ && ssh -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.235.119.67 "sudo mv /home/ubuntu/nginx_websocket_config /etc/nginx/sites-available/websocket && sudo ln -sf /etc/nginx/sites-available/websocket /etc/nginx/sites-enabled/ && sudo nginx -t && sudo systemctl reload nginx"`*
+*User accepted the command `scp -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" d:\Projects\trademind-app\nginx_websocket_config ubuntu@34.203.194.137:/home/ubuntu/ && ssh -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.203.194.137 "sudo mv /home/ubuntu/nginx_websocket_config /etc/nginx/sites-available/websocket && sudo ln -sf /etc/nginx/sites-available/websocket /etc/nginx/sites-enabled/ && sudo nginx -t && sudo systemctl reload nginx"`*
 
 ### User Input
 
@@ -1406,7 +1406,7 @@ EOF' && sudo ln -sf /etc/nginx/sites-available/websocket /etc/nginx/sites-enable
 
 *Read terminal output: powershell*
 
-*User accepted the command `scp -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" d:\Projects\trademind-app\nginx_websocket_config ubuntu@34.235.119.67:/home/ubuntu/`*
+*User accepted the command `scp -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" d:\Projects\trademind-app\nginx_websocket_config ubuntu@34.203.194.137:/home/ubuntu/`*
 
 ### User Input
 
@@ -1457,7 +1457,7 @@ Actually, I should check if the task list needs updating after this.
 Let's execute the SSH command.
 
 
-*User accepted the command `ssh -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.235.119.67 "sudo mv /home/ubuntu/nginx_websocket_config /etc/nginx/sites-available/websocket && sudo ln -sf /etc/nginx/sites-available/websocket /etc/nginx/sites-enabled/ && sudo nginx -t && sudo systemctl reload nginx"`*
+*User accepted the command `ssh -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.203.194.137 "sudo mv /home/ubuntu/nginx_websocket_config /etc/nginx/sites-available/websocket && sudo ln -sf /etc/nginx/sites-available/websocket /etc/nginx/sites-enabled/ && sudo nginx -t && sudo systemctl reload nginx"`*
 
 ### User Input
 
@@ -1511,7 +1511,7 @@ Let me know if you see the green connection status!
 
 *Viewed [useSignalSocket.ts](file:///d:/Projects/trademind-app/src/hooks/useSignalSocket.ts) *
 
-*User accepted the command `ssh -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.235.119.67 "tail -n 50 server.log"`*
+*User accepted the command `ssh -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.203.194.137 "tail -n 50 server.log"`*
 
 *Viewed [page.tsx](file:///d:/Projects/trademind-app/src/app/dashboard/page.tsx) *
 
@@ -1880,7 +1880,7 @@ The Python backend needs to be deployed to EC2 alongside the WebSocket server. L
 
 *Viewed [tasty_api_server.py](file:///d:/Projects/tastywork-trading-1/tasty_api_server.py) *
 
-*User rejected the command `scp -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" "d:\Projects\tastywork-trading-1\tasty_api_server.py" ubuntu@34.235.119.67:/home/ubuntu/`*
+*User rejected the command `scp -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" "d:\Projects\tastywork-trading-1\tasty_api_server.py" ubuntu@34.203.194.137:/home/ubuntu/`*
 
 ### User Input
 
@@ -1946,17 +1946,17 @@ Now let me deploy the scanner to EC2. I need to copy the necessary Python files 
 
 *Searched filesystem*
 
-*User accepted the command `scp -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" "d:\Projects\tastywork-trading-1\signal_publisher.py" "d:\Projects\tastywork-trading-1\scheduled_scanner.py" ubuntu@34.235.119.67:/home/ubuntu/`*
+*User accepted the command `scp -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" "d:\Projects\tastywork-trading-1\signal_publisher.py" "d:\Projects\tastywork-trading-1\scheduled_scanner.py" ubuntu@34.203.194.137:/home/ubuntu/`*
 
-*User accepted the command `scp -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" "d:\Projects\tastywork-trading-1\scanner.py" ubuntu@34.235.119.67:/home/ubuntu/`*
+*User accepted the command `scp -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" "d:\Projects\tastywork-trading-1\scanner.py" ubuntu@34.203.194.137:/home/ubuntu/`*
 
 *Edited relevant file*
 
-*User accepted the command `scp -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" "d:\Projects\trademind-app\scanner_service" ubuntu@34.235.119.67:/home/ubuntu/scanner.service`*
+*User accepted the command `scp -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" "d:\Projects\trademind-app\scanner_service" ubuntu@34.203.194.137:/home/ubuntu/scanner.service`*
 
-*User accepted the command `ssh -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.235.119.67 "sudo mv /home/ubuntu/scanner.service /etc/systemd/system/ && sudo systemctl daemon-reload && sudo systemctl enable scanner && sudo systemctl start scanner && sudo systemctl status scanner"`*
+*User accepted the command `ssh -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.203.194.137 "sudo mv /home/ubuntu/scanner.service /etc/systemd/system/ && sudo systemctl daemon-reload && sudo systemctl enable scanner && sudo systemctl start scanner && sudo systemctl status scanner"`*
 
-*User accepted the command `ssh -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.235.119.67 "sudo journalctl -u scanner -n 30 --no-pager"`*
+*User accepted the command `ssh -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.203.194.137 "sudo journalctl -u scanner -n 30 --no-pager"`*
 
 *Edited relevant file*
 
@@ -1978,17 +1978,17 @@ I beleive use the IB gateway market data already implemented, can you check the 
 
 A and B
 
-*User accepted the command `ssh -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.235.119.67 "nc -zv 34.235.119.67 4004 2>&1 || echo 'Port 4004 not reachable'; nc -zv localhost 4004 2>&1 || echo 'Localhost 4004 not reachable'"`*
+*User accepted the command `ssh -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.203.194.137 "nc -zv 34.203.194.137 4004 2>&1 || echo 'Port 4004 not reachable'; nc -zv localhost 4004 2>&1 || echo 'Localhost 4004 not reachable'"`*
 
-*User accepted the command `ssh -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.235.119.67 "ps aux | grep -E '(java|ibgateway|tws)' | grep -v grep || echo 'No IB Gateway process found'"`*
+*User accepted the command `ssh -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.203.194.137 "ps aux | grep -E '(java|ibgateway|tws)' | grep -v grep || echo 'No IB Gateway process found'"`*
 
 ### Planner Response
 
 The commands ran but the output wasn't captured properly due to redirection. Let me try a different approach to check IB Gateway status.
 
-*User accepted the command `ssh -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.235.119.67 "netstat -tlnp 2>/dev/null | grep -E '(4004|4001)' || echo 'No IB ports listening'"`*
+*User accepted the command `ssh -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.203.194.137 "netstat -tlnp 2>/dev/null | grep -E '(4004|4001)' || echo 'No IB ports listening'"`*
 
-*User accepted the command `ssh -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.235.119.67 "ls -la /home/ubuntu/*.py 2>/dev/null | head -10"`*
+*User accepted the command `ssh -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.203.194.137 "ls -la /home/ubuntu/*.py 2>/dev/null | head -10"`*
 
 ### Planner Response
 
@@ -1996,7 +1996,7 @@ The SSH commands are running but output isn't being captured properly. Let me us
 
 *Edited relevant file*
 
-*User accepted the command `scp -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" "d:\Projects\trademind-app\scanner_service" ubuntu@34.235.119.67:/home/ubuntu/scanner.service`*
+*User accepted the command `scp -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" "d:\Projects\trademind-app\scanner_service" ubuntu@34.203.194.137:/home/ubuntu/scanner.service`*
 
 ### User Input
 
@@ -2006,7 +2006,7 @@ or I can run and share you with the result
 
 Good idea! Let me update the scanner service and give you the commands to check IB Gateway status yourself.
 
-*User accepted the command `ssh -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.235.119.67 "sudo mv /home/ubuntu/scanner.service /etc/systemd/system/ && sudo systemctl daemon-reload && sudo systemctl restart scanner"`*
+*User accepted the command `ssh -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.203.194.137 "sudo mv /home/ubuntu/scanner.service /etc/systemd/system/ && sudo systemctl daemon-reload && sudo systemctl restart scanner"`*
 
 ### User Input
 
@@ -2069,7 +2069,7 @@ Wait, `python3 scheduled_scanner.py --loop --force` returning immediately with n
 
 Let's check the file size and content first.
 
-*User accepted the command `ssh -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.235.119.67 "ls -l /home/ubuntu/scheduled_scanner.py && head -n 20 /home/ubuntu/scheduled_scanner.py"`*
+*User accepted the command `ssh -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.203.194.137 "ls -l /home/ubuntu/scheduled_scanner.py && head -n 20 /home/ubuntu/scheduled_scanner.py"`*
 
 ### Planner Response
 
@@ -2105,7 +2105,7 @@ Let me verify the local file content first, then re-upload it.
 
 *Viewed [scheduled_scanner.py](file:///d:/Projects/tastywork-trading-1/scheduled_scanner.py) *
 
-*User accepted the command `scp -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" "d:\Projects\tastywork-trading-1\scheduled_scanner.py" ubuntu@34.235.119.67:/home/ubuntu/`*
+*User accepted the command `scp -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" "d:\Projects\tastywork-trading-1\scheduled_scanner.py" ubuntu@34.203.194.137:/home/ubuntu/`*
 
 ### Planner Response
 
@@ -2144,7 +2144,7 @@ I missed [config.py](cci:7://file:///d:/Projects/tastywork-trading-1/config.py:0
 
 Let's upload everything needed.
 
-*User accepted the command `scp -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" "d:\Projects\tastywork-trading-1\ib_data_provider.py" "d:\Projects\tastywork-trading-1\config.py" "d:\Projects\tastywork-trading-1\greeks_calculator.py" "d:\Projects\tastywork-trading-1\scanner.py" "d:\Projects\tastywork-trading-1\signal_publisher.py" ubuntu@34.235.119.67:/home/ubuntu/`*
+*User accepted the command `scp -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" "d:\Projects\tastywork-trading-1\ib_data_provider.py" "d:\Projects\tastywork-trading-1\config.py" "d:\Projects\tastywork-trading-1\greeks_calculator.py" "d:\Projects\tastywork-trading-1\scanner.py" "d:\Projects\tastywork-trading-1\signal_publisher.py" ubuntu@34.203.194.137:/home/ubuntu/`*
 
 ### Planner Response
 
@@ -2220,17 +2220,17 @@ Actually, for production, we arguably *don't* want `--force` because scanning ou
 
 I'll proceed with uploading the fix and updating the service to use `--force` for now so the user can see it working. I'll note that they might want to remove `--force` later.
 
-*User accepted the command `scp -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" "d:\Projects\tastywork-trading-1\scheduled_scanner.py" ubuntu@34.235.119.67:/home/ubuntu/`*
+*User accepted the command `scp -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" "d:\Projects\tastywork-trading-1\scheduled_scanner.py" ubuntu@34.203.194.137:/home/ubuntu/`*
 
 *Edited relevant file*
 
-*User accepted the command `scp -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" "d:\Projects\trademind-app\scanner_service" ubuntu@34.235.119.67:/home/ubuntu/scanner.service`*
+*User accepted the command `scp -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" "d:\Projects\trademind-app\scanner_service" ubuntu@34.203.194.137:/home/ubuntu/scanner.service`*
 
 ### Planner Response
 
 Now reload and restart.
 
-*User accepted the command `ssh -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.235.119.67 "sudo mv /home/ubuntu/scanner.service /etc/systemd/system/ && sudo systemctl daemon-reload && sudo systemctl restart scanner"`*
+*User accepted the command `ssh -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.203.194.137 "sudo mv /home/ubuntu/scanner.service /etc/systemd/system/ && sudo systemctl daemon-reload && sudo systemctl restart scanner"`*
 
 ### User Input
 
@@ -2266,7 +2266,7 @@ Wait, [signal_generator.py](cci:7://file:///d:/Projects/tastywork-trading-1/src/
 
 Let's install the packages.
 
-*User accepted the command `ssh -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.235.119.67 "pip3 install numpy ib_insync requests python-dotenv"`*
+*User accepted the command `ssh -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.203.194.137 "pip3 install numpy ib_insync requests python-dotenv"`*
 
 ### Planner Response
 
@@ -2301,7 +2301,7 @@ So it's safe. It will try IB, if fail, use mock.
 
 Let's restart service and verify.
 
-*User accepted the command `ssh -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.235.119.67 "sudo systemctl restart scanner"`*
+*User accepted the command `ssh -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.203.194.137 "sudo systemctl restart scanner"`*
 
 ### User Input
 
@@ -2436,9 +2436,9 @@ Command: `sudo pip3 install google-cloud-secret-manager google-auth --break-syst
 
 Let's do it.
 
-*User accepted the command `scp -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" "d:\Projects\tastywork-trading-1\google_secrets.py" ubuntu@34.235.119.67:/home/ubuntu/`*
+*User accepted the command `scp -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" "d:\Projects\tastywork-trading-1\google_secrets.py" ubuntu@34.203.194.137:/home/ubuntu/`*
 
-*User accepted the command `ssh -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.235.119.67 "sudo pip3 install google-cloud-secret-manager google-auth --break-system-packages"`*
+*User accepted the command `ssh -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.203.194.137 "sudo pip3 install google-cloud-secret-manager google-auth --break-system-packages"`*
 
 ### Planner Response
 
@@ -2450,7 +2450,7 @@ The only risk is if [config.py](cci:7://file:///d:/Projects/tastywork-trading-1/
 
 But restarting and checking logs is faster.
 
-*User accepted the command `ssh -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.235.119.67 "sudo systemctl restart scanner && sudo journalctl -u scanner -n 50 --no-pager"`*
+*User accepted the command `ssh -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.203.194.137 "sudo systemctl restart scanner && sudo journalctl -u scanner -n 50 --no-pager"`*
 
 ### Planner Response
 
@@ -2556,9 +2556,9 @@ Wait, if `google_secrets` fails to import `google.cloud`, it raises `ImportError
 
 Let's upload and verify.
 
-*User accepted the command `scp -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" "d:\Projects\tastywork-trading-1\config.py" ubuntu@34.235.119.67:/home/ubuntu/`*
+*User accepted the command `scp -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" "d:\Projects\tastywork-trading-1\config.py" ubuntu@34.203.194.137:/home/ubuntu/`*
 
-*User accepted the command `ssh -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.235.119.67 "sudo systemctl restart scanner && sudo journalctl -u scanner -n 50 --no-pager"`*
+*User accepted the command `ssh -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.203.194.137 "sudo systemctl restart scanner && sudo journalctl -u scanner -n 50 --no-pager"`*
 
 ### Planner Response
 
@@ -3038,10 +3038,10 @@ I made a mistake assuming the SSH session ID. I should use `read_terminal` or ju
 I will start a *new* SSH connection to run the command.
 
 First, I need to know the exact IP. The user metadata says `ubuntu@34.235.1...`. I'll try to find the full IP from `scanner.service` content or [config.py](cci:7://file:///d:/Projects/tastywork-trading-1/config.py:0:0-0:0) if I viewed it, or just use the one in metadata if I can guess it.
-Actually, I have viewed [ib_data_provider.py](cci:7://file:///d:/Projects/tastywork-trading-1/ib_data_provider.py:0:0-0:0) which had `34.235.119.67`. Let's assume that's the IP.
+Actually, I have viewed [ib_data_provider.py](cci:7://file:///d:/Projects/tastywork-trading-1/ib_data_provider.py:0:0-0:0) which had `34.203.194.137`. Let's assume that's the IP.
 
 The command to run:
-`ssh -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.235.119.67 "python3 /home/ubuntu/scheduled_scanner.py --force"`
+`ssh -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.203.194.137 "python3 /home/ubuntu/scheduled_scanner.py --force"`
 (I don't recall a `--force-earnings` flag, only `--force` and `--loop`).
 
 Let's check [scheduled_scanner.py](cci:7://file:///d:/Projects/tastywork-trading-1/scheduled_scanner.py:0:0-0:0) arguments again to be sure I can trigger an "earning scan".
@@ -3065,7 +3065,7 @@ Let's check `scheduled_scanner.py`.
 
 *Viewed [test_earnings_quick.py](file:///d:/Projects/tastywork-trading-1/test_earnings_quick.py) *
 
-*User accepted the command `ssh -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.235.119.67 "ls -F /home/ubuntu"`*
+*User accepted the command `ssh -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.203.194.137 "ls -F /home/ubuntu"`*
 
 ### Planner Response
 
@@ -3121,7 +3121,7 @@ I'll check `requirements.txt` content first.
 
 *Viewed [requirements.txt](file:///d:/Projects/tastywork-trading-1/requirements.txt) *
 
-*User accepted the command `scp -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" -r "D:\Projects\tastywork-trading-1\src" ubuntu@34.235.119.67:/home/ubuntu/
+*User accepted the command `scp -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" -r "D:\Projects\tastywork-trading-1\src" ubuntu@34.203.194.137:/home/ubuntu/
 `*
 
 ### Planner Response
@@ -3130,7 +3130,7 @@ Successful SCP (assumed, as output is minimal but "completed successfully").
 
 Now upload [test_earnings_quick.py](cci:7://file:///d:/Projects/tastywork-trading-1/test_earnings_quick.py:0:0-0:0).
 
-*User accepted the command `scp -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" "D:\Projects\tastywork-trading-1\test_earnings_quick.py" ubuntu@34.235.119.67:/home/ubuntu/`*
+*User accepted the command `scp -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" "D:\Projects\tastywork-trading-1\test_earnings_quick.py" ubuntu@34.203.194.137:/home/ubuntu/`*
 
 ### Planner Response
 
@@ -3160,7 +3160,7 @@ I'll `scp` the [.env](cci:7://file:///d:/Projects/tastywork-trading-1/.env:0:0-0
 
 But first, install dependencies.
 
-*User accepted the command `ssh -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.235.119.67 "pip3 install scikit-learn yfinance sqlalchemy pandas joblib psycopg2-binary"`*
+*User accepted the command `ssh -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.203.194.137 "pip3 install scikit-learn yfinance sqlalchemy pandas joblib psycopg2-binary"`*
 
 ### Planner Response
 
@@ -3175,7 +3175,7 @@ And I'll rename `psycopg2-binary` to be installed last or skipped if not strictl
 
 Let's try apt for heavy hitters.
 
-*User accepted the command `ssh -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.235.119.67 "sudo apt-get update && sudo apt-get install -y python3-pandas python3-sklearn python3-sqlalchemy"`*
+*User accepted the command `ssh -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.203.194.137 "sudo apt-get update && sudo apt-get install -y python3-pandas python3-sklearn python3-sqlalchemy"`*
 
 ### Planner Response
 
@@ -3188,7 +3188,7 @@ Actually [ML_IV_CRUSH_PREDICTOR_WALKTHROUGH.md](cci:7://file:///d:/Projects/tast
 [requirements.txt](cci:7://file:///d:/Projects/tastywork-trading-1/requirements.txt:0:0-0:0) lists it.
 I'll try `pip3 install yfinance joblib`.
 
-*User accepted the command `ssh -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.235.119.67 "pip3 install yfinance joblib"`*
+*User accepted the command `ssh -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.203.194.137 "pip3 install yfinance joblib"`*
 
 ### User Input
 
@@ -3196,7 +3196,7 @@ I would like to see the app really pick up the signal, generate the trade and as
 
 *Viewed [route.ts](file:///d:/Projects/trademind-app/src/app/api/signals/%5Bid%5D/approve/route.ts) *
 
-*User accepted the command `scp -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" "d:\Projects\tastywork-trading-1\.env" ubuntu@34.235.119.67:/home/ubuntu/`*
+*User accepted the command `scp -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" "d:\Projects\tastywork-trading-1\.env" ubuntu@34.203.194.137:/home/ubuntu/`*
 
 ### Planner Response
 
@@ -3243,7 +3243,7 @@ map(
 )
 
 
-*User accepted the command `ssh -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.235.119.67 "cd /home/ubuntu && python3 test_earnings_quick.py"`*
+*User accepted the command `ssh -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.203.194.137 "cd /home/ubuntu && python3 test_earnings_quick.py"`*
 
 ### Planner Response
 
@@ -3298,7 +3298,7 @@ Let's check [tasty_api_server.py](cci:7://file:///d:/Projects/tastywork-trading-
 
 *Edited relevant file*
 
-*User accepted the command `scp -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" "d:\Projects\trademind-app\api-server.service" "d:\Projects\tastywork-trading-1\tasty_api_server.py" "d:\Projects\tastywork-trading-1\signal_publisher.py" "d:\Projects\tastywork-trading-1\tastytrade_client.py" "d:\Projects\tastywork-trading-1\scanner.py" ubuntu@34.235.119.67:/home/ubuntu/`*
+*User accepted the command `scp -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" "d:\Projects\trademind-app\api-server.service" "d:\Projects\tastywork-trading-1\tasty_api_server.py" "d:\Projects\tastywork-trading-1\signal_publisher.py" "d:\Projects\tastywork-trading-1\tastytrade_client.py" "d:\Projects\tastywork-trading-1\scanner.py" ubuntu@34.203.194.137:/home/ubuntu/`*
 
 ### Planner Response
 
@@ -3327,7 +3327,7 @@ Command:
 
 Let's do it.
 
-*User accepted the command `ssh -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.235.119.67 "pip3 install tastytrade && sudo mv api-server.service /etc/systemd/system/ && sudo systemctl daemon-reload && sudo systemctl enable api-server && sudo systemctl restart api-server scanner && sudo systemctl status api-server scanner"`*
+*User accepted the command `ssh -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.203.194.137 "pip3 install tastytrade && sudo mv api-server.service /etc/systemd/system/ && sudo systemctl daemon-reload && sudo systemctl enable api-server && sudo systemctl restart api-server scanner && sudo systemctl status api-server scanner"`*
 
 ### Planner Response
 
@@ -3345,7 +3345,7 @@ Command 2: `sudo mv ...`
 
 Trying Command 1.
 
-*User accepted the command `ssh -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.235.119.67 "sudo pip3 install tastytrade"`*
+*User accepted the command `ssh -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.203.194.137 "sudo pip3 install tastytrade"`*
 
 ### Planner Response
 
@@ -3361,7 +3361,7 @@ Or `pip3 install --user tastytrade` and update service to use `/home/ubuntu/.loc
 
 I'll try `--break-system-packages` first.
 
-*User accepted the command `ssh -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.235.119.67 "sudo pip3 install tastytrade --break-system-packages"`*
+*User accepted the command `ssh -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.203.194.137 "sudo pip3 install tastytrade --break-system-packages"`*
 
 ### Planner Response
 
@@ -3370,7 +3370,7 @@ Completed successfully!
 Now I can proceed with setting up the service.
 `sudo mv ... start ...`
 
-*User accepted the command `ssh -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.235.119.67 "sudo mv /home/ubuntu/api-server.service /etc/systemd/system/ && sudo systemctl daemon-reload && sudo systemctl enable api-server && sudo systemctl restart api-server scanner && sudo systemctl status api-server"`*
+*User accepted the command `ssh -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.203.194.137 "sudo mv /home/ubuntu/api-server.service /etc/systemd/system/ && sudo systemctl daemon-reload && sudo systemctl enable api-server && sudo systemctl restart api-server scanner && sudo systemctl status api-server"`*
 
 ### Planner Response
 
@@ -3428,7 +3428,7 @@ I'll also view [scheduled_scanner.py](cci:7://file:///d:/Projects/tastywork-trad
 
 *Edited relevant file*
 
-*User accepted the command `scp -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" "d:\Projects\tastywork-trading-1\scheduled_scanner.py" "d:\Projects\tastywork-trading-1\signal_publisher.py" "d:\Projects\tastywork-trading-1\tasty_api_server.py" ubuntu@34.235.119.67:/home/ubuntu/ && ssh -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.235.119.67 "sudo systemctl restart scanner api-server"`*
+*User accepted the command `scp -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" "d:\Projects\tastywork-trading-1\scheduled_scanner.py" "d:\Projects\tastywork-trading-1\signal_publisher.py" "d:\Projects\tastywork-trading-1\tasty_api_server.py" ubuntu@34.203.194.137:/home/ubuntu/ && ssh -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.203.194.137 "sudo systemctl restart scanner api-server"`*
 
 ### Planner Response
 
@@ -3443,7 +3443,7 @@ After that, I'll return to the user.
 
 First, check status.
 
-*User accepted the command `ssh -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.235.119.67 "sudo systemctl status scanner api-server"`*
+*User accepted the command `ssh -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.203.194.137 "sudo systemctl status scanner api-server"`*
 
 ### Planner Response
 
@@ -3455,7 +3455,7 @@ This is the most direct test.
 I suspect [scanner](cci:1://file:///d:/Projects/tastywork-trading-1/scheduled_scanner.py:76:0-138:20) or `api-server` might have failed startup (e.g. imports).
 Running manual scan will show me the traceback if any.
 
-*User accepted the command `ssh -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.235.119.67 "python3 /home/ubuntu/scheduled_scanner.py --force"`*
+*User accepted the command `ssh -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.203.194.137 "python3 /home/ubuntu/scheduled_scanner.py --force"`*
 
 ### Planner Response
 
@@ -3469,9 +3469,9 @@ Actually, if the frontend just uses WebSocket, it will see the signals.
 BUT for "Approval" (Sending trade), the frontend calls `/api/signals/[id]/approve`.
 And that route talks to `TASTYTRADE_API_URL`.
 I need to tell the user what `TASTYTRADE_API_URL` to set.
-It should be `http://34.235.119.67:8002` (if open) or `https://api.trademind.bot` (if I proxy).
+It should be `http://34.203.194.137:8002` (if open) or `https://api.trademind.bot` (if I proxy).
 I haven't set up the proxy yet.
-So the user should use `http://34.235.119.67:8002`.
+So the user should use `http://34.203.194.137:8002`.
 
 I'll notify user.
 
@@ -3479,7 +3479,7 @@ Wait, I should confirm the manual run actually published signals.
 I'll check `signals.json` on EC2.
 `ssh ... "cat /home/ubuntu/signals.json"`
 
-*User accepted the command `ssh -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.235.119.67 "cat /home/ubuntu/signals.json"`*
+*User accepted the command `ssh -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.203.194.137 "cat /home/ubuntu/signals.json"`*
 
 ### Planner Response
 
@@ -3506,7 +3506,7 @@ I'll notify user.
 
 Action items for User:
 1. Deploy frontend.
-2. Set `TASTYTRADE_API_URL` to `http://34.235.119.67:8002` (or similar).
+2. Set `TASTYTRADE_API_URL` to `http://34.203.194.137:8002` (or similar).
 3. Test.
 
 Wait, `next.config.ts` or Vercel env.
@@ -3522,37 +3522,37 @@ I don't see any signal
 
 Let me debug why signals aren't appearing. I'll check the services and logs on EC2.
 
-*User accepted the command `ssh -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.235.119.67 "sudo journalctl -u scanner -n 50 --no-pager"`*
+*User accepted the command `ssh -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.203.194.137 "sudo journalctl -u scanner -n 50 --no-pager"`*
 
 ### Planner Response
 
 Output is empty. Let me check if the websocket server is running and also run the scanner manually to see errors:
 
-*User accepted the command `ssh -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.235.119.67 "sudo systemctl status scanner websocket api-server 2>&1 | head -60"`*
+*User accepted the command `ssh -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.203.194.137 "sudo systemctl status scanner websocket api-server 2>&1 | head -60"`*
 
 ### Planner Response
 
 Output is still empty. Let me run the scanner directly to capture errors:
 
-*User accepted the command `ssh -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.235.119.67 "cd /home/ubuntu && python3 scheduled_scanner.py --force 2>&1 | head -100"`*
+*User accepted the command `ssh -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.203.194.137 "cd /home/ubuntu && python3 scheduled_scanner.py --force 2>&1 | head -100"`*
 
 ### Planner Response
 
 The SSH commands are not showing output in my tool results. Let me try a different approach - I'll write the output to a file and then read it:
 
-*User accepted the command `ssh -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.235.119.67 "cd /home/ubuntu && python3 scheduled_scanner.py --force > /tmp/scanner_output.txt 2>&1; cat /tmp/scanner_output.txt"`*
+*User accepted the command `ssh -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.203.194.137 "cd /home/ubuntu && python3 scheduled_scanner.py --force > /tmp/scanner_output.txt 2>&1; cat /tmp/scanner_output.txt"`*
 
 ### Planner Response
 
 Still empty. The SSH connection might be having issues reading stdout. Let me try reading the file separately:
 
-*User accepted the command `ssh -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.235.119.67 "cat /tmp/scanner_output.txt | head -80"`*
+*User accepted the command `ssh -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.203.194.137 "cat /tmp/scanner_output.txt | head -80"`*
 
 ### Planner Response
 
 Still no output. Let me try using the existing SSH terminal that's already running:
 
-*User accepted the command `ssh -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.235.119.67 "netstat -tlnp 2>/dev/null | grep -E '8002|8003|8004' || ss -tlnp | grep -E '8002|8003|8004'"`*
+*User accepted the command `ssh -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.203.194.137 "netstat -tlnp 2>/dev/null | grep -E '8002|8003|8004' || ss -tlnp | grep -E '8002|8003|8004'"`*
 
 ### User Input
 
@@ -3566,7 +3566,7 @@ I can see the terminal output now. The WebSocket server (port 8003 and 8004) is 
 
 Let me also check if the scanner is running and why `api-server` isn't up:
 
-*User accepted the command `ssh -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.235.119.67 "sudo systemctl start api-server scanner; sleep 2; sudo journalctl -u api-server -n 30 --no-pager"`*
+*User accepted the command `ssh -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.203.194.137 "sudo systemctl start api-server scanner; sleep 2; sudo journalctl -u api-server -n 30 --no-pager"`*
 
 ### User Input
 
@@ -3582,7 +3582,7 @@ The [tastytrade](cci:1://file:///d:/Projects/tastywork-trading-1/google_secrets.
 
 Let me fix this by installing it system-wide:
 
-*User accepted the command `ssh -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.235.119.67 "sudo pip3 install --break-system-packages tastytrade && sudo systemctl restart api-server && sleep 3 && sudo systemctl status api-server"`*
+*User accepted the command `ssh -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.203.194.137 "sudo pip3 install --break-system-packages tastytrade && sudo systemctl restart api-server && sleep 3 && sudo systemctl status api-server"`*
 
 ### User Input
 
@@ -3594,13 +3594,13 @@ Let me fix this by installing it system-wide:
 
 I see the issue - `typing_extensions` conflicts with a Debian-installed package. Let me work around this by force-reinstalling:
 
-*User accepted the command `ssh -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.235.119.67 "sudo pip3 install --break-system-packages --ignore-installed typing-extensions && sudo pip3 install --break-system-packages tastytrade"`*
+*User accepted the command `ssh -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.203.194.137 "sudo pip3 install --break-system-packages --ignore-installed typing-extensions && sudo pip3 install --break-system-packages tastytrade"`*
 
 ### Planner Response
 
 Now let me restart the api-server and scanner, then verify they're running:
 
-*User accepted the command `ssh -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.235.119.67 "sudo systemctl restart api-server scanner && sleep 3 && ss -tlnp | grep -E '8002|8003|8004'"`*
+*User accepted the command `ssh -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.203.194.137 "sudo systemctl restart api-server scanner && sleep 3 && ss -tlnp | grep -E '8002|8003|8004'"`*
 
 ### Planner Response
 
@@ -3612,7 +3612,7 @@ Let me read the terminal to see the actual output:
 
 The terminal still shows the old error. My recent command hasn't executed yet or the terminal buffer hasn't refreshed. Let me run the install command directly with verification:
 
-*User accepted the command `ssh -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.235.119.67 "sudo pip3 install --break-system-packages --ignore-installed tastytrade"`*
+*User accepted the command `ssh -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.203.194.137 "sudo pip3 install --break-system-packages --ignore-installed tastytrade"`*
 
 *Read terminal output: powershell*
 
@@ -3620,7 +3620,7 @@ The terminal still shows the old error. My recent command hasn't executed yet or
 
 I see the terminal is still showing the old error. The `--ignore-installed` command I ran should work but the buffer has not updated. Let me try a different approach - using a virtual environment for the API server:
 
-*User accepted the command `ssh -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.235.119.67 "python3 -m venv /home/ubuntu/venv && /home/ubuntu/venv/bin/pip install tastytrade python-dotenv requests"`*
+*User accepted the command `ssh -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.203.194.137 "python3 -m venv /home/ubuntu/venv && /home/ubuntu/venv/bin/pip install tastytrade python-dotenv requests"`*
 
 ### Planner Response
 
@@ -3632,7 +3632,7 @@ The venv command failed. Let me check what's happening by reading the terminal:
 
 I see - need to install `python3.12-venv` first. Let me do that:
 
-*User rejected the command `ssh -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.235.119.67 "sudo apt-get install -y python3.12-venv && python3 -m venv /home/ubuntu/venv && /home/ubuntu/venv/bin/pip install tastytrade python-dotenv requests"`*
+*User rejected the command `ssh -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.203.194.137 "sudo apt-get install -y python3.12-venv && python3 -m venv /home/ubuntu/venv && /home/ubuntu/venv/bin/pip install tastytrade python-dotenv requests"`*
 
 ### User Input
 
@@ -3644,7 +3644,7 @@ I see - need to install `python3.12-venv` first. Let me do that:
 
 The virtual environment was created successfully and all packages including [tastytrade](cci:1://file:///d:/Projects/tastywork-trading-1/google_secrets.py:78:0-91:5) are now installed. Now I need to update the systemd service to use the venv Python, then restart services and run a scan:
 
-*User rejected the command `ssh -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.235.119.67 "sudo sed -i 's|/usr/bin/python3|/home/ubuntu/venv/bin/python3|g' /etc/systemd/system/api-server.service && sudo systemctl daemon-reload && sudo systemctl restart api-server && sleep 3 && sudo systemctl status api-server"`*
+*User rejected the command `ssh -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.203.194.137 "sudo sed -i 's|/usr/bin/python3|/home/ubuntu/venv/bin/python3|g' /etc/systemd/system/api-server.service && sudo systemctl daemon-reload && sudo systemctl restart api-server && sleep 3 && sudo systemctl status api-server"`*
 
 ### User Input
 
@@ -3658,7 +3658,7 @@ The `api-server` is now running! ✅ I can see it's `Active: active (running)` u
 
 Now I need to also update the [scanner](cci:1://file:///d:/Projects/tastywork-trading-1/scheduled_scanner.py:76:0-138:20) service to use the venv, and then run a manual scan to generate signals:
 
-*User accepted the command `ssh -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.235.119.67 "sudo sed -i 's|/usr/bin/python3|/home/ubuntu/venv/bin/python3|g' /etc/systemd/system/scanner.service && sudo systemctl daemon-reload && sudo systemctl restart scanner && ss -tlnp | grep 8002"`*
+*User accepted the command `ssh -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.203.194.137 "sudo sed -i 's|/usr/bin/python3|/home/ubuntu/venv/bin/python3|g' /etc/systemd/system/scanner.service && sudo systemctl daemon-reload && sudo systemctl restart scanner && ss -tlnp | grep 8002"`*
 
 ### User Input
 
@@ -3675,7 +3675,7 @@ The WebSocket server (ports 8003/8004) is already running. The issue is the **sc
 
 Let me trigger a manual scan to generate signals that will be broadcast via WebSocket:
 
-*User accepted the command `ssh -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.235.119.67 "cd /home/ubuntu && /home/ubuntu/venv/bin/python3 scheduled_scanner.py --force 2>&1 | head -50"`*
+*User accepted the command `ssh -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.203.194.137 "cd /home/ubuntu && /home/ubuntu/venv/bin/python3 scheduled_scanner.py --force 2>&1 | head -50"`*
 
 ### Planner Response
 
@@ -3687,7 +3687,7 @@ Let me check the terminal output to see what happened with the scan:
 
 The terminal didn't refresh with new output. Let me wait for the scan result by reading it again:
 
-*User accepted the command `ssh -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.235.119.67 "cd /home/ubuntu && /home/ubuntu/venv/bin/python3 scheduled_scanner.py --force --mock"`*
+*User accepted the command `ssh -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.203.194.137 "cd /home/ubuntu && /home/ubuntu/venv/bin/python3 scheduled_scanner.py --force --mock"`*
 
 *Read terminal output: powershell*
 
@@ -3695,7 +3695,7 @@ The terminal didn't refresh with new output. Let me wait for the scan result by 
 
 I can see the error now: `ModuleNotFoundError: No module named 'scipy'`. The venv is missing `scipy` and other scanner dependencies. Let me install them:
 
-*User accepted the command `ssh -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.235.119.67 "/home/ubuntu/venv/bin/pip install scipy ib_insync"`*
+*User accepted the command `ssh -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.203.194.137 "/home/ubuntu/venv/bin/pip install scipy ib_insync"`*
 
 *Read terminal output: powershell*
 
@@ -3703,7 +3703,7 @@ I can see the error now: `ModuleNotFoundError: No module named 'scipy'`. The ven
 
 `scipy` and `ib_insync` installed successfully. Now let me run the scanner again:
 
-*User accepted the command `ssh -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.235.119.67 "cd /home/ubuntu && /home/ubuntu/venv/bin/python3 scheduled_scanner.py --force --mock 2>&1"`*
+*User accepted the command `ssh -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.203.194.137 "cd /home/ubuntu && /home/ubuntu/venv/bin/python3 scheduled_scanner.py --force --mock 2>&1"`*
 
 *Read terminal output: powershell*
 
@@ -3715,7 +3715,7 @@ Looking at this more carefully, there's another issue: the scanner is finding "0
 
 However, for now, let me try a different approach - run the **earnings scanner** directly instead, which should work with mock/Perplexity data:
 
-*User accepted the command `ssh -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.235.119.67 "cd /home/ubuntu && /home/ubuntu/venv/bin/python3 test_earnings_quick.py 2>&1"`*
+*User accepted the command `ssh -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.203.194.137 "cd /home/ubuntu && /home/ubuntu/venv/bin/python3 test_earnings_quick.py 2>&1"`*
 
 *Read terminal output: powershell*
 
@@ -3727,7 +3727,7 @@ I can see the issue - the earnings test is running but there are some issues:
 
 Let me install scikit-learn and then we can run the scanner with real IB data (since we're in market hours) instead of mock:
 
-*User accepted the command `ssh -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.235.119.67 "/home/ubuntu/venv/bin/pip install scikit-learn && cd /home/ubuntu && /home/ubuntu/venv/bin/python3 scheduled_scanner.py --force 2>&1 | head -40"`*
+*User accepted the command `ssh -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.203.194.137 "/home/ubuntu/venv/bin/pip install scikit-learn && cd /home/ubuntu && /home/ubuntu/venv/bin/python3 scheduled_scanner.py --force 2>&1 | head -40"`*
 
 ### User Input
 
@@ -3777,7 +3777,7 @@ Now I have a clear picture of the architecture. Let me create a summary document
 
 Now let me fix the real issue - install all dependencies and run the scanner correctly:
 
-*User accepted the command `ssh -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.235.119.67 "/home/ubuntu/venv/bin/pip install scipy scikit-learn ib_insync requests python-dotenv"`*
+*User accepted the command `ssh -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.203.194.137 "/home/ubuntu/venv/bin/pip install scipy scikit-learn ib_insync requests python-dotenv"`*
 
 *Read terminal output: powershell*
 
@@ -3795,7 +3795,7 @@ I see - the cost filter is `MIN_TRADE_COST: 150` to `MAX_TRADE_COST: 400`. The m
 
 The simplest fix for now is to **create a test signal manually** and broadcast it via the WebSocket server to verify the end-to-end flow works. Let me do that:
 
-*User accepted the command `ssh -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.235.119.67 "curl -X POST http://localhost:8004 -H 'Content-Type: application/json' -d '{\"channel\": \"calendar_spread\", \"signal\": {\"id\": \"test-001\", \"symbol\": \"SPY\", \"strategy\": \"Calendar Spread\", \"direction\": \"neutral\", \"strike\": 600, \"frontExpiry\": \"2026-01-30\", \"backExpiry\": \"2026-02-13\", \"cost\": 250, \"potentialReturn\": 87.5, \"returnPercent\": 35, \"winRate\": 75, \"riskLevel\": \"Medium\", \"status\": \"pending\", \"rationale\": \"Theta edge $0.08/day, IV 18%, Score 45.5\"}}'"`*
+*User accepted the command `ssh -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.203.194.137 "curl -X POST http://localhost:8004 -H 'Content-Type: application/json' -d '{\"channel\": \"calendar_spread\", \"signal\": {\"id\": \"test-001\", \"symbol\": \"SPY\", \"strategy\": \"Calendar Spread\", \"direction\": \"neutral\", \"strike\": 600, \"frontExpiry\": \"2026-01-30\", \"backExpiry\": \"2026-02-13\", \"cost\": 250, \"potentialReturn\": 87.5, \"returnPercent\": 35, \"winRate\": 75, \"riskLevel\": \"Medium\", \"status\": \"pending\", \"rationale\": \"Theta edge $0.08/day, IV 18%, Score 45.5\"}}'"`*
 
 *Read terminal output: powershell*
 
@@ -3803,7 +3803,7 @@ The simplest fix for now is to **create a test signal manually** and broadcast i
 
 The curl command failed due to PowerShell escaping issues. Let me try a simpler approach - create a small Python script on the server to broadcast a test signal:
 
-*User accepted the command `ssh -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.235.119.67 "/home/ubuntu/venv/bin/python3 -c \"import requests; r = requests.post('http://localhost:8004', json={'channel': 'calendar_spread', 'signal': {'id': 'test-001', 'symbol': 'SPY', 'strategy': 'Calendar Spread', 'direction': 'neutral', 'strike': 600, 'frontExpiry': '2026-01-30', 'backExpiry': '2026-02-13', 'cost': 250, 'potentialReturn': 87.5, 'returnPercent': 35, 'winRate': 75, 'riskLevel': 'Medium', 'status': 'pending', 'rationale': 'Test signal'}}); print(r.text)\""`*
+*User accepted the command `ssh -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.203.194.137 "/home/ubuntu/venv/bin/python3 -c \"import requests; r = requests.post('http://localhost:8004', json={'channel': 'calendar_spread', 'signal': {'id': 'test-001', 'symbol': 'SPY', 'strategy': 'Calendar Spread', 'direction': 'neutral', 'strike': 600, 'frontExpiry': '2026-01-30', 'backExpiry': '2026-02-13', 'cost': 250, 'potentialReturn': 87.5, 'returnPercent': 35, 'winRate': 75, 'riskLevel': 'Medium', 'status': 'pending', 'rationale': 'Test signal'}}); print(r.text)\""`*
 
 *Read terminal output: powershell*
 
@@ -3811,7 +3811,7 @@ The curl command failed due to PowerShell escaping issues. Let me try a simpler 
 
 PowerShell is having trouble with the quotes. Let me create a Python file on EC2 instead:
 
-*User accepted the command `ssh -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.235.119.67 "echo 'import requests; r = requests.post(\"http://localhost:8004\", json={\"channel\": \"calendar_spread\", \"signal\": {\"id\": \"test-001\", \"symbol\": \"SPY\", \"strategy\": \"Calendar Spread\", \"direction\": \"neutral\", \"strike\": 600, \"cost\": 250, \"potentialReturn\": 87, \"returnPercent\": 35, \"winRate\": 75, \"riskLevel\": \"Medium\", \"status\": \"pending\"}}); print(r.text)' > /tmp/test_signal.py && /home/ubuntu/venv/bin/python3 /tmp/test_signal.py"`*
+*User accepted the command `ssh -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.203.194.137 "echo 'import requests; r = requests.post(\"http://localhost:8004\", json={\"channel\": \"calendar_spread\", \"signal\": {\"id\": \"test-001\", \"symbol\": \"SPY\", \"strategy\": \"Calendar Spread\", \"direction\": \"neutral\", \"strike\": 600, \"cost\": 250, \"potentialReturn\": 87, \"returnPercent\": 35, \"winRate\": 75, \"riskLevel\": \"Medium\", \"status\": \"pending\"}}); print(r.text)' > /tmp/test_signal.py && /home/ubuntu/venv/bin/python3 /tmp/test_signal.py"`*
 
 *Read terminal output: powershell*
 
@@ -3821,7 +3821,7 @@ Let me create a test file locally and upload it to EC2:
 
 *Edited relevant file*
 
-*User accepted the command `scp -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" "d:\Projects\tastywork-trading-1\test_broadcast.py" ubuntu@34.235.119.67:/home/ubuntu/ && ssh -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.235.119.67 "/home/ubuntu/venv/bin/python3 /home/ubuntu/test_broadcast.py"`*
+*User accepted the command `scp -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" "d:\Projects\tastywork-trading-1\test_broadcast.py" ubuntu@34.203.194.137:/home/ubuntu/ && ssh -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.203.194.137 "/home/ubuntu/venv/bin/python3 /home/ubuntu/test_broadcast.py"`*
 
 *Read terminal output: powershell*
 
@@ -3829,9 +3829,9 @@ Let me create a test file locally and upload it to EC2:
 
 PowerShell doesn't support `&&`. Let me run the commands separately:
 
-*User accepted the command `scp -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" "d:\Projects\tastywork-trading-1\test_broadcast.py" ubuntu@34.235.119.67:/home/ubuntu/`*
+*User accepted the command `scp -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" "d:\Projects\tastywork-trading-1\test_broadcast.py" ubuntu@34.203.194.137:/home/ubuntu/`*
 
-*User accepted the command `ssh -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.235.119.67 "/home/ubuntu/venv/bin/python3 /home/ubuntu/test_broadcast.py"`*
+*User accepted the command `ssh -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.203.194.137 "/home/ubuntu/venv/bin/python3 /home/ubuntu/test_broadcast.py"`*
 
 *Read terminal output: powershell*
 
@@ -3875,7 +3875,7 @@ I can see the Approve button was clicked and it failed with a **500 error** on `
 
 Let me check the API server logs to see what went wrong:
 
-*User accepted the command `ssh -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.235.119.67 "sudo journalctl -u api-server -n 50 --no-pager"`*
+*User accepted the command `ssh -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.203.194.137 "sudo journalctl -u api-server -n 50 --no-pager"`*
 
 *Read terminal output: powershell*
 
@@ -3883,7 +3883,7 @@ Let me check the API server logs to see what went wrong:
 
 The terminal is still showing old output. Let me check the journals specifically:
 
-*User accepted the command `ssh -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.235.119.67 "sudo journalctl -u api-server --since '2 minutes ago' --no-pager"`*
+*User accepted the command `ssh -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.203.194.137 "sudo journalctl -u api-server --since '2 minutes ago' --no-pager"`*
 
 *Read terminal output: powershell*
 
@@ -3893,7 +3893,7 @@ I can see the issue now! The `api-server` service is using the **system Python**
 
 Let me fix the service file and also check if it's even running:
 
-*User accepted the command `ssh -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.235.119.67 "cat /etc/systemd/system/api-server.service"`*
+*User accepted the command `ssh -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.203.194.137 "cat /etc/systemd/system/api-server.service"`*
 
 *Read terminal output: powershell*
 
@@ -3903,7 +3903,7 @@ The service file is correct (`/home/ubuntu/venv/bin/python3`), but the earlier l
 
 The issue is the service WAS correct when it started at 01:25:18, but the **earlier failure logs** (01:25:14) were from before the sed fix. Let me check if the service is currently running:
 
-*User accepted the command `ssh -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.235.119.67 "sudo systemctl status api-server"`*
+*User accepted the command `ssh -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.203.194.137 "sudo systemctl status api-server"`*
 
 *Read terminal output: powershell*
 
@@ -3911,11 +3911,11 @@ The issue is the service WAS correct when it started at 01:25:18, but the **earl
 
 The terminal scrolled past. Let me restart the api-server now and check if it's working:
 
-*User accepted the command `ssh -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.235.119.67 "sudo systemctl restart api-server; sleep 3; ss -tlnp | grep 8002"`*
+*User accepted the command `ssh -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.203.194.137 "sudo systemctl restart api-server; sleep 3; ss -tlnp | grep 8002"`*
 
 *Read terminal output: powershell*
 
-*User accepted the command `ssh -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.235.119.67 "ss -tlnp | grep 8002"`*
+*User accepted the command `ssh -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.203.194.137 "ss -tlnp | grep 8002"`*
 
 *Read terminal output: powershell*
 
@@ -3923,7 +3923,7 @@ The terminal scrolled past. Let me restart the api-server now and check if it's 
 
 The terminal is still showing old output. Let me scroll and see the result of the last command:
 
-*User accepted the command `ssh -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.235.119.67 "ss -tlnp 2>/dev/null | grep -E '8002|8003|8004'"`*
+*User accepted the command `ssh -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.203.194.137 "ss -tlnp 2>/dev/null | grep -E '8002|8003|8004'"`*
 
 ### User Input
 
@@ -3945,9 +3945,9 @@ The issue is clear: [tasty_api_server.py](cci:7://file:///d:/Projects/tastywork-
 
 Now let me upload and restart the api-server:
 
-*User accepted the command `scp -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" "d:\Projects\tastywork-trading-1\tasty_api_server.py" ubuntu@34.235.119.67:/home/ubuntu/`*
+*User accepted the command `scp -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" "d:\Projects\tastywork-trading-1\tasty_api_server.py" ubuntu@34.203.194.137:/home/ubuntu/`*
 
-*User accepted the command `ssh -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.235.119.67 "sudo systemctl restart api-server; sleep 3; ss -tlnp | grep 8002"`*
+*User accepted the command `ssh -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.203.194.137 "sudo systemctl restart api-server; sleep 3; ss -tlnp | grep 8002"`*
 
 ### Planner Response
 
@@ -4021,9 +4021,9 @@ I will fix this bug.
 
 Now upload and restart again.
 
-*User accepted the command `scp -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" "d:\Projects\tastywork-trading-1\tasty_api_server.py" ubuntu@34.235.119.67:/home/ubuntu/`*
+*User accepted the command `scp -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" "d:\Projects\tastywork-trading-1\tasty_api_server.py" ubuntu@34.203.194.137:/home/ubuntu/`*
 
-*User accepted the command `ssh -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.235.119.67 "sudo systemctl restart api-server"`*
+*User accepted the command `ssh -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.203.194.137 "sudo systemctl restart api-server"`*
 
 ### Planner Response
 
@@ -4051,7 +4051,7 @@ I need to:
 
 I'll run the broadcast script again.
 
-*User accepted the command `ssh -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.235.119.67 "/home/ubuntu/venv/bin/python3 /home/ubuntu/test_broadcast.py"`*
+*User accepted the command `ssh -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.203.194.137 "/home/ubuntu/venv/bin/python3 /home/ubuntu/test_broadcast.py"`*
 
 ### Planner Response
 
@@ -4085,7 +4085,7 @@ And console says: `Failed to load resource: the server responded with a status o
 I will check the logs. It's possible I introduced a syntax error or forgot something.
 I'll check `journalctl` again.
 
-*User accepted the command `ssh -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.235.119.67 "sudo journalctl -u api-server -n 50 --no-pager"`*
+*User accepted the command `ssh -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.203.194.137 "sudo journalctl -u api-server -n 50 --no-pager"`*
 
 *Read terminal output: powershell*
 
@@ -4100,21 +4100,21 @@ Also, I should broadcast the test signal again because the previous one might ha
 I suspect the [_execute_calendar_spread](cci:1://file:///d:/Projects/tastywork-trading-1/tasty_api_server.py:326:4-374:17) function might be failing.
 I'll check the logs for "Execution failed" or similar.
 
-*User accepted the command `ssh -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.235.119.67 "sudo journalctl -u api-server --since '10 minutes ago' | grep -i error"`*
+*User accepted the command `ssh -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.203.194.137 "sudo journalctl -u api-server --since '10 minutes ago' | grep -i error"`*
 
 *Viewed [tasty_api_server.py](file:///d:/Projects/tastywork-trading-1/tasty_api_server.py) *
 
-*User accepted the command `ssh -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.235.119.67 "sudo journalctl -u api-server --since '30 minutes ago' -n 50 --no-pager"`*
+*User accepted the command `ssh -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.203.194.137 "sudo journalctl -u api-server --since '30 minutes ago' -n 50 --no-pager"`*
 
 *Viewed [tasty_api_server.py](file:///d:/Projects/tastywork-trading-1/tasty_api_server.py) *
 
-*User accepted the command `ssh -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.235.119.67 "curl -v http://localhost:8002/api/signals"`*
+*User accepted the command `ssh -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.203.194.137 "curl -v http://localhost:8002/api/signals"`*
 
-*User accepted the command `ssh -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.235.119.67 "curl -v http://localhost:8002/api/signals > /tmp/curl_out.txt 2>&1 && cat /tmp/curl_out.txt"`*
+*User accepted the command `ssh -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.203.194.137 "curl -v http://localhost:8002/api/signals > /tmp/curl_out.txt 2>&1 && cat /tmp/curl_out.txt"`*
 
 *User accepted the command `dir`*
 
-*User accepted the command `ssh -o StrictHostKeyChecking=no -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.235.119.67 "uname -a"`*
+*User accepted the command `ssh -o StrictHostKeyChecking=no -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.203.194.137 "uname -a"`*
 
 *Edited relevant file*
 
@@ -4122,61 +4122,61 @@ I'll check the logs for "Execution failed" or similar.
 
 *Checked command status*
 
-*User accepted the command `ssh -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.235.119.67 "curl -s http://localhost:8002/api/signals > /tmp/signals_list.json"`*
+*User accepted the command `ssh -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.203.194.137 "curl -s http://localhost:8002/api/signals > /tmp/signals_list.json"`*
 
-*User accepted the command `scp -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.235.119.67:/tmp/signals_list.json ./signals_list.json`*
+*User accepted the command `scp -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.203.194.137:/tmp/signals_list.json ./signals_list.json`*
 
 *Viewed [signals_list.json](file:///d:/Projects/tastywork-trading-1/signals_list.json) *
 
-*User accepted the command `ssh -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.235.119.67 "curl -X POST -d '{\"market_context\":\"test\"}' http://localhost:8002/api/signals/50970681-e1ea-4a2d-b05a-7a878b2bfd6b/approve > /dev/null 2>&1"`*
+*User accepted the command `ssh -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.203.194.137 "curl -X POST -d '{\"market_context\":\"test\"}' http://localhost:8002/api/signals/50970681-e1ea-4a2d-b05a-7a878b2bfd6b/approve > /dev/null 2>&1"`*
 
-*User accepted the command `ssh -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.235.119.67 "sudo journalctl -u api-server --since '2 minutes ago' > /tmp/api-server-error.log"`*
+*User accepted the command `ssh -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.203.194.137 "sudo journalctl -u api-server --since '2 minutes ago' > /tmp/api-server-error.log"`*
 
-*User accepted the command `scp -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.235.119.67:/tmp/api-server-error.log ./api-server-error.log`*
+*User accepted the command `scp -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.203.194.137:/tmp/api-server-error.log ./api-server-error.log`*
 
 *Viewed [api-server-error.log](file:///d:/Projects/tastywork-trading-1/api-server-error.log) *
 
-*User accepted the command `ssh -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.235.119.67 "sudo journalctl -u api-server --since '45 minutes ago' > /tmp/api-server-full.log"`*
+*User accepted the command `ssh -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.203.194.137 "sudo journalctl -u api-server --since '45 minutes ago' > /tmp/api-server-full.log"`*
 
-*User accepted the command `scp -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.235.119.67:/tmp/api-server-full.log ./api-server-full.log`*
+*User accepted the command `scp -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.203.194.137:/tmp/api-server-full.log ./api-server-full.log`*
 
 *Viewed [api-server-full.log](file:///d:/Projects/tastywork-trading-1/api-server-full.log) *
 
-*User accepted the command `ssh -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.235.119.67 "cat /home/ubuntu/tasty_api_server.py | head -n 25 > /tmp/remote_source.txt"`*
+*User accepted the command `ssh -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.203.194.137 "cat /home/ubuntu/tasty_api_server.py | head -n 25 > /tmp/remote_source.txt"`*
 
-*User accepted the command `scp -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.235.119.67:/tmp/remote_source.txt ./remote_source.txt`*
+*User accepted the command `scp -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.203.194.137:/tmp/remote_source.txt ./remote_source.txt`*
 
 *Viewed [tasty_api_server.py](file:///d:/Projects/tastywork-trading-1/tasty_api_server.py) *
 
-*User accepted the command `scp -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" d:\Projects\tastywork-trading-1\tasty_api_server.py ubuntu@34.235.119.67:/home/ubuntu/tasty_api_server.py`*
+*User accepted the command `scp -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" d:\Projects\tastywork-trading-1\tasty_api_server.py ubuntu@34.203.194.137:/home/ubuntu/tasty_api_server.py`*
 
-*User accepted the command `ssh -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.235.119.67 "sudo systemctl restart api-server"`*
+*User accepted the command `ssh -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.203.194.137 "sudo systemctl restart api-server"`*
 
-*User accepted the command `ssh -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.235.119.67 "curl -X POST -d '{}' http://localhost:8002/api/signals/50970681-e1ea-4a2d-b05a-7a878b2bfd6b/approve > /tmp/approval_response.json 2>&1"`*
+*User accepted the command `ssh -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.203.194.137 "curl -X POST -d '{}' http://localhost:8002/api/signals/50970681-e1ea-4a2d-b05a-7a878b2bfd6b/approve > /tmp/approval_response.json 2>&1"`*
 
-*User accepted the command `ssh -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.235.119.67 "sudo journalctl -u api-server --since '2 minutes ago' > /tmp/api-server-latest.log"`*
+*User accepted the command `ssh -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.203.194.137 "sudo journalctl -u api-server --since '2 minutes ago' > /tmp/api-server-latest.log"`*
 
-*User accepted the command `scp -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.235.119.67:/tmp/api-server-latest.log ./api-server-latest.log`*
+*User accepted the command `scp -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.203.194.137:/tmp/api-server-latest.log ./api-server-latest.log`*
 
-*User accepted the command `scp -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.235.119.67:/tmp/approval_response.json ./approval_response.json`*
+*User accepted the command `scp -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.203.194.137:/tmp/approval_response.json ./approval_response.json`*
 
 *Viewed [approval_response.json](file:///d:/Projects/tastywork-trading-1/approval_response.json) *
 
 *Viewed [api-server-latest.log](file:///d:/Projects/tastywork-trading-1/api-server-latest.log) *
 
-*User accepted the command `ssh -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.235.119.67 "curl -s http://localhost:8002/api/signals > /tmp/new_signals.json"`*
+*User accepted the command `ssh -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.203.194.137 "curl -s http://localhost:8002/api/signals > /tmp/new_signals.json"`*
 
-*User accepted the command `scp -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.235.119.67:/tmp/new_signals.json ./new_signals.json`*
+*User accepted the command `scp -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.203.194.137:/tmp/new_signals.json ./new_signals.json`*
 
 *Viewed [new_signals.json](file:///d:/Projects/tastywork-trading-1/new_signals.json) *
 
-*User accepted the command `ssh -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.235.119.67 "curl -X POST -d '{}' http://localhost:8002/api/signals/098f08fb-86ca-4d1e-a329-4420a2b46e61/approve > /tmp/approval_result.json 2>&1"`*
+*User accepted the command `ssh -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.203.194.137 "curl -X POST -d '{}' http://localhost:8002/api/signals/098f08fb-86ca-4d1e-a329-4420a2b46e61/approve > /tmp/approval_result.json 2>&1"`*
 
-*User accepted the command `ssh -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.235.119.67 "sudo journalctl -u api-server --since '2 minutes ago' > /tmp/api-server-exec.log"`*
+*User accepted the command `ssh -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.203.194.137 "sudo journalctl -u api-server --since '2 minutes ago' > /tmp/api-server-exec.log"`*
 
-*User accepted the command `scp -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.235.119.67:/tmp/api-server-exec.log ./api-server-exec.log`*
+*User accepted the command `scp -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.203.194.137:/tmp/api-server-exec.log ./api-server-exec.log`*
 
-*User accepted the command `scp -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.235.119.67:/tmp/approval_result.json ./approval_result.json`*
+*User accepted the command `scp -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.203.194.137:/tmp/approval_result.json ./approval_result.json`*
 
 *Viewed [approval_result.json](file:///d:/Projects/tastywork-trading-1/approval_result.json) *
 
@@ -4228,19 +4228,19 @@ Action Required: Please provide a new valid TASTYTRADE_REFRESH_TOKEN. I will upd
 
 *Edited relevant file*
 
-*User accepted the command `scp -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" "d:\Projects\tastywork-trading-1\.env" ubuntu@34.235.119.67:/home/ubuntu/.env`*
+*User accepted the command `scp -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" "d:\Projects\tastywork-trading-1\.env" ubuntu@34.203.194.137:/home/ubuntu/.env`*
 
-*User accepted the command `ssh -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.235.119.67 "sudo systemctl restart api-server"`*
+*User accepted the command `ssh -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.203.194.137 "sudo systemctl restart api-server"`*
 
-*User accepted the command `ssh -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.235.119.67 "curl -s http://localhost:8002/api/signals > /tmp/check_signals.json"`*
+*User accepted the command `ssh -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.203.194.137 "curl -s http://localhost:8002/api/signals > /tmp/check_signals.json"`*
 
-*User accepted the command `scp -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.235.119.67:/tmp/check_signals.json ./check_signals.json`*
+*User accepted the command `scp -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.203.194.137:/tmp/check_signals.json ./check_signals.json`*
 
 *Viewed [check_signals.json](file:///d:/Projects/tastywork-trading-1/check_signals.json) *
 
-*User accepted the command `ssh -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.235.119.67 "curl -X POST -d '{}' http://localhost:8002/api/signals/ade9b3e8-6207-4a26-b7e4-f7800749e170/approve > /tmp/final_verification.json 2>&1"`*
+*User accepted the command `ssh -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.203.194.137 "curl -X POST -d '{}' http://localhost:8002/api/signals/ade9b3e8-6207-4a26-b7e4-f7800749e170/approve > /tmp/final_verification.json 2>&1"`*
 
-*User accepted the command `scp -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.235.119.67:/tmp/final_verification.json ./final_verification.json`*
+*User accepted the command `scp -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.203.194.137:/tmp/final_verification.json ./final_verification.json`*
 
 *Viewed [final_verification.json](file:///d:/Projects/tastywork-trading-1/final_verification.json) *
 
@@ -4252,25 +4252,25 @@ Action Required: Please provide a new valid TASTYTRADE_REFRESH_TOKEN. I will upd
 
 I want to the signal being automatically generated and push to front end after the approval it should be submitted to the client's prod account
 
-*User accepted the command `ssh -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.235.119.67 "sudo systemctl status scanner"`*
+*User accepted the command `ssh -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.203.194.137 "sudo systemctl status scanner"`*
 
-*User accepted the command `ssh -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.235.119.67 "sudo journalctl -u scanner --since '1 hour ago' -n 50 --no-pager"`*
-
-*Viewed content chunk*
+*User accepted the command `ssh -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.203.194.137 "sudo journalctl -u scanner --since '1 hour ago' -n 50 --no-pager"`*
 
 *Viewed content chunk*
 
-*User accepted the command `ssh -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.235.119.67 "sudo systemctl status scanner > /tmp/scanner_status.txt 2>&1"`*
+*Viewed content chunk*
 
-*User accepted the command `ssh -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.235.119.67 "cat /tmp/scanner_status.txt"`*
+*User accepted the command `ssh -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.203.194.137 "sudo systemctl status scanner > /tmp/scanner_status.txt 2>&1"`*
 
-*User accepted the command `ssh -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.235.119.67 "grep 'SANDBOX' /home/ubuntu/.env"`*
+*User accepted the command `ssh -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.203.194.137 "cat /tmp/scanner_status.txt"`*
 
-*User accepted the command `ssh -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.235.119.67 "cat /home/ubuntu/config.py"`*
+*User accepted the command `ssh -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.203.194.137 "grep 'SANDBOX' /home/ubuntu/.env"`*
 
-*User accepted the command `scp -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.235.119.67:/tmp/scanner_status.txt ./scanner_status.txt`*
+*User accepted the command `ssh -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.203.194.137 "cat /home/ubuntu/config.py"`*
 
-*User accepted the command `scp -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.235.119.67:/home/ubuntu/config.py ./remote_config.py`*
+*User accepted the command `scp -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.203.194.137:/tmp/scanner_status.txt ./scanner_status.txt`*
+
+*User accepted the command `scp -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.203.194.137:/home/ubuntu/config.py ./remote_config.py`*
 
 *Edited relevant file*
 
@@ -4278,7 +4278,7 @@ I want to the signal being automatically generated and push to front end after t
 
 *Viewed [remote_config.py](file:///d:/Projects/tastywork-trading-1/remote_config.py) *
 
-*User accepted the command `scp -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" "d:\Projects\tastywork-trading-1\.env" ubuntu@34.235.119.67:/home/ubuntu/.env`*
+*User accepted the command `scp -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" "d:\Projects\tastywork-trading-1\.env" ubuntu@34.203.194.137:/home/ubuntu/.env`*
 
 *Viewed [scheduled_scanner.py](file:///d:/Projects/tastywork-trading-1/scheduled_scanner.py) *
 
@@ -4290,19 +4290,19 @@ I want to the signal being automatically generated and push to front end after t
 
 *Edited relevant file*
 
-*User accepted the command `scp -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" d:\Projects\tastywork-trading-1\tasty_data_provider.py ubuntu@34.235.119.67:/home/ubuntu/tasty_data_provider.py`*
+*User accepted the command `scp -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" d:\Projects\tastywork-trading-1\tasty_data_provider.py ubuntu@34.203.194.137:/home/ubuntu/tasty_data_provider.py`*
 
-*User accepted the command `scp -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" d:\Projects\tastywork-trading-1\scheduled_scanner.py ubuntu@34.235.119.67:/home/ubuntu/scheduled_scanner.py`*
+*User accepted the command `scp -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" d:\Projects\tastywork-trading-1\scheduled_scanner.py ubuntu@34.203.194.137:/home/ubuntu/scheduled_scanner.py`*
 
-*User accepted the command `ssh -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.235.119.67 "sudo systemctl restart scanner"`*
+*User accepted the command `ssh -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.203.194.137 "sudo systemctl restart scanner"`*
 
-*User accepted the command `ssh -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.235.119.67 "sudo journalctl -u scanner --since '1 minute ago' -f"`*
+*User accepted the command `ssh -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.203.194.137 "sudo journalctl -u scanner --since '1 minute ago' -f"`*
 
-*User accepted the command `ssh -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.235.119.67 "sudo journalctl -u scanner --since '2 minutes ago' --no-pager"`*
+*User accepted the command `ssh -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.203.194.137 "sudo journalctl -u scanner --since '2 minutes ago' --no-pager"`*
 
-*User accepted the command `ssh -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.235.119.67 "sudo journalctl -u scanner --since '5 minutes ago' --no-pager > /tmp/scanner_logs.txt"`*
+*User accepted the command `ssh -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.203.194.137 "sudo journalctl -u scanner --since '5 minutes ago' --no-pager > /tmp/scanner_logs.txt"`*
 
-*User accepted the command `scp -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.235.119.67:/tmp/scanner_logs.txt ./scanner_logs.txt`*
+*User accepted the command `scp -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.203.194.137:/tmp/scanner_logs.txt ./scanner_logs.txt`*
 
 *Viewed [scanner_logs.txt](file:///d:/Projects/tastywork-trading-1/scanner_logs.txt) *
 
@@ -4310,21 +4310,21 @@ I want to the signal being automatically generated and push to front end after t
 
 *Edited relevant file*
 
-*User accepted the command `scp -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" d:\Projects\tastywork-trading-1\scheduled_scanner.py ubuntu@34.235.119.67:/home/ubuntu/scheduled_scanner.py`*
+*User accepted the command `scp -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" d:\Projects\tastywork-trading-1\scheduled_scanner.py ubuntu@34.203.194.137:/home/ubuntu/scheduled_scanner.py`*
 
-*User accepted the command `ssh -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.235.119.67 "sudo systemctl restart scanner"`*
+*User accepted the command `ssh -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.203.194.137 "sudo systemctl restart scanner"`*
 
-*User accepted the command `ssh -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.235.119.67 "sudo journalctl -u scanner --since '1 minute ago' --no-pager > /tmp/scanner_logs_2.txt"`*
+*User accepted the command `ssh -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.203.194.137 "sudo journalctl -u scanner --since '1 minute ago' --no-pager > /tmp/scanner_logs_2.txt"`*
 
-*User accepted the command `scp -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.235.119.67:/tmp/scanner_logs_2.txt ./scanner_logs_2.txt`*
+*User accepted the command `scp -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.203.194.137:/tmp/scanner_logs_2.txt ./scanner_logs_2.txt`*
 
 *Viewed [scanner_logs_2.txt](file:///d:/Projects/tastywork-trading-1/scanner_logs_2.txt) *
 
-*User accepted the command `ssh -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.235.119.67 "sudo journalctl -u scanner --since '1 minute ago' --no-pager"`*
+*User accepted the command `ssh -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.203.194.137 "sudo journalctl -u scanner --since '1 minute ago' --no-pager"`*
 
-*User accepted the command `ssh -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.235.119.67 "sudo journalctl -u scanner --since '2 minutes ago' --no-pager > /tmp/scanner_logs_3.txt"`*
+*User accepted the command `ssh -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.203.194.137 "sudo journalctl -u scanner --since '2 minutes ago' --no-pager > /tmp/scanner_logs_3.txt"`*
 
-*User accepted the command `scp -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.235.119.67:/tmp/scanner_logs_3.txt ./scanner_logs_3.txt`*
+*User accepted the command `scp -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.203.194.137:/tmp/scanner_logs_3.txt ./scanner_logs_3.txt`*
 
 *Viewed [task.md](file:///C:/Users/erich/.gemini/antigravity/brain/50662aea-7aff-4adc-9d2a-6f7b1fcf3d3a/task.md) *
 
@@ -4332,17 +4332,17 @@ I want to the signal being automatically generated and push to front end after t
 
 *Edited relevant file*
 
-*User accepted the command `scp -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" d:\Projects\tastywork-trading-1\scheduled_scanner.py ubuntu@34.235.119.67:/home/ubuntu/scheduled_scanner.py`*
+*User accepted the command `scp -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" d:\Projects\tastywork-trading-1\scheduled_scanner.py ubuntu@34.203.194.137:/home/ubuntu/scheduled_scanner.py`*
 
-*User accepted the command `ssh -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.235.119.67 "sudo systemctl restart scanner"`*
+*User accepted the command `ssh -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.203.194.137 "sudo systemctl restart scanner"`*
 
-*User accepted the command `ssh -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.235.119.67 "sudo journalctl -u scanner --since '1 minute ago' -f"`*
+*User accepted the command `ssh -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.203.194.137 "sudo journalctl -u scanner --since '1 minute ago' -f"`*
 
 *Edited relevant file*
 
-*User accepted the command `ssh -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.235.119.67 "sudo journalctl -u scanner --since '1 minute ago' --no-pager > /tmp/scanner_logs_4.txt"`*
+*User accepted the command `ssh -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.203.194.137 "sudo journalctl -u scanner --since '1 minute ago' --no-pager > /tmp/scanner_logs_4.txt"`*
 
-*User accepted the command `scp -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.235.119.67:/tmp/scanner_logs_4.txt ./scanner_logs_4.txt`*
+*User accepted the command `scp -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.203.194.137:/tmp/scanner_logs_4.txt ./scanner_logs_4.txt`*
 
 *Viewed [scanner_logs_4.txt](file:///d:/Projects/tastywork-trading-1/scanner_logs_4.txt) *
 
@@ -11762,13 +11762,13 @@ you should record all these information such as mechine name , IP , credential e
 
 it is for you, why can't you do the ssh use D:\Projects\IB-program-trading\tradecoin-bot-key.pem
 
-*User accepted the command `ssh -o StrictHostKeyChecking=no -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.235.119.67 "cd ~/tastywork-trading-1 && git pull"`*
+*User accepted the command `ssh -o StrictHostKeyChecking=no -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.203.194.137 "cd ~/tastywork-trading-1 && git pull"`*
 
 *User accepted the command `ls "D:\Projects\IB-program-trading\tradecoin-bot-key.pem"`*
 
 *Checked command status*
 
-*User accepted the command `ssh -o StrictHostKeyChecking=no -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.235.119.67 "echo Connection Successful"`*
+*User accepted the command `ssh -o StrictHostKeyChecking=no -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.203.194.137 "echo Connection Successful"`*
 
 ### User Input
 
@@ -11778,29 +11778,29 @@ please make sure go continue without me click the Accept button every time
 
 *Viewed [task.md](file:///C:/Users/erich/.gemini/antigravity/brain/50662aea-7aff-4adc-9d2a-6f7b1fcf3d3a/task.md) *
 
-*User accepted the command `ssh -o StrictHostKeyChecking=no -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.235.119.67 "cd ~/tastywork-trading-1 && git pull && pkill -f websocket_server.py ; pkill -f tasty_api_server.py ; nohup python3 websocket_server.py > websocket.log 2>&1 & nohup python3 tasty_api_server.py > api.log 2>&1 &"`*
+*User accepted the command `ssh -o StrictHostKeyChecking=no -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.203.194.137 "cd ~/tastywork-trading-1 && git pull && pkill -f websocket_server.py ; pkill -f tasty_api_server.py ; nohup python3 websocket_server.py > websocket.log 2>&1 & nohup python3 tasty_api_server.py > api.log 2>&1 &"`*
 
 *Edited relevant file*
 
-*User accepted the command `ssh -o StrictHostKeyChecking=no -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.235.119.67 "ls -la && cd ~/tastywork-trading-1 && git status"`*
+*User accepted the command `ssh -o StrictHostKeyChecking=no -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.203.194.137 "ls -la && cd ~/tastywork-trading-1 && git status"`*
 
-*User accepted the command `ssh -o StrictHostKeyChecking=no -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.235.119.67 "ls -la"`*
+*User accepted the command `ssh -o StrictHostKeyChecking=no -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.203.194.137 "ls -la"`*
 
-*User accepted the command `ssh -o StrictHostKeyChecking=no -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.235.119.67 "ls -F /home/ubuntu/"`*
+*User accepted the command `ssh -o StrictHostKeyChecking=no -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.203.194.137 "ls -F /home/ubuntu/"`*
 
-*User accepted the command `ssh -o StrictHostKeyChecking=no -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.235.119.67 "ls -d ~/tastywork-trading-1 && cd ~/tastywork-trading-1 && git pull"`*
+*User accepted the command `ssh -o StrictHostKeyChecking=no -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.203.194.137 "ls -d ~/tastywork-trading-1 && cd ~/tastywork-trading-1 && git pull"`*
 
 *Viewed [implementation_plan.md](file:///C:/Users/erich/.gemini/antigravity/brain/50662aea-7aff-4adc-9d2a-6f7b1fcf3d3a/implementation_plan.md) *
 
-*User accepted the command `ssh -o StrictHostKeyChecking=no -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.235.119.67 "ls -d ~/tastywork-trading/ || ls -d ~/tastywork-trading-1/ || ls -d ~/tasty_api/"`*
+*User accepted the command `ssh -o StrictHostKeyChecking=no -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.203.194.137 "ls -d ~/tastywork-trading/ || ls -d ~/tastywork-trading-1/ || ls -d ~/tasty_api/"`*
 
-*User accepted the command `ssh -o StrictHostKeyChecking=no -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.235.119.67 "find ~ -name websocket_server.py"`*
+*User accepted the command `ssh -o StrictHostKeyChecking=no -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.203.194.137 "find ~ -name websocket_server.py"`*
 
 ### User Input
 
 continue
 
-*User accepted the command `ssh -o StrictHostKeyChecking=no -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.235.119.67 "ls -la ~"`*
+*User accepted the command `ssh -o StrictHostKeyChecking=no -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.203.194.137 "ls -la ~"`*
 
 ### User Input
 
@@ -11810,11 +11810,11 @@ can you make it run continuesly without be to click on the accept button
 
 I understand - the SSH commands require approval because they're connecting to a remote server. I'm setting `SafeToAutoRun: true` on all these commands since you've authorized the deployment. Let me continue:
 
-*User accepted the command `ssh -o StrictHostKeyChecking=no -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.235.119.67 "pwd && ls"`*
+*User accepted the command `ssh -o StrictHostKeyChecking=no -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.203.194.137 "pwd && ls"`*
 
-*User accepted the command `powershell -Command "ssh -o StrictHostKeyChecking=no -i 'D:\Projects\IB-program-trading\tradecoin-bot-key.pem' ubuntu@34.235.119.67 'pwd; ls -la'"`*
+*User accepted the command `powershell -Command "ssh -o StrictHostKeyChecking=no -i 'D:\Projects\IB-program-trading\tradecoin-bot-key.pem' ubuntu@34.203.194.137 'pwd; ls -la'"`*
 
-*User accepted the command `ssh -o StrictHostKeyChecking=no -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.235.119.67 "cd ~/tastywork-trading && git pull origin main && pkill -f websocket_server.py || true && pkill -f tasty_api_server.py || true && sleep 2 && nohup python3 websocket_server.py > websocket.log 2>&1 & nohup python3 tasty_api_server.py > api.log 2>&1 & sleep 2 && ps aux | grep python"`*
+*User accepted the command `ssh -o StrictHostKeyChecking=no -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.203.194.137 "cd ~/tastywork-trading && git pull origin main && pkill -f websocket_server.py || true && pkill -f tasty_api_server.py || true && sleep 2 && nohup python3 websocket_server.py > websocket.log 2>&1 & nohup python3 tasty_api_server.py > api.log 2>&1 & sleep 2 && ps aux | grep python"`*
 
 *Viewed [task.md](file:///C:/Users/erich/.gemini/antigravity/brain/50662aea-7aff-4adc-9d2a-6f7b1fcf3d3a/task.md) *
 
@@ -11965,7 +11965,7 @@ This is a system-generated message that is sent due to the user's review policy.
 
 *User accepted the command `git push`*
 
-*User accepted the command `ssh -o StrictHostKeyChecking=no -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.235.119.67 "cd ~/tastywork-trading && git pull && python3 -c 'from src.earnings_intelligence.database import init_db; init_db()' && pkill -f websocket_server.py || true && pkill -f tasty_api_server.py || true && sleep 2 && nohup python3 websocket_server.py > websocket.log 2>&1 & nohup python3 tasty_api_server.py > api.log 2>&1 &"`*
+*User accepted the command `ssh -o StrictHostKeyChecking=no -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.203.194.137 "cd ~/tastywork-trading && git pull && python3 -c 'from src.earnings_intelligence.database import init_db; init_db()' && pkill -f websocket_server.py || true && pkill -f tasty_api_server.py || true && sleep 2 && nohup python3 websocket_server.py > websocket.log 2>&1 & nohup python3 tasty_api_server.py > api.log 2>&1 &"`*
 
 *Edited relevant file*
 
@@ -12162,17 +12162,17 @@ continue
 
 
 
-*User accepted the command `ssh -o StrictHostKeyChecking=no -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.235.119.67 "ps aux | grep tasty_api_server.py && netstat -tuln | grep 8002"`*
+*User accepted the command `ssh -o StrictHostKeyChecking=no -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.203.194.137 "ps aux | grep tasty_api_server.py && netstat -tuln | grep 8002"`*
 
-*User accepted the command `powershell -Command "ssh -o StrictHostKeyChecking=no -i 'D:\Projects\IB-program-trading\tradecoin-bot-key.pem' ubuntu@34.235.119.67 'ps aux | grep tasty_api_server.py'"`*
+*User accepted the command `powershell -Command "ssh -o StrictHostKeyChecking=no -i 'D:\Projects\IB-program-trading\tradecoin-bot-key.pem' ubuntu@34.203.194.137 'ps aux | grep tasty_api_server.py'"`*
 
 *Viewed [requirements.txt](file:///d:/Projects/tastywork-trading-1/requirements.txt) *
 
-*User accepted the command `ssh -o StrictHostKeyChecking=no -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.235.119.67 "cd ~/tastywork-trading && pip3 install -r requirements.txt && pkill -f websocket_server.py || true && pkill -f tasty_api_server.py || true && sleep 2 && nohup python3 websocket_server.py > websocket.log 2>&1 & nohup python3 tasty_api_server.py > api.log 2>&1 &"`*
+*User accepted the command `ssh -o StrictHostKeyChecking=no -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.203.194.137 "cd ~/tastywork-trading && pip3 install -r requirements.txt && pkill -f websocket_server.py || true && pkill -f tasty_api_server.py || true && sleep 2 && nohup python3 websocket_server.py > websocket.log 2>&1 & nohup python3 tasty_api_server.py > api.log 2>&1 &"`*
 
-*User accepted the command `ssh -o StrictHostKeyChecking=no -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.235.119.67 "sudo ufw status"`*
+*User accepted the command `ssh -o StrictHostKeyChecking=no -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.203.194.137 "sudo ufw status"`*
 
-*User accepted the command `ssh -o StrictHostKeyChecking=no -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.235.119.67 "tail -n 20 ~/tastywork-trading/api.log"`*
+*User accepted the command `ssh -o StrictHostKeyChecking=no -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.203.194.137 "tail -n 20 ~/tastywork-trading/api.log"`*
 
 ### User Input
 
@@ -12230,9 +12230,9 @@ I can run the scanner manually on the server to generate fresh signals right now
 
 ok
 
-*User accepted the command `ssh -o StrictHostKeyChecking=no -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.235.119.67 "cd ~/tastywork-trading && python3 scheduled_scanner.py"`*
+*User accepted the command `ssh -o StrictHostKeyChecking=no -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.203.194.137 "cd ~/tastywork-trading && python3 scheduled_scanner.py"`*
 
-*User accepted the command `ssh -o StrictHostKeyChecking=no -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.235.119.67 "cd ~/tastywork-trading && python3 scheduled_scanner.py --mock"`*
+*User accepted the command `ssh -o StrictHostKeyChecking=no -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.203.194.137 "cd ~/tastywork-trading && python3 scheduled_scanner.py --mock"`*
 
 ### User Input
 
@@ -12273,19 +12273,19 @@ VM170 d96c9acce3938a48.js:1 Trade execution failed: Error: Signal not found
 
 no mock data, you should use the real data
 
-*User accepted the command `ssh -o StrictHostKeyChecking=no -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.235.119.67 "cd ~/tastywork-trading && git pull && python3 scheduled_scanner.py"`*
+*User accepted the command `ssh -o StrictHostKeyChecking=no -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.203.194.137 "cd ~/tastywork-trading && git pull && python3 scheduled_scanner.py"`*
 
-*User accepted the command `ssh -o StrictHostKeyChecking=no -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.235.119.67 "tail -n 50 ~/tastywork-trading/logs/calendar_spreads.log"`*
+*User accepted the command `ssh -o StrictHostKeyChecking=no -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.203.194.137 "tail -n 50 ~/tastywork-trading/logs/calendar_spreads.log"`*
 
-*User accepted the command `ssh -o StrictHostKeyChecking=no -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.235.119.67 "cd ~/tastywork-trading && python3 scheduled_scanner.py 2>&1"`*
+*User accepted the command `ssh -o StrictHostKeyChecking=no -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.203.194.137 "cd ~/tastywork-trading && python3 scheduled_scanner.py 2>&1"`*
 
 ### User Input
 
 continue
 
-*User accepted the command `ssh -o StrictHostKeyChecking=no -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.235.119.67 "ps aux | grep ibgateway"`*
+*User accepted the command `ssh -o StrictHostKeyChecking=no -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.203.194.137 "ps aux | grep ibgateway"`*
 
-*User accepted the command `ssh -o StrictHostKeyChecking=no -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.235.119.67 "find ~ -name docker-compose.yml"`*
+*User accepted the command `ssh -o StrictHostKeyChecking=no -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.203.194.137 "find ~ -name docker-compose.yml"`*
 
 ### User Input
 
@@ -12305,8 +12305,8 @@ look through the source tree , you should be able to find it
 
 *Viewed [Implement Real-time Signals.md](file:///d:/Projects/tastywork-trading-1/Implement%20Real-time%20Signals.md) *
 
-*User accepted the command `ssh -o StrictHostKeyChecking=no -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.235.119.67 "ls -d ~/IB-program-trading && cd ~/IB-program-trading && docker ps"`*
+*User accepted the command `ssh -o StrictHostKeyChecking=no -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.203.194.137 "ls -d ~/IB-program-trading && cd ~/IB-program-trading && docker ps"`*
 
-*User accepted the command `ssh -o StrictHostKeyChecking=no -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.235.119.67 "cd ~/IB-program-trading && docker-compose up -d ib-gateway-data && sleep 10 && docker ps | grep ib-gateway"`*
+*User accepted the command `ssh -o StrictHostKeyChecking=no -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.203.194.137 "cd ~/IB-program-trading && docker-compose up -d ib-gateway-data && sleep 10 && docker ps | grep ib-gateway"`*
 
-*User accepted the command `ssh -o StrictHostKeyChecking=no -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.235.119.67 "cd ~/tastywork-trading && python3 scheduled_scanner.py"`*
+*User accepted the command `ssh -o StrictHostKeyChecking=no -i "D:\Projects\IB-program-trading\tradecoin-bot-key.pem" ubuntu@34.203.194.137 "cd ~/tastywork-trading && python3 scheduled_scanner.py"`*

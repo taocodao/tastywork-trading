@@ -74,9 +74,9 @@ MAX_HOLD_HOURS: float = 6.5      # Close by 10:00 AM if still open
 # =============================================================================
 
 # Interactive Brokers (Market Data Source + IB Paper Trading Execution)
-# EC2 IB Gateway: 34.235.119.67:4004 (Production)
+# EC2 IB Gateway: 34.203.194.137:4004 (Production)
 # Local Paper: 127.0.0.1:7497, Local Live: 127.0.0.1:7496
-IB_HOST: str = "34.235.119.67"
+IB_HOST: str = "34.203.194.137"
 IB_PORT: int = 4004              # EC2 Gateway port
 IB_CLIENT_ID: int = 100
 
