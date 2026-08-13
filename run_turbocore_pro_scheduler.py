@@ -109,7 +109,11 @@ class TurboCoreProScheduler:
                 if df is not None and not df.empty:
                     df.columns = [c[0].lower() if isinstance(c, tuple) else c.lower() for c in df.columns]
                     ibkr_bars[sym] = df
-            vix_data = fetch_all_vix_indices(self.config["strategy"].get("vix_indices", ["VIX"]))
+            # fetch_all_vix_indices(lookback_days: int = 400, ibkr_client=None) — its
+            # first positional arg is lookback_days, NOT a symbol list. Passing the
+            # config's vix_indices list here crashed with
+            # "TypeError: unsupported type for timedelta days component: list".
+            vix_data = fetch_all_vix_indices()  # fetches VIX, VIX9D, VIX3M (CBOE→Yahoo→IBKR)
         except Exception as e:
             logger.error(f"Live data fetch failed: {e}", exc_info=True)
             return
