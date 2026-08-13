@@ -486,6 +486,7 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--dry-run", action="store_true", help="Never place orders")
     parser.add_argument("--force-full-scan", action="store_true", help="Ignore time-of-day gating")
+    parser.add_argument("--force-exits", action="store_true", help="Force exit scan regardless of hour (overrides backtest-matched exit gating)")
     args = parser.parse_args()
 
     live = LIVE_TRADE and not args.dry_run
@@ -512,7 +513,11 @@ def main():
         et_now = pd.Timestamp.now(tz="America/New_York")
         et_hour = et_now.hour
         do_entries = args.force_full_scan or et_hour == 15  # only enter at 15:00 ET
-        do_exits = True  # always check exits
+        # Match the backtest's 2-scan-per-day design: exits are evaluated only on the
+        # 10:00 ET (exit-only) and 15:00 ET (full) scans. The backtest treats the
+        # 11:00-14:00 bars as inert, so checking exits every hour diverges from the
+        # validated replay. --force-exits / --force-full-scan override for manual runs.
+        do_exits = args.force_full_scan or args.force_exits or et_hour in (10, 15)
 
         log.info(f"ET time: {et_now}  do_entries={do_entries}  do_exits={do_exits}")
 
