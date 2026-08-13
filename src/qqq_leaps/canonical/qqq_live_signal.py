@@ -20,6 +20,7 @@ Environment:
 import os
 import sys
 import json
+import random
 import argparse
 from datetime import datetime, timedelta, date
 from pathlib import Path
@@ -39,7 +40,12 @@ from qqq_leaps_enhanced_2y_hourly import (
 
 IB_HOST = os.getenv("IB_HOST", "127.0.0.1")
 IB_PORT = int(os.getenv("IB_PORT", "4005"))
-IB_CLIENT_ID = int(os.getenv("IB_CLIENT_ID", "200"))
+# Use a unique client ID per run by default. A fixed ID (e.g. 200) collides with
+# any concurrent/leftover IB API session on the shared gateway, causing the
+# connect to time out ("clientId already in use") and the signal run to fail.
+# Set IB_CLIENT_ID explicitly to pin a specific ID.
+_env_cid = os.getenv("IB_CLIENT_ID")
+IB_CLIENT_ID = int(_env_cid) if _env_cid else random.randint(8000, 8999)
 CAPITAL = float(os.getenv("QQQ_CAPITAL", "75000"))
 
 CFG = Config()  # Same parameters as backtest (== "moderate" tier)
