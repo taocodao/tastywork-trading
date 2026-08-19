@@ -175,29 +175,27 @@ def publish_turbocore_rebalance_signal(
             except Exception as email_err:
                 logger.warning(f"[Email] Signal notification failed (non-fatal): {email_err}")
                 
-            # ── NEW: Fire Ghost Auto-Execution Webhook ────────────────────
+            # ── Fan out to per-account virtual execution ──────────────────
+            # Replaces the retired Ghost auto-executor (410 Gone). The app's
+            # notify route runs fanoutSignal() only when signal_id is present —
+            # generating per-account orders, pre-executing them into each
+            # virtual account, and emailing sized instructions.
             try:
                 if data.get("iv_switching_pending"):
-                    logger.info("[Ghost] Skipping auto-execute — iv_switching_pending=True (intermediate publish)")
+                    logger.info("[Fanout] Skipping — iv_switching_pending=True (intermediate publish)")
                 else:
                     import requests, os
-                    logger.info(f"🤖 Firing Ghost Executor for Signal {data.get('id')}")
-                    # Fallback to local host if dev
-                    base_url = "https://trademind.bot" if os.environ.get("FLASK_ENV") != "development" else "http://localhost:3000"
-                    secret_key = os.environ.get("INTERNAL_API_SECRET", "dev_secret_key")
+                    secret_key = os.environ.get("INTERNAL_API_SECRET", "")
                     res = requests.post(
-                        f"{base_url}/api/internal/signals/{data.get('id', 'new')}/auto-execute",
-                        json={"signal": data},
-                        headers={"Authorization": f"Bearer {secret_key}"},
-                        timeout=5
+                        "https://www.trademind.bot/api/signals/notify",
+                        json={"strategy": data.get("strategy"), "signal_id": data.get("id")},
+                        headers={"Authorization": f"Bearer {secret_key}"} if secret_key else {},
+                        timeout=15,
                     )
-                    if res.status_code == 200:
-                        logger.info(f"✅ Ghost Executor verified: {res.json().get('processed', 0)} users executed.")
-                    else:
-                        logger.warning(f"❌ Ghost Executor warning: status {res.status_code}")
-            except Exception as ghost_err:
-                logger.warning(f"[Ghost] Auto-execute trigger failed (non-fatal): {ghost_err}")
-            # ── END NEW ───────────────────────────────────────────────────
+                    logger.info(f"[Fanout] notify status={res.status_code} signal_id={data.get('id')}")
+            except Exception as fanout_err:
+                logger.warning(f"[Fanout] notify failed (non-fatal): {fanout_err}")
+            # ── END FANOUT ─────────────────────────────────────────────────
 
             # ── Post to Whop Signal Alerts channel (non-fatal) ────────────
             try:

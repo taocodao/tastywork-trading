@@ -90,6 +90,23 @@ def publish_qqq_leaps_signal(
             repo.save_signal(data)
             logger.info(f"[QQQ_LEAPS] Signal saved: {action} | regime={regime} | conf={confidence:.2f}")
 
+            # ── Fan out to per-account virtual execution ──────────────────
+            # The app's notify route runs fanoutSignal() only when signal_id
+            # is present — this generates per-account orders, pre-executes
+            # them into each virtual account, and emails sized instructions.
+            try:
+                import os as _os, requests as _requests
+                _secret = _os.environ.get("INTERNAL_API_SECRET", "")
+                _res = _requests.post(
+                    "https://www.trademind.bot/api/signals/notify",
+                    json={"strategy": "QQQ_LEAPS", "signal_id": data.get("id")},
+                    headers={"Authorization": f"Bearer {_secret}"} if _secret else {},
+                    timeout=15,
+                )
+                logger.info(f"[QQQ_LEAPS] Fan-out notify status={_res.status_code} signal_id={data.get('id')}")
+            except Exception as fanout_err:
+                logger.warning(f"[QQQ_LEAPS] Fan-out notify failed (non-fatal): {fanout_err}")
+
             # ── Notify email subscribers ────────────────────────────────────
             try:
                 from email_notifications.resend_sender import notify_signal_subscribers
