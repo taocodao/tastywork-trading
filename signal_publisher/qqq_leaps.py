@@ -141,6 +141,128 @@ def publish_qqq_leaps_signal(
     return data
 
 
+def publish_qqq_leaps_pmcc_signal(pmcc_signal) -> dict:
+    """
+    Publish a PMCC overlay signal (short-call management on an open LEAPS).
+
+    Saves to PostgreSQL and triggers the app fan-out so subscribed virtual
+    accounts see the signal. No Whop post and no legacy email blast: PMCC is
+    per-account position management, and the app fan-out is the canonical
+    delivery path.
+
+    Args:
+        pmcc_signal: src.qqq_leaps.pmcc_manager.PMCCSignal dataclass
+    """
+    et = pytz.timezone("US/Eastern")
+    now_et = datetime.now(et)
+    # PMCC orders are day orders: expire at 4 PM ET today, or next trading
+    # day if the market has already closed.
+    expires_et = now_et.replace(hour=16, minute=0, second=0, microsecond=0)
+    if now_et >= expires_et:
+        expires_et += timedelta(days=1)
+        while expires_et.weekday() >= 5:
+            expires_et += timedelta(days=1)
+    expires_at_utc = expires_et.astimezone(pytz.utc)
+
+    import uuid
+    action = str(pmcc_signal.action)              # PMCC_ENTER / PMCC_ROLL_* / ...
+    is_open = action == "PMCC_ENTER"
+
+    def _occ(strike: float, expiry: str) -> str:
+        return f"QQQ_{expiry.replace('-', '')}C{int(round(strike)):05d}"
+
+    legs = []
+    # Closing leg for rolls / management closes (existing short call)
+    if not is_open and pmcc_signal.short_strike and pmcc_signal.short_expiry:
+        legs.append({
+            "symbol":    _occ(pmcc_signal.short_strike, pmcc_signal.short_expiry),
+            "action":    "BUY_TO_CLOSE",
+            "strike":    pmcc_signal.short_strike,
+            "expiry":    pmcc_signal.short_expiry,
+            "delta":     pmcc_signal.short_delta,
+            "contracts": pmcc_signal.contracts,
+            "leg_type":  "pmcc_short_call",
+        })
+    # Opening leg: ENTER uses short_*, rolls use new_*
+    open_strike = pmcc_signal.short_strike if is_open else getattr(pmcc_signal, "new_strike", 0.0)
+    open_expiry = pmcc_signal.short_expiry if is_open else getattr(pmcc_signal, "new_expiry", "")
+    open_delta  = pmcc_signal.short_delta  if is_open else getattr(pmcc_signal, "new_delta", 0.0)
+    if open_strike and open_expiry:
+        legs.append({
+            "symbol":    _occ(open_strike, open_expiry),
+            "action":    "SELL_TO_OPEN",
+            "strike":    open_strike,
+            "expiry":    open_expiry,
+            "delta":     open_delta,
+            "contracts": pmcc_signal.contracts,
+            "leg_type":  "pmcc_short_call",
+        })
+
+    data = {
+        "id":          str(uuid.uuid4()),
+        "timestamp":   datetime.utcnow().isoformat() + "Z",
+        "symbol":      "QQQ",
+        "strategy":    "QQQ_LEAPS",
+        "type":        action,
+        "action":      action,
+        "direction":   "SHORT" if is_open else "CLOSE",
+        "regime":      "",
+        "confidence":  round(float(pmcc_signal.confidence), 4),
+        "rationale":   pmcc_signal.rationale,
+        "expires_at":  expires_at_utc.strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "cost":        0.0,
+        "capital_required": 0.0,
+        "virtual_only": False,
+        "auto_execute": True,
+
+        # Short call specifics
+        "short_strike": round(float(pmcc_signal.short_strike), 2),
+        "short_expiry": pmcc_signal.short_expiry,
+        "short_delta":  round(float(pmcc_signal.short_delta), 4),
+        "short_dte":    int(pmcc_signal.short_dte),
+        "limit_price":  round(float(pmcc_signal.limit_price), 4),
+        "contracts":    int(pmcc_signal.contracts),
+
+        # Roll target (when applicable)
+        "new_strike":   round(float(getattr(pmcc_signal, "new_strike", 0.0)), 2),
+        "new_expiry":   getattr(pmcc_signal, "new_expiry", ""),
+        "new_delta":    round(float(getattr(pmcc_signal, "new_delta", 0.0)), 4),
+
+        # Backend bookkeeping
+        "leaps_position_id": pmcc_signal.leaps_position_id,
+        "user_id":           pmcc_signal.user_id,
+
+        "legs": legs,
+    }
+
+    try:
+        from src.earnings_intelligence.database import SignalRepository
+        repo = SignalRepository()
+        try:
+            repo.save_signal(data)
+            logger.info(f"[QQQ_LEAPS] PMCC signal saved: {action} | {pmcc_signal.rationale[:80]}")
+
+            # ── Fan out to per-account virtual execution ──────────────────
+            try:
+                import os as _os, requests as _requests
+                _secret = _os.environ.get("INTERNAL_API_SECRET", "")
+                _res = _requests.post(
+                    "https://www.trademind.bot/api/signals/notify",
+                    json={"strategy": "QQQ_LEAPS", "signal_id": data.get("id")},
+                    headers={"Authorization": f"Bearer {_secret}"} if _secret else {},
+                    timeout=15,
+                )
+                logger.info(f"[QQQ_LEAPS] PMCC fan-out notify status={_res.status_code} signal_id={data.get('id')}")
+            except Exception as fanout_err:
+                logger.warning(f"[QQQ_LEAPS] PMCC fan-out notify failed (non-fatal): {fanout_err}")
+        finally:
+            repo.session.close()
+    except Exception as e:
+        logger.error(f"[QQQ_LEAPS] PMCC DB save failed: {e}")
+
+    return data
+
+
 def _post_leaps_to_whop(signal_data: dict) -> None:
     """Post LEAPS signal to the Whop Pro Strategy Chat channel."""
     import os, requests
