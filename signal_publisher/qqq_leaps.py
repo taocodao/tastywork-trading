@@ -30,6 +30,13 @@ def publish_qqq_leaps_signal(
     Publish QQQ LEAPS signal to PostgreSQL.
     Signal is VIRTUAL ONLY — no auto-execution hook.
     """
+    # Callers pass None for price fields on HOLD/NO-ACTION days; coerce so the
+    # payload math below never sees None.
+    strike    = float(strike or 0.0)
+    entry_px  = float(entry_px or 0.0)
+    contracts = int(contracts or 0)
+    delta     = float(delta or 0.0)
+    exit_px   = float(exit_px or 0.0)
     et = pytz.timezone("US/Eastern")
     now_et = datetime.now(et)
     # Signals expire at 3 PM ET next trading day
