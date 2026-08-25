@@ -88,10 +88,14 @@ CREATE TABLE IF NOT EXISTS verified_nav (
     as_of           DATE NOT NULL,
     nav             NUMERIC,
     cash            NUMERIC,
+    deposits        NUMERIC,
+    withdrawals     NUMERIC,
     raw             JSONB,
     pulled_at       TIMESTAMPTZ NOT NULL DEFAULT now(),
     UNIQUE (account_id, as_of)
 );
+ALTER TABLE verified_nav ADD COLUMN IF NOT EXISTS deposits NUMERIC;
+ALTER TABLE verified_nav ADD COLUMN IF NOT EXISTS withdrawals NUMERIC;
 CREATE TABLE IF NOT EXISTS flex_pull_log (
     id              BIGSERIAL PRIMARY KEY,
     account_id      TEXT NOT NULL,
@@ -200,25 +204,32 @@ def parse_and_store(conn, account_id: str, strategy: str, xml_bytes: bytes) -> d
             )
             counts["positions"] += 1
 
-        # NAV: use the ending value from the Net Asset Value section if present
+        # NAV: use the ending value from the Net Asset Value section if present.
+        # Deposits/withdrawals from the CashReport are REQUIRED: the public
+        # equity curve is unit-accounted (NAV-per-unit), so cash movements must
+        # be separable from P&L or added capital would look like performance.
         nav_val, cash_val, nav_raw = None, None, {}
+        deposits, withdrawals = None, None
         for eq in root.iter("EquitySummaryByReportDateInBase"):
             a = eq.attrib
             if a.get("reportDate"):
                 nav_val = _f(a.get("total"))
                 nav_raw = dict(a)
-        for cs in root.iter("CashReport"):
+        for cs in root.iter("CashReportCurrency"):
             a = cs.attrib
             if a.get("currency") == "BASE_SUMMARY":
                 cash_val = _f(a.get("endingCash"))
+                deposits = _f(a.get("deposits"))
+                withdrawals = _f(a.get("withdrawals"))
                 break
         if nav_val is not None:
             cur.execute(
-                """INSERT INTO verified_nav (account_id, strategy, as_of, nav, cash, raw)
-                   VALUES (%s,%s,%s,%s,%s,%s)
+                """INSERT INTO verified_nav (account_id, strategy, as_of, nav, cash, deposits, withdrawals, raw)
+                   VALUES (%s,%s,%s,%s,%s,%s,%s,%s)
                    ON CONFLICT (account_id, as_of) DO UPDATE SET
-                     nav=excluded.nav, cash=excluded.cash, raw=excluded.raw, pulled_at=now()""",
-                (account_id, strategy, today, nav_val, cash_val, json.dumps(nav_raw)),
+                     nav=excluded.nav, cash=excluded.cash, deposits=excluded.deposits,
+                     withdrawals=excluded.withdrawals, raw=excluded.raw, pulled_at=now()""",
+                (account_id, strategy, today, nav_val, cash_val, deposits, withdrawals, json.dumps(nav_raw)),
             )
             counts["nav"] += 1
 
