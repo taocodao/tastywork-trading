@@ -14,10 +14,15 @@ Tables (created idempotently):
   flex_pull_log        every pull attempt, with status
 
 Config (env or .env):
-  FLEX_TOKEN          IBKR Flex Web Service token (1-year expiry)
+  FLEX_TOKEN_LEAPS    Flex Web Service token from the LEAPS login
+  FLEX_TOKEN_BASIC    Flex Web Service token from the QQQ Basic login
+  FLEX_TOKEN          fallback token used for both (single-login setups)
   FLEX_QUERY_LEAPS    Activity Flex Query ID for the LEAPS account
   FLEX_QUERY_BASIC    Activity Flex Query ID for the QQQ Basic account
   FLEX_RAW_DIR        optional, default ~/flex_raw
+
+Note: Flex tokens are per IB LOGIN, not per account. Two separate logins
+require two tokens; linked sub-accounts under one login share one token.
 
 Usage:
   python3 -m src.verification.flex_ingest            # nightly pull, both accounts
@@ -271,19 +276,24 @@ def main() -> int:
         log.info("smoke rows cleaned up")
         return 0
 
-    token = _env("FLEX_TOKEN")
-    queries = [("FLEX_QUERY_LEAPS", "QQQ_LEAPS"), ("FLEX_QUERY_BASIC", "QQQ_BASIC")]
-    if not token:
-        log.error("FLEX_TOKEN not set")
-        return 1
+    # Per-login tokens with FLEX_TOKEN fallback: two separate IB logins each
+    # mint their own token, so allow FLEX_TOKEN_LEAPS / FLEX_TOKEN_BASIC.
+    queries = [
+        ("FLEX_QUERY_LEAPS", "QQQ_LEAPS", _env("FLEX_TOKEN_LEAPS") or _env("FLEX_TOKEN")),
+        ("FLEX_QUERY_BASIC", "QQQ_BASIC", _env("FLEX_TOKEN_BASIC") or _env("FLEX_TOKEN")),
+    ]
 
     raw_dir = Path(_env("FLEX_RAW_DIR", str(Path.home() / "flex_raw")))
     results = []
-    for env_name, strategy in queries:
+    for env_name, strategy, token in queries:
         qid = _env(env_name)
         acct = _env(env_name + "_ACCOUNT")
         if not qid:
             log.info("%s not set - skipping %s", env_name, strategy)
+            continue
+        if not token:
+            log.error("No Flex token for %s (set FLEX_TOKEN_%s or FLEX_TOKEN)", strategy, strategy.split("_")[-1])
+            results.append({"account": strategy, "status": "ERROR"})
             continue
         results.append(pull_account(conn, token, qid, acct or env_name, strategy, raw_dir))
 
