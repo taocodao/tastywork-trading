@@ -1,0 +1,59 @@
+# config_mtas.yaml — MTAS (Momentum-Triggered Asymmetric Strangle Ladder) live config
+#
+# This is the LIVE implementation of the exact rule set walk-forward validated in
+# real_rule_backtest_5m.py (separate research workspace) on 2026-07-16/17/18.
+# It is a DIFFERENT strategy from bot_v41.py / strangle_manager_v41.py (delta-targeted,
+# 3-strangle cap, ML regime gating, premium-multiple stop-loss) and from the older
+# src/otm_naked/sndk/ladder_manager.py (delta-targeted, 3-rung cap). Do not merge configs.
+#
+# Validation summary (train = 2025-02-24..2026-02-27 ~12mo hourly-chained history;
+# test = 2026-03-02..2026-07-14 ~4.5mo held-out real IB 5m bars, never used for selection):
+#   Symmetric baseline (call_floor=put_floor=0.22): full 17mo P&L -$6,438, DD $123,054 (~24%).
+#   Adopted (call_floor=0.40, put_floor=0.22):      full 17mo P&L +$215,778, DD $40,647 (~8.5%).
+#   DTE 45 beats 50 and 60 on TRAIN (the selection slice) under the adopted floor -- do not
+#   change dte_days without re-running the walk-forward sweep in real_rule_backtest_5m.py.
+#   Leg cap 12 is not distinguished from 10/14/16 on TRAIN (rarely binds there) -- 12 is kept
+#   as the prior operational choice, not because backtest data proves it's better than 10-16.
+#   20% OTM targets and any premium-multiple stop-loss were explicitly tested and REJECTED
+#   (both made results significantly worse) -- never add stop_loss_per_leg_mult to this bot.
+
+mode: "paper"          # "paper" | "live" -- must be manually changed, no live default
+ticker: "SNDK"
+
+account:
+  nav: 478351.11        # matches CAPITAL used throughout the walk-forward validation
+  margin_pct: 0.20       # simplified margin proxy used in backtest: margin_pc = margin_pct * spot * 100
+
+strategy:
+  entry_dte_days: 45
+  call_otm_target: 0.434     # calls sell at spot * (1 + 0.434), snapped to nearest listed strike
+  put_otm_target: 0.278      # puts sell at spot * (1 - 0.278), snapped to nearest listed strike
+  call_cushion_floor: 0.40   # close a call leg when (strike-spot)/spot < 0.40 (unbounded-loss side, wider stop)
+  put_cushion_floor: 0.22    # close a put leg when (spot-strike)/spot < 0.22 (bounded-loss side, tighter stop)
+  profit_take_pct: 0.30      # close a leg when (premium_open - mark)/premium_open >= 0.30
+  forced_expiry_dte: 3       # force-close any leg once dte_days_left <= 3
+  max_legs_per_side: 12      # ladder cap, independent per side (calls / puts)
+  contract_quantity: 1       # always 1 contract per rung, matches backtest sizing
+  min_premium: 0.80          # skip an entry if the selected contract's premium is below this
+
+  # NOT implemented, intentionally -- all tested and either rejected or never adopted upstream:
+  #   no premium-multiple stop-loss, no ML regime gating / entry gate, no rolls, no vol-percentile
+  #   leg-cap throttle, no entry-gap/cooldown/trailing-entry logic. Keep this bot exactly rule-matched
+  #   to real_rule_backtest_5m.py's adopted default config -- do not add features here without
+  #   re-validating them in that backtest engine first.
+
+management_interval_seconds: 60   # how often on_management_tick() runs
+
+ib:
+  host: "127.0.0.1"
+  port: 4004
+  client_id: 141             # distinct from bot_v41.py's client_id (102) so both could run
+                              # side by side against the same IB Gateway if ever needed --
+                              # they should NOT be run live simultaneously on the same account.
+
+telegram:
+  enabled: true
+  bot_token: "${TELEGRAM_BOT_TOKEN}"
+  chat_id: "${TELEGRAM_CHAT_ID}"
+
+data_dir: "data_mtas"        # separate state file from bot_v41.py's data/sndk_live_state.json
